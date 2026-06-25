@@ -1,0 +1,22 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import App from './App'
+import ErrorBoundary from './components/ui/ErrorBoundary'
+import './index.css'
+import './styles/settings.css'
+import './styles/themes.css'
+import './styles/polish.css'
+import './styles/advanced.css'
+import './styles/micro-interactions.css'
+import './styles/animations.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ErrorBoundary>
+  </React.StrictMode>,
+)

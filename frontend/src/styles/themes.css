@@ -1,0 +1,159 @@
+/* ════════════════════════════════════════════════════════════════
+   VOX — THEME SYSTEM
+   Each theme overrides a small set of semantic variables only.
+   The core palette (--void, --abyss, --chaos, etc.) is NEVER touched;
+   we remap --accent / --accent-glow / --online / --idle / --danger and
+   the text scale so existing components keep working while gaining a
+   fresh hue. Switching is instant via [data-theme] on <html>.
+   ════════════════════════════════════════════════════════════════ */
+
+/* Shared semantic defaults (VOID theme = the existing palette).
+   These variables are read by the new Day 8-9 components; legacy
+   components keep using the original tokens directly. */
+:root,
+[data-theme='void'] {
+  --accent: var(--chaos);
+  --accent-glow: var(--chaos-glow);
+  --accent-2: var(--electric, #e63232);
+  --online: var(--toxic);
+  --idle: var(--gold);
+  --danger: var(--blood);
+  --primary-bg: var(--void);
+  --secondary-bg: var(--abyss);
+  --surface: var(--dark-matter);
+  --border: var(--rim);
+  --text-primary: var(--ghost-white);
+  --text-secondary: var(--ash);
+  --text-muted: var(--shadow);
+}
+
+/* THEME 2 — CRIMSON BLOOD */
+[data-theme='crimson-blood'] {
+  --primary-bg: #0a0000;
+  --secondary-bg: #110000;
+  --surface: #1a0000;
+  --border: #3a0000;
+  --accent: #cc0000;
+  --accent-glow: rgba(204, 0, 0, 0.4);
+  --accent-2: #ff4444;
+  --text-primary: #ffcccc;
+  --text-secondary: #aa6666;
+  --text-muted: #664444;
+  --online: #ff4444;
+  --idle: #ff8800;
+  --danger: #ff0000;
+}
+
+/* THEME 3 — OCEAN ABYSS */
+[data-theme='ocean-abyss'] {
+  --primary-bg: #000a0f;
+  --secondary-bg: #00111a;
+  --surface: #001824;
+  --border: #002233;
+  --accent: #0066cc;
+  --accent-glow: rgba(0, 102, 204, 0.4);
+  --accent-2: #0099ff;
+  --text-primary: #c8e8ff;
+  --text-secondary: #6699aa;
+  --text-muted: #334455;
+  --online: #00ffcc;
+  --idle: #0099ff;
+  --danger: #cc0044;
+}
+
+/* THEME 4 — TOXIC MATRIX */
+[data-theme='toxic-matrix'] {
+  --primary-bg: #000a00;
+  --secondary-bg: #001100;
+  --surface: #001800;
+  --border: #003300;
+  --accent: #00cc44;
+  --accent-glow: rgba(0, 204, 68, 0.4);
+  --accent-2: #00ff41;
+  --text-primary: #ccffcc;
+  --text-secondary: #66aa66;
+  --text-muted: #334433;
+  --online: #00ff41;
+  --idle: #88ff00;
+  --danger: #ff4400;
+}
+
+/* THEME 5 — GOLD SOVEREIGN */
+[data-theme='gold-sovereign'] {
+  --primary-bg: #0a0800;
+  --secondary-bg: #110f00;
+  --surface: #1a1600;
+  --border: #332800;
+  --accent: #cc9900;
+  --accent-glow: rgba(204, 153, 0, 0.4);
+  --accent-2: #ffd700;
+  --text-primary: #fff8cc;
+  --text-secondary: #aa9944;
+  --text-muted: #665533;
+  --online: #ffd700;
+  --idle: #ffaa00;
+  --danger: #cc2200;
+}
+
+/* THEME 6 — SPECTER GRAY */
+[data-theme='specter-gray'] {
+  --primary-bg: #050505;
+  --secondary-bg: #0a0a0a;
+  --surface: #111111;
+  --border: #222222;
+  --accent: #888888;
+  --accent-glow: rgba(136, 136, 136, 0.3);
+  --accent-2: #aaaaaa;
+  --text-primary: #dddddd;
+  --text-secondary: #888888;
+  --text-muted: #444444;
+  --online: #aaaaaa;
+  --idle: #888888;
+  --danger: #cc4444;
+}
+
+/* THEME 7 — SUNSET INFERNO */
+[data-theme='sunset-inferno'] {
+  --primary-bg: #0a0400;
+  --secondary-bg: #110800;
+  --surface: #1a0f00;
+  --border: #331800;
+  --accent: #cc4400;
+  --accent-glow: rgba(204, 68, 0, 0.4);
+  --accent-2: #ff6600;
+  --text-primary: #ffe8cc;
+  --text-secondary: #aa7744;
+  --text-muted: #664422;
+  --online: #ff6600;
+  --idle: #ffaa00;
+  --danger: #ff0000;
+}
+
+/* THEME 8 — MIDNIGHT CHERRY */
+[data-theme='midnight-cherry'] {
+  --primary-bg: #0a0008;
+  --secondary-bg: #110010;
+  --surface: #1a0018;
+  --border: #330028;
+  --accent: #cc0066;
+  --accent-glow: rgba(204, 0, 102, 0.4);
+  --accent-2: #ff0088;
+  --text-primary: #ffccee;
+  --text-secondary: #aa6688;
+  --text-muted: #663344;
+  --online: #ff0088;
+  --idle: #ff88cc;
+  --danger: #cc0000;
+}
+
+/* Reduced motion: honor the OS preference across every theme. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  username        String   @unique
+  displayName     String
+  passwordHash    String
+  role            Role     @default(MEMBER)
+  color           String   @default("#5865f2")
+  status          Status   @default(OFFLINE)
+  activity        String?
+  bio             String?
+  avatarUrl       String?
+  bannerUrl       String?
+
+  twoFactorSecret      String?
+  twoFactorEnabled     Boolean @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  messages        Message[]
+  reactions       Reaction[]
+  refreshTokens   RefreshToken[]
+
+  ownedServers    Server[]       @relation("ServerOwner")
+  serverMembers   ServerMember[]
+  sentDMs         DMMessage[]    @relation("DMSender")
+  receivedDMs     DMMessage[]    @relation("DMRecipient")
+  friends         Friend[]       @relation("FriendUser")
+  friendOf        Friend[]       @relation("FriendFriend")
+  createdInvites  Invite[]
+
+  @@index([username])
+  @@index([email])
+}
+
+model Server {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  banner      String?
+  category    String   @default("COMMUNITY")
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  ownerId     String
+  owner       User     @relation("ServerOwner", fields: [ownerId], references: [id])
+
+  channels    Channel[]
+  members     ServerMember[]
+  invites     Invite[]
+}
+
+model ServerMember {
+  id        String   @id @default(cuid())
+  serverId  String
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @default(MEMBER)
+  joinedAt  DateTime @default(now())
+  
+  @@unique([serverId, userId])
+}
+
+model Channel {
+  id        String    @id
+  name      String
+  topic     String    @default("")
+  type      ChannelType @default(TEXT)
+  position  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  serverId  String?
+  server    Server?   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  messages  Message[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channelId String
+  author    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userId    String?
+  authorOverride String?
+  body      String
+  attachments Json?
+  createdAt DateTime @default(now())
+
+  edited      Boolean  @default(false)
+  deleted     Boolean  @default(false)
+  pinned      Boolean  @default(false)
+  parentId    String?
+  parent      Message? @relation("MessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies     Message[] @relation("MessageReplies")
+
+  reactions Reaction[]
+
+  @@index([channelId, createdAt])
+  @@index([userId])
+  @@index([pinned])
+}
+
+model Invite {
+  id        String    @id @default(cuid())
+  code      String    @unique
+  serverId  String
+  server    Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  creatorId String
+  creator   User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  maxUses   Int       @default(0)
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([serverId])
+}
+
+model DMMessage {
+  id          String   @id @default(uuid())
+  content     String
+  attachments Json?
+  dmId        String
+  senderId    String
+  recipientId String
+  createdAt   DateTime @default(now())
+  edited      Boolean  @default(false)
+  deleted     Boolean  @default(false)
+  
+  sender    User @relation("DMSender", fields:[senderId], references:[id])
+  recipient User @relation("DMRecipient", fields:[recipientId], references:[id])
+
+  @@index([dmId, createdAt])
+}
+
+model Friend {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("FriendUser", fields: [userId], references: [id], onDelete: Cascade)
+  friendId  String
+  friend    User     @relation("FriendFriend", fields: [friendId], references: [id], onDelete: Cascade)
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  @@unique([userId, friendId])
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  messageId String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String   @unique
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum Role {
+  FOUNDER
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+enum Status {
+  ONLINE
+  IDLE
+  DND
+  OFFLINE
+}
+
+enum ChannelType {
+  TEXT
+  VOICE
+}

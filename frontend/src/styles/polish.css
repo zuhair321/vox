@@ -1,0 +1,598 @@
+/* ════════════════════════════════════════════════════════════════
+   VOX — DAY 8-9 UI POLISH
+   Additive only. No existing rules are overridden destructively.
+   Covers: scrollbars, accessibility, themes switcher, quick switcher,
+   shortcuts modal, GIF picker, mentions, skeletons, voice timers,
+   date separators, jump-to-bottom, role badges, waveforms.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Global keyframes for new components ─────────────────────── */
+@keyframes waveBar {
+  0%,
+  100% {
+    height: 4px;
+  }
+  50% {
+    height: 14px;
+  }
+}
+
+@keyframes statusDotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-glow, rgba(0, 255, 65, 0.6));
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0);
+  }
+}
+
+@keyframes voiceTimerPulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+@keyframes jumpBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* ── Custom scrollbars (thin, angular, theme-aware) ──────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rim) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rim);
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--chaos);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Message area scrollbar gets a purple→chaos gradient thumb. */
+.messages-container::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--void-purple), var(--chaos));
+}
+
+/* Member list scrollbar is muted. */
+.member-panel::-webkit-scrollbar-thumb {
+  background: var(--shadow);
+}
+.member-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--ash);
+}
+
+/* ── Accessibility: keyboard focus + reduced motion + sr-only ── */
+:focus-visible {
+  outline: 2px solid var(--chaos);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Skeleton shimmer ────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--rim) 25%,
+    var(--phantom) 50%,
+    var(--rim) 75%
+  );
+  background-size: 400px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* ── Theme switcher ──────────────────────────────────────────── */
+.theme-switcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.theme-switcher-panel {
+  width: min(380px, 92vw);
+  padding: 24px;
+  clip-path: var(--cut-corner-tr);
+  background: var(--dark-matter);
+  border: 1px solid var(--rim);
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.theme-switcher-title {
+  margin: 0 0 18px;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 14px;
+  color: var(--ghost-white);
+  letter-spacing: 0.2em;
+}
+
+.theme-switcher-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.theme-swatch {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 48px;
+  border: 1px solid var(--rim);
+  border-radius: 0;
+  clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.theme-swatch.selected {
+  outline: 2px solid var(--chaos);
+  outline-offset: 1px;
+}
+
+.theme-swatch-check {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 12px;
+  color: #ffffff;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.8);
+}
+
+.theme-swatch-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 9px;
+  color: #ffffff;
+  letter-spacing: 0.12em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  padding-bottom: 3px;
+}
+
+/* ── Quick switcher ──────────────────────────────────────────── */
+.quick-switcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: flex-start center;
+  padding-top: 12vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.quick-switcher {
+  width: min(480px, 92vw);
+  clip-path: var(--cut-corner-tr);
+  background: var(--dark-matter);
+  border: 1px solid var(--rim);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.quick-switcher-input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ghost-white);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--rim);
+  outline: none;
+}
+
+.quick-switcher-results {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.quick-switcher-empty {
+  padding: 16px;
+  color: var(--shadow);
+  font-size: 12px;
+  text-align: center;
+}
+
+.quick-switcher-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--ash);
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+}
+
+.quick-switcher-item:hover,
+.quick-switcher-item.active {
+  background: rgba(102, 0, 204, 0.08);
+  color: var(--ghost-white);
+}
+
+.quick-switcher-item.active {
+  background: rgba(102, 0, 204, 0.15);
+}
+
+.quick-switcher-icon {
+  color: var(--shadow);
+  width: 18px;
+  text-align: center;
+}
+
+.quick-switcher-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-switcher-meta {
+  font-size: 10px;
+  color: var(--shadow);
+  letter-spacing: 0.1em;
+}
+
+/* ── Shortcuts modal ─────────────────────────────────────────── */
+.shortcuts-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+}
+
+.shortcuts-modal {
+  width: min(560px, 96vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 28px;
+  clip-path: var(--cut-corner-tr);
+  background: var(--dark-matter);
+  border: 1px solid var(--rim);
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+}
+
+.shortcuts-title {
+  margin: 0 0 20px;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 20px;
+  color: var(--ghost-white);
+  letter-spacing: 0.12em;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 640px) {
+  .shortcuts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.shortcuts-section-title {
+  margin: 0 0 10px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  color: var(--shadow);
+}
+
+.shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+
+.shortcuts-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.kbd {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--ghost-white);
+  background: var(--phantom);
+  border: 1px solid var(--rim);
+  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 3px, 100% 100%, 0 100%);
+}
+
+.kbd-plus {
+  color: var(--shadow);
+  font-size: 10px;
+}
+
+.shortcuts-desc {
+  color: var(--ash);
+  font-size: 13px;
+  text-align: right;
+  min-width: 0;
+}
+
+.shortcuts-close {
+  display: block;
+  margin: 22px auto 0;
+}
+
+/* ── GIF picker ──────────────────────────────────────────────── */
+.gif-picker {
+  position: absolute;
+  bottom: 52px;
+  right: 0;
+  width: 320px;
+  height: 360px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+  background: var(--dark-matter);
+  border: 1px solid var(--rim);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.gif-picker-search {
+  margin-bottom: 8px;
+}
+
+.gif-picker-categories {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 8px;
+  padding-bottom: 2px;
+}
+
+.gif-category {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--shadow);
+  background: var(--phantom);
+  border: 0;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 0 100%);
+}
+
+.gif-category.active {
+  color: #ffffff;
+  background: var(--chaos);
+}
+
+.gif-picker-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  align-content: start;
+}
+
+.gif-tile {
+  padding: 0;
+  background: var(--rim);
+  border: 0;
+  cursor: pointer;
+  overflow: hidden;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 0 100%);
+}
+
+.gif-tile img {
+  width: 100%;
+  height: 100%;
+  min-height: 70px;
+  object-fit: cover;
+  display: block;
+}
+
+.gif-tile:hover {
+  outline: 1px solid var(--chaos);
+}
+
+.gif-picker-empty {
+  grid-column: 1 / -1;
+  color: var(--shadow);
+  font-size: 12px;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.gif-picker-close {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: var(--shadow);
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* ── Mention chips + dropdown ────────────────────────────────── */
+.mention-chip {
+  display: inline-block;
+  background: rgba(74, 0, 128, 0.25);
+  border: 1px solid rgba(102, 0, 204, 0.4);
+  color: #c8c8ff;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  padding: 0 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 0 100%);
+}
+
+.mention-chip:hover {
+  background: rgba(102, 0, 204, 0.4);
+  border-color: var(--chaos);
+}
+
+.mention-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: 240px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 6px;
+  z-index: 40;
+  background: var(--dark-matter);
+  border: 1px solid var(--rim);
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, 0.45);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  color: var(--ghost-white);
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+}
+
+.mention-item:hover {
+  background: rgba(102, 0, 204, 0.08);
+}
+
+.mention-at {
+  color: var(--chaos);
+}
+
+/* ── Date separators ─────────────────────────────────────────── */
+.date-separator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.date-separator-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--rim), transparent);
+}
+
+.date-separator-text {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--shadow);
+  text-transform: uppercase;
+  padding: 0 8px;
+}
+
+/* ── Jump-to-bottom button ───────────────────────────────────── */
+.jump-to-bottom {
+  position: absolute;
+  bottom: 16px;
+  right: 20px;
+  z-index: 10;
+  padding: 8px 14px;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: #ffffff;
+  background: var(--chaos);
+  border: 0;
+  cursor: pointer;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  animation: jumpBounce 1s ease infinite;
+}
+
+/* ── Voice timer (panel variant) dot animation ───────────────── */
+.voice-timer-dot {
+  /* inline-styled in component; animation named voiceTimerPulse */
+}
+
+/* ── Member panel polished rows ──────────────────────────────── */
+.member-row-polished {
+  transition: background 0.15s ease;
+}
+
+.member-row-polished:hover {
+  background: rgba(255, 255, 255, 0.03);
+}

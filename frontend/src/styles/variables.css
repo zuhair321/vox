@@ -1,0 +1,55 @@
+/* ════════════════════════════════════════════════════════════════
+   VOX — VOID DESIGN TOKENS
+   The strict color palette. Single source of truth.
+   Dark Matter. Villain HQ. Gothic cathedral meets quantum void.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Backgrounds — descending into the void ──────────────── */
+  --void: #0c090b;          /* deep shell */
+  --abyss: #151012;         /* main background */
+  --dark-matter: #21171a;   /* card backgrounds */
+  --obsidian: #26191d;      /* sidebar */
+  --phantom: #372126;       /* elevated surfaces */
+  --rim: #5a2c32;           /* borders */
+  --ghost: #704047;         /* hover states */
+
+  /* ── Accents — cracks of light in the darkness ───────────── */
+  --crimson: #8b0000;       /* danger, delete, evil */
+  --blood: #cc0000;         /* active danger */
+  --void-purple: #5a0808;   /* legacy accent now dried blood */
+  --chaos: #b1121b;         /* primary action */
+  --electric: #e63232;      /* hover glow */
+  --gold: #ffd700;          /* rare, legendary */
+  --toxic: #00ff41;         /* online status, matrix */
+
+  /* ── Text — spectral hierarchy ───────────────────────────── */
+  --ghost-white: #fff4f4;   /* primary text */
+  --ash: #ead0d0;           /* secondary text */
+  --shadow: #b88989;        /* muted/disabled */
+
+  /* ── Derived — convenience composites ────────────────────── */
+  --chaos-glow: rgba(204, 0, 0, 0.42);
+  --crimson-glow: rgba(139, 0, 0, 0.5);
+  --toxic-glow: rgba(0, 255, 65, 0.4);
+  --gold-glow: rgba(255, 215, 0, 0.3);
+
+  /* ── Circle clip-paths — avatars and signature shapes ─────── */
+  --octagon: circle(50%);
+
+  /* ── Angular cut-corner clip-paths ───────────────────────── */
+  --cut-corner-tr: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+  --cut-corner-bl: polygon(0 0, 100% 0, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+  --cut-corner-all: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+
+  /* ── Fonts ───────────────────────────────────────────────── */
+  --font-display: 'Cinzel Decorative', serif;
+  --font-ui: 'Share Tech Mono', monospace;
+  --font-accent: 'Creepster', cursive;
+
+  /* ── Z-index scale ───────────────────────────────────────── */
+  --z-particles: 0;
+  --z-content: 1;
+  --z-overlay: 10;
+  --z-modal: 20;
+}

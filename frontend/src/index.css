@@ -1,0 +1,1339 @@
+:root {
+  --void:        #030304;
+  --abyss:       #060608;
+  --dark-matter: #0a0a0d;
+  --obsidian:    #0f0f13;
+  --phantom:     #161620;
+  --rim:         #2a2a38;
+  --ghost:       #1e1e2a;
+  --chaos:       #d84a5a;
+  --void-purple: #3b0a12;
+  --crimson:     #7d1f2b;
+  --blood:       #d84a5a;
+  --gold:        #d9c98d;
+  --toxic:       #8fcf9b;
+  --ghost-white: #f4f7fb;
+  --ash:         #c7ced8;
+  --shadow:      #8c95a3;
+  --chaos-glow:  rgba(216, 74, 90, 0.24);
+  --crimson-glow: rgba(216, 74, 90, 0.22);
+  --gold-glow: rgba(255, 209, 102, 0.32);
+  --toxic-glow: rgba(125, 255, 122, 0.36);
+  --octagon: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+  --cut-corner-tr: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+  --cut-corner-all: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--void);
+  color: var(--ghost-white);
+  font-family: 'Share Tech Mono', monospace;
+  overflow: hidden;
+}
+
+.vox-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 22px;
+  color: var(--ghost-white);
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 16, 43, 0.12), transparent 28%),
+    linear-gradient(180deg, #202529 0%, #171a1f 55%, #0b0d11 100%);
+}
+
+.vox-splash::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.025), transparent),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 5px);
+  animation: splash-breathe 2.8s ease-in-out infinite;
+}
+
+.vox-splash-mark {
+  position: relative;
+  display: grid;
+  width: 92px;
+  height: 62px;
+  place-items: center;
+  clip-path: polygon(16% 0, 84% 0, 100% 28%, 100% 72%, 84% 100%, 16% 100%, 0 72%, 0 28%);
+  color: #ffffff;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.76) 44%, rgba(255, 255, 255, 0.14) 45%),
+    linear-gradient(135deg, #fff, #d7d9de);
+  box-shadow: 0 0 34px rgba(255, 255, 255, 0.08), 0 0 28px rgba(255, 16, 43, 0.12);
+  animation: splash-mark-pulse 1.65s ease-in-out infinite;
+}
+
+.vox-splash-mark span {
+  color: #1c2026;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.vox-splash p {
+  position: relative;
+  margin: 0;
+  color: rgba(255, 244, 244, 0.9);
+  font-size: 13px;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 14px rgba(255, 255, 255, 0.08);
+  animation: splash-text 1.4s ease-in-out infinite;
+}
+
+@keyframes splash-breathe {
+  0%, 100% {
+    opacity: 0.64;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes splash-mark-pulse {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    filter: brightness(0.94);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.025);
+    filter: brightness(1.08);
+  }
+}
+
+@keyframes splash-text {
+  0%, 100% {
+    opacity: 0.62;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+h1, h2, h3, h4, h5, h6, .title {
+  font-family: 'Cinzel Decorative', serif;
+  font-weight: 700;
+  margin: 0;
+}
+
+.badge {
+  font-family: 'Creepster', cursive;
+  background-color: var(--crimson);
+  color: white;
+  padding: 2px 6px;
+  font-size: 14px;
+}
+
+/* Angular Utilities */
+.angular-cut {
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+}
+
+.angular-cut-top-right {
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
+}
+
+.angular-button {
+  background-color: var(--obsidian);
+  border: 1px solid var(--rim);
+  color: var(--ghost-white);
+  padding: 8px 16px;
+  font-family: 'Share Tech Mono', monospace;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  outline: none;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+
+.angular-button:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 0 15px var(--chaos-glow);
+  border-color: var(--chaos);
+}
+
+.angular-button.primary {
+  background: linear-gradient(135deg, var(--void-purple), var(--chaos), var(--ash));
+  border: none;
+  font-family: 'Cinzel Decorative', serif;
+  font-weight: 700;
+  box-shadow: 0 0 18px var(--chaos-glow);
+}
+
+.angular-button.danger {
+  background-color: var(--blood);
+  border-color: var(--crimson);
+}
+
+.angular-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.angular-input {
+  background-color: var(--obsidian);
+  border: 1px solid var(--rim);
+  color: var(--ghost-white);
+  padding: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  outline: none;
+  width: 100%;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.angular-input:focus {
+  border-color: var(--chaos);
+  box-shadow: 0 0 10px var(--chaos-glow);
+}
+
+.octagon {
+  clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+}
+
+/* Animations */
+@keyframes materialize {
+  from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer-bg {
+  background: linear-gradient(90deg, var(--rim) 25%, var(--phantom) 50%, var(--rim) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+
+@keyframes pulse-status {
+  0% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(0, 255, 65, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 255, 65, 0); }
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%; /* Only exception for toggles/dots */
+  display: inline-block;
+}
+
+.status-dot.online {
+  background-color: var(--toxic);
+  animation: pulse-status 2s infinite;
+}
+
+.status-dot.idle {
+  background-color: var(--gold);
+  box-shadow: 0 0 5px var(--gold);
+}
+
+.status-dot.dnd {
+  background-color: var(--crimson);
+}
+
+.status-dot.offline {
+  background-color: var(--shadow);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--phantom);
+  border: 1px solid var(--rim);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ghost);
+}
+
+/* App Layout — Gothic Black */
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background: #000000;
+}
+
+.server-rail {
+  width: 72px;
+  background:
+    radial-gradient(circle at 50% 16%, rgba(216, 74, 90, 0.04), transparent 36%),
+    linear-gradient(180deg, #050506, #020203);
+  border-right: 1px solid rgba(216, 74, 90, 0.12);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.sidebar {
+  width: 240px;
+  background:
+    linear-gradient(180deg, rgba(216, 74, 90, 0.03), transparent 26%),
+    var(--abyss);
+  border-right: 1px solid rgba(216, 74, 90, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.main-content {
+  flex: 1;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(216, 74, 90, 0.03), transparent),
+    var(--dark-matter);
+  display: flex;
+  flex-direction: column;
+}
+
+.member-panel {
+  width: 260px;
+  background:
+    linear-gradient(180deg, rgba(216, 74, 90, 0.03), transparent 26%),
+    var(--abyss);
+  border-left: 1px solid rgba(216, 74, 90, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.top-bar {
+  height: 48px;
+  border-bottom: 1px solid rgba(216, 74, 90, 0.1);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background:
+    linear-gradient(90deg, rgba(216, 74, 90, 0.04), transparent 45%),
+    var(--obsidian);
+  box-shadow: 0 2px 18px rgba(0,0,0,0.7), inset 0 -1px 0 rgba(216, 74, 90, 0.06);
+  z-index: 10;
+}
+
+.vox-user-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 30px 30px;
+  align-items: center;
+  gap: 7px;
+  padding: 10px;
+  background:
+    linear-gradient(90deg, rgba(216, 74, 90, 0.04), transparent),
+    var(--obsidian);
+  border-top: 1px solid rgba(216, 74, 90, 0.1);
+}
+
+.vox-user-profile {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ghost-white);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vox-user-profile .octagon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  color: white;
+  background: linear-gradient(135deg, #3b0a12, #0f0f13, #2a1520);
+  font-weight: 800;
+  overflow: hidden;
+}
+
+.vox-user-profile .octagon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.vox-user-profile span {
+  min-width: 0;
+}
+
+.vox-user-profile strong,
+.vox-user-profile em {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vox-user-profile strong {
+  font-size: 13px;
+}
+
+.vox-user-profile em {
+  color: var(--shadow);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.vox-panel-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  clip-path: var(--cut-corner-all);
+  color: var(--shadow);
+  background: var(--dark-matter);
+  border: 1px solid rgba(216, 74, 90, 0.1);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.vox-panel-icon:hover,
+.vox-user-profile:hover {
+  color: var(--ghost-white);
+}
+
+.vox-panel-icon:hover {
+  border-color: rgba(216, 74, 90, 0.5);
+  box-shadow: 0 0 14px rgba(216, 74, 90, 0.2);
+}
+
+/* --- Dark Matter Animations --- */
+@keyframes dark-matter-logo {
+  0% { transform: scale(0.8) rotate(-5deg); text-shadow: 0 0 0px var(--chaos); letter-spacing: -2px; filter: blur(5px); opacity: 0; }
+  50% { transform: scale(1.1) rotate(2deg); text-shadow: 0 0 25px var(--chaos-glow), 0 0 50px var(--void-purple); letter-spacing: 4px; filter: blur(0px); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); text-shadow: 0 0 10px var(--chaos-glow); letter-spacing: 2px; filter: blur(0px); opacity: 1; }
+}
+
+.animated-logo {
+  animation: dark-matter-logo 2s cubic-bezier(0.075, 0.82, 0.165, 1) forwards;
+  display: inline-block;
+}
+
+@keyframes void-pulse {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+.animated-bg {
+  background:
+              radial-gradient(ellipse 50% 40% at 50% 0%, rgba(216, 74, 90, 0.04) 0%, transparent),
+              radial-gradient(circle at 80% 80%, rgba(125, 31, 43, 0.03), transparent 40%),
+              radial-gradient(circle at center, var(--dark-matter) 0%, #000000 100%),
+              url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+  background-blend-mode: overlay;
+  background-size: cover, cover, cover, 150px 150px;
+  animation: void-pulse 30s ease infinite;
+}
+
+
+/* ─── VOX Login · Gothic Black ─── */
+
+/* ── keyframes ── */
+@keyframes sigil-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes login-glitch-cyan {
+  0%, 87%, 100% { opacity: 0; transform: none; }
+  88%  { opacity: 0.6; transform: translate(-2px, 1px); }
+  89%  { opacity: 0; }
+  92%  { opacity: 0.4; transform: translate(1px, -1px); }
+  93%  { opacity: 0; }
+}
+
+@keyframes login-glitch-red {
+  0%, 91%, 100% { opacity: 0; transform: none; }
+  92%  { opacity: 0.5; transform: translate(2px, -1px); }
+  93%  { opacity: 0; }
+  96%  { opacity: 0.35; transform: translate(-1px, 2px); }
+  97%  { opacity: 0; }
+}
+
+@keyframes ember-rise {
+  0%   { opacity: 0; transform: translateY(0) scale(0.4); }
+  15%  { opacity: 1; }
+  85%  { opacity: 0.6; }
+  100% { opacity: 0; transform: translateY(-100vh) scale(0); }
+}
+
+@keyframes fog-drift {
+  0%, 100% { opacity: 0.25; transform: translateX(-8%) scaleX(1.2); }
+  50%      { opacity: 0.45; transform: translateX(8%) scaleX(1.1); }
+}
+
+@keyframes corner-flicker {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.7; }
+  75%      { opacity: 0.2; }
+}
+
+@keyframes diamond-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(216, 74, 90, 0.4); }
+  50%      { box-shadow: 0 0 12px rgba(216, 74, 90, 0.8), 0 0 24px rgba(216, 74, 90, 0.3); }
+}
+
+@keyframes cross-glow {
+  0%, 100% { text-shadow: 0 0 6px rgba(216, 74, 90, 0.4); }
+  50%      { text-shadow: 0 0 18px rgba(216, 74, 90, 0.9), 0 0 36px rgba(216, 74, 90, 0.3); }
+}
+
+@keyframes card-breathe {
+  0%, 100% { box-shadow: 0 28px 70px rgba(0, 0, 0, 0.8), 0 0 60px rgba(216, 74, 90, 0.04), inset 0 0 42px rgba(216, 74, 90, 0.02); }
+  50%      { box-shadow: 0 28px 70px rgba(0, 0, 0, 0.8), 0 0 80px rgba(216, 74, 90, 0.08), inset 0 0 52px rgba(216, 74, 90, 0.04); }
+}
+
+@keyframes watermark-pulse {
+  0%, 100% { opacity: 0.03; transform: scale(1) translateY(-50%); filter: blur(4px); }
+  50%      { opacity: 0.08; transform: scale(1.05) translateY(-50%); filter: blur(8px); }
+}
+
+@keyframes border-trace {
+  0%   { clip-path: polygon(0 0, 100% 0, 100% 0, 0 0); }
+  25%  { clip-path: polygon(100% 0, 100% 100%, 100% 100%, 100% 0); }
+  50%  { clip-path: polygon(100% 100%, 0 100%, 0 100%, 100% 100%); }
+  75%  { clip-path: polygon(0 100%, 0 0, 0 0, 0 100%); }
+  100% { clip-path: polygon(0 0, 100% 0, 100% 0, 0 0); }
+}
+
+/* ── main container ── */
+.vox-login {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-height: 100vh;
+  width: 100vw;
+  place-items: center;
+  overflow: hidden;
+  padding: 34px 18px;
+  color: var(--ghost-white);
+  background:
+    radial-gradient(ellipse 60% 50% at 50% 40%, rgba(216, 74, 90, 0.06), transparent),
+    radial-gradient(circle at 20% 80%, rgba(125, 31, 43, 0.05), transparent 40%),
+    radial-gradient(circle at 80% 20%, rgba(125, 31, 43, 0.04), transparent 40%),
+    linear-gradient(180deg, #0a0a0a 0%, #050505 40%, #000000 100%);
+}
+
+.vox-login::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, rgba(216, 74, 90, 0.015), transparent),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.012) 0 1px, transparent 1px 5px);
+  animation: splash-breathe 3.6s ease-in-out infinite;
+}
+
+/* ── scanlines ── */
+.vox-login-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.008) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+}
+
+/* ── fog layer ── */
+.vox-login-fog {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 100% 30% at 50% 100%, rgba(20, 8, 10, 0.9), transparent),
+    radial-gradient(ellipse 80% 20% at 30% 90%, rgba(216, 74, 90, 0.03), transparent);
+  animation: fog-drift 12s ease-in-out infinite;
+}
+
+/* ── ember particles ── */
+.vox-login-embers {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.vox-login-embers .ember {
+  position: absolute;
+  bottom: -10px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(216, 74, 90, 0.9), rgba(255, 120, 80, 0.6));
+  box-shadow: 0 0 6px rgba(216, 74, 90, 0.5), 0 0 14px rgba(216, 74, 90, 0.2);
+  left: calc(8% + var(--i) * 7.5%);
+  animation: ember-rise calc(4s + var(--i) * 0.8s) ease-out infinite;
+  animation-delay: calc(var(--i) * 0.6s);
+}
+
+.vox-login-embers .ember:nth-child(odd) {
+  width: 2px;
+  height: 2px;
+  background: radial-gradient(circle, rgba(255, 160, 60, 0.8), rgba(255, 80, 40, 0.4));
+}
+
+/* ── watermark ── */
+.vox-login-watermark {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  z-index: 1;
+  pointer-events: none;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 35vw;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--crimson);
+  transform: translateY(-50%);
+  animation: watermark-pulse 8s ease-in-out infinite;
+  mix-blend-mode: screen;
+}
+
+/* ── sigil rings ── */
+.vox-login-orb {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.vox-login-ring {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.4;
+}
+
+.vox-login-ring.ring-outer {
+  width: 380px;
+  height: 380px;
+  border: 1px solid rgba(216, 74, 90, 0.15);
+  box-shadow: 0 0 20px rgba(216, 74, 90, 0.05);
+  animation: sigil-spin 28s linear infinite;
+}
+
+.vox-login-ring.ring-inner {
+  width: 300px;
+  height: 300px;
+  border: 1px solid rgba(216, 74, 90, 0.1);
+  animation: sigil-spin 20s linear infinite reverse;
+}
+
+.vox-login-ring.ring-sigil {
+  width: 340px;
+  height: 340px;
+  border: 1px dashed rgba(216, 74, 90, 0.08);
+  animation: sigil-spin 36s linear infinite;
+}
+
+/* ── stage ── */
+.vox-login-stage {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: min(420px, calc(100vw - 32px));
+  place-items: center;
+}
+
+/* ── card ── */
+.vox-login-card {
+  position: relative;
+  width: 100%;
+  padding: 36px 32px;
+  overflow: hidden;
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+  background:
+    linear-gradient(145deg, rgba(216, 74, 90, 0.04), transparent 22%),
+    linear-gradient(180deg, rgba(12, 10, 10, 0.98), rgba(5, 3, 3, 0.96));
+  border: 1px solid rgba(216, 74, 90, 0.15);
+  animation: card-breathe 6s ease-in-out infinite;
+}
+
+/* ── animated border glow ── */
+.vox-login-border-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 2px solid var(--crimson);
+  opacity: 0.5;
+  filter: blur(4px);
+  animation: border-trace 4s linear infinite;
+}
+
+/* ── corner ornaments ── */
+.vox-login-corner {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+  animation: corner-flicker 4s ease-in-out infinite;
+}
+
+.vox-login-corner::before,
+.vox-login-corner::after {
+  content: '';
+  position: absolute;
+  background: rgba(216, 74, 90, 0.5);
+}
+
+.vox-login-corner::before {
+  width: 100%;
+  height: 1px;
+  top: 50%;
+}
+
+.vox-login-corner::after {
+  width: 1px;
+  height: 100%;
+  left: 50%;
+}
+
+.corner-tl { top: 8px; left: 8px; }
+.corner-tr { top: 8px; right: 8px; animation-delay: 0.5s; }
+.corner-bl { bottom: 8px; left: 8px; animation-delay: 1s; }
+.corner-br { bottom: 8px; right: 8px; animation-delay: 1.5s; }
+
+/* ── header ── */
+.vox-login-header {
+  margin: 8px 0 20px;
+  text-align: center;
+}
+
+.vox-login-subtitle {
+  margin-bottom: 10px;
+  color: rgba(216, 74, 90, 0.7);
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+}
+
+.vox-login-header h1 {
+  position: relative;
+  display: inline-block;
+  margin: 0;
+  color: transparent;
+  background: linear-gradient(180deg, #ffffff 0%, #e0d0d4 30%, #8c4550 80%, #5a2030 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  font-size: 72px;
+  line-height: 0.9;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 30px rgba(216, 74, 90, 0.12);
+}
+
+.vox-login-header .glitch-text::before,
+.vox-login-header .glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vox-login-header .glitch-text::before {
+  color: rgba(216, 74, 90, 0.6);
+  animation: login-glitch-cyan 4.5s steps(1, end) infinite;
+}
+
+.vox-login-header .glitch-text::after {
+  color: rgba(125, 31, 43, 0.5);
+  animation: login-glitch-red 5.2s steps(1, end) infinite;
+}
+
+.vox-login-header strong {
+  display: block;
+  margin-top: 10px;
+  color: rgba(140, 149, 163, 0.6);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  font-weight: 400;
+}
+
+/* ── ornament under heading ── */
+.vox-login-ornament {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.vox-login-ornament span:first-child,
+.vox-login-ornament span:last-child {
+  display: block;
+  width: 40px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(216, 74, 90, 0.35), transparent);
+}
+
+.vox-login-ornament .cross {
+  color: rgba(216, 74, 90, 0.7);
+  font-size: 14px;
+  animation: cross-glow 3s ease-in-out infinite;
+}
+
+/* ── divider ── */
+.vox-login-divider {
+  position: relative;
+  height: 1px;
+  margin: 0 0 24px;
+  background: linear-gradient(90deg, transparent, rgba(216, 74, 90, 0.25), transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vox-login-divider .divider-diamond {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: rgba(216, 74, 90, 0.6);
+  transform: rotate(45deg);
+  animation: diamond-pulse 3s ease-in-out infinite;
+}
+
+/* ── fields ── */
+.vox-login-field {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.vox-login-field label {
+  color: rgba(216, 74, 90, 0.55);
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.vox-login-input-wrap {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 14px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  color: rgba(140, 149, 163, 0.6);
+  background:
+    linear-gradient(90deg, rgba(216, 74, 90, 0.03), transparent 40%),
+    rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(216, 74, 90, 0.12);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.vox-login-input-wrap:focus-within {
+  background:
+    linear-gradient(90deg, rgba(216, 74, 90, 0.06), transparent 44%),
+    rgba(5, 2, 2, 0.9);
+  border-color: rgba(216, 74, 90, 0.4);
+  box-shadow: 0 0 22px rgba(216, 74, 90, 0.1), inset 0 0 12px rgba(216, 74, 90, 0.03);
+}
+
+.vox-login-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  color: var(--ghost-white);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+}
+
+.vox-login-input-wrap input::placeholder {
+  color: rgba(140, 149, 163, 0.3);
+}
+
+/* ── submit button ── */
+.vox-login-submit {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  margin-top: 22px;
+  padding: 0 16px;
+  clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  color: var(--ghost-white);
+  background:
+    linear-gradient(90deg, rgba(216, 74, 90, 0.15), transparent 30%),
+    linear-gradient(135deg, #2a0a10, #1a0408, #0d0204);
+  border: 1px solid rgba(216, 74, 90, 0.3);
+  box-shadow: 0 0 28px rgba(216, 74, 90, 0.1);
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  cursor: pointer;
+}
+
+.vox-login-submit span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vox-login-submit:hover:not(:disabled),
+.vox-login-submit:focus-visible:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(216, 74, 90, 0.5);
+  box-shadow: 0 0 40px rgba(216, 74, 90, 0.2), 0 8px 32px rgba(0, 0, 0, 0.6);
+  background:
+    linear-gradient(90deg, rgba(216, 74, 90, 0.2), transparent 35%),
+    linear-gradient(135deg, #3a1018, #200610, #100306);
+}
+
+.vox-login-submit:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+/* ── footer ── */
+.vox-login-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.vox-login-footer span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 26px;
+  padding: 5px 8px;
+  color: rgba(216, 74, 90, 0.4);
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(216, 74, 90, 0.1);
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  flex: 1;
+}
+
+/* ── responsive ── */
+@media (max-width: 560px) {
+  .vox-login {
+    padding: 22px 14px;
+  }
+
+  .vox-login-stage {
+    width: min(100%, calc(100vw - 24px));
+  }
+
+  .vox-login-card {
+    padding: 22px;
+  }
+
+  .vox-login-header {
+    margin: 8px 0 14px;
+  }
+
+  .vox-login-header h1 {
+    font-size: 56px;
+  }
+
+  .vox-login-header strong {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  .vox-login-submit {
+    font-size: 12px;
+    letter-spacing: 0.1em;
+  }
+
+  .vox-login-footer {
+    gap: 6px;
+  }
+
+  .vox-login-footer span {
+    padding-inline: 4px;
+    font-size: 8px;
+  }
+}
+
+.vox-login-register {
+  margin-top: 16px;
+  color: var(--shadow);
+  font-size: 12px;
+  text-align: center;
+}
+
+.vox-login-register strong {
+  color: var(--crimson);
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  transition: color 0.2s ease, text-shadow 0.2s ease;
+}
+
+.vox-login-register strong:hover {
+  color: var(--blood);
+  text-shadow: 0 0 10px rgba(216, 74, 90, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vox-login::before,
+  .vox-login-ring,
+  .vox-login-embers .ember,
+  .vox-login-fog,
+  .vox-login-corner,
+  .vox-login-ornament .cross,
+  .vox-login-divider .divider-diamond {
+    animation: none;
+  }
+}
+
+/* ── Button utilities (used by ErrorBoundary, Onboarding, Voice) ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  border: 1px solid var(--rim);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: all 0.2s ease;
+  background: transparent;
+  color: var(--ghost-white);
+}
+
+.vox-btn-chaos {
+  background: linear-gradient(135deg, var(--void-purple), var(--chaos));
+  color: var(--ghost-white);
+  border-color: var(--chaos);
+  box-shadow: 0 0 14px var(--chaos-glow);
+}
+
+.vox-btn-chaos:hover:not(:disabled) {
+  box-shadow: 0 0 24px var(--chaos-glow);
+  transform: translateY(-1px);
+}
+
+.vox-btn-outline {
+  background: transparent;
+  color: var(--ash);
+  border-color: var(--rim);
+}
+
+.vox-btn-outline:hover:not(:disabled) {
+  border-color: var(--chaos);
+  color: var(--ghost-white);
+  box-shadow: 0 0 14px var(--chaos-glow);
+}
+
+.btn:disabled,
+.btn-loading {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.btn-loading::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--rim);
+  border-top-color: var(--chaos);
+  border-radius: 50%;
+  animation: spinAnim 0.6s linear infinite;
+}
+
+/* ── Spinner small (14px) ── */
+.spinner-sm {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--rim);
+  border-top-color: var(--chaos);
+  border-radius: 50%;
+  animation: spinAnim 0.6s linear infinite;
+}
+
+/* ── Empty state utilities ── */
+.vox-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.vox-empty-icon {
+  font-size: 36px;
+  opacity: 0.3;
+  margin-bottom: 12px;
+}
+
+.vox-empty-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 14px;
+  color: var(--shadow);
+  margin-bottom: 8px;
+}
+
+.vox-empty-desc {
+  font-size: 12px;
+  color: var(--shadow);
+  opacity: 0.7;
+}
+
+/* ── Crop / adjust modal ─────────────────────────────────────── */
+.crop-stage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 0;
+  background: #000;
+  border-radius: 8px;
+  margin: 6px 0 14px;
+  overflow: hidden;
+  user-select: none;
+}
+.crop-frame {
+  position: relative;
+  overflow: hidden;
+  background: #0a0a0a;
+  cursor: grab;
+  touch-action: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.crop-frame:active {
+  cursor: grabbing;
+}
+.crop-frame img {
+  display: block;
+  transform-origin: center center;
+  will-change: transform;
+}
+.crop-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ghost-white);
+}
+
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  color: var(--ghost-white);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+}
+.crop-zoom input[type='range'] {
+  flex: 1;
+  accent-color: var(--chaos);
+  cursor: pointer;
+}
+
+.crop-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.crop-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.crop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.crop-panel {
+  width: min(480px, 100%);
+  padding: 28px;
+  clip-path: var(--cut-corner-tr);
+  background: var(--dark-matter);
+  border: 1px solid var(--rim);
+  box-shadow: 0 0 36px rgba(0, 0, 0, 0.45);
+}
+
+/* ── Toast Notifications ───────────────────────────────────── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 9999;
+  pointer-events: none;
+  max-height: 40vh;
+  overflow: visible;
+}
+
+.toast-item {
+  padding: 12px 16px;
+  border: 1px solid var(--rim);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.toast-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), 0 0 12px var(--chaos-glow);
+}
+
+.toast-timer-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+/* Variant border colors — keep for backward compat but left-border now handled inline */
+.toast-success { border-color: var(--chaos); }
+.toast-error { border-color: var(--blood); }
+.toast-info { border-color: var(--void-purple); }
+.toast-warning { border-color: var(--gold); }
+.toast-pin { border-color: var(--gold); }
+.toast-mention { border-color: var(--chaos); }
+
+/* Pulsing mention style */
+@keyframes toastMentionPulse {
+  0% { box-shadow: 0 0 0 0 rgba(102, 0, 204, 0.4); }
+  70% { box-shadow: 0 0 0 6px rgba(102, 0, 204, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(102, 0, 204, 0); }
+}
+
+.toast-pulse {
+  animation: toastMentionPulse 2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-timer-fill,
+  .toast-pulse {
+    animation: none;
+  }
+}
+/* Ripple effect */
+.ripple-container,
+.btn,
+.angular-button,
+.server-icon,
+.channel-item,
+.member-row-polished,
+.member-list-item,
+.clickable-row {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-wave {
+  position: absolute;
+  border-radius: 0;
+  background: rgba(102, 0, 204, 0.3);
+  transform: scale(0);
+  pointer-events: none;
+  animation: rippleAnim 0.5s ease-out forwards;
+}
+
+@keyframes rippleAnim {
+  from {
+    transform: scale(0);
+    opacity: 0.3;
+  }
+  to {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+/* Message hover glow */
+.message-row {
+  transition: background 0.15s ease, border-left 0.15s ease;
+  border-left: 2px solid transparent;
+}
+
+.message-row:hover {
+  background: rgba(255, 255, 255, 0.015);
+  border-left: 2px solid rgba(102, 0, 204, 0.2);
+}
+
+.message-row.own-message:hover {
+  border-left: 2px solid rgba(255, 215, 0, 0.2);
+}
+
+/* Message input focus brightening */
+.angular-input:focus {
+  background-color: var(--phantom);
+}
+
+/* Message input send button activation */
+.message-input-wrapper .send-button {
+  background: var(--phantom);
+  color: var(--shadow);
+}
+
+.message-input-wrapper:focus-within .send-button:not(:disabled) {
+  background: var(--chaos);
+  color: white;
+  border-color: var(--crimson);
+  box-shadow: 0 0 10px var(--chaos-glow);
+}
+
+.message-input-wrapper .send-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: var(--phantom);
+  color: var(--shadow);
+  box-shadow: none;
+}

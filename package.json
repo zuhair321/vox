@@ -1,0 +1,15 @@
+{
+  "name": "vox-desktop",
+  "version": "1.0.0",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "desktop": "electron ."
+  },
+  "dependencies": {
+    "lucide-react": "^1.18.0"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0"
+  }
+}

@@ -1,0 +1,297 @@
+/* ════════════════════════════════════════════════════════════════
+   VOX — VOID ANIMATION LIBRARY
+   The app breathes, pulses, glitches, and watches.
+   ════════════════════════════════════════════════════════════════ */
+
+/* 1. VOID PULSE — the entire app breathes on a 4s loop ─────────── */
+@keyframes void-pulse {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.03);
+  }
+}
+
+.void-breathe {
+  animation: void-pulse 4s ease-in-out infinite;
+}
+
+/* 2. GLITCH — VOX logo fractures every 8-12s ───────────────────── */
+@keyframes glitch-1 {
+  0%, 92%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+    opacity: 0;
+  }
+  93% { clip-path: inset(20% 0 30% 0); transform: translate(-3px, 0); opacity: 0.8; }
+  94% { clip-path: inset(60% 0 10% 0); transform: translate(3px, 0); opacity: 0.7; }
+  95% { clip-path: inset(40% 0 50% 0); transform: translate(-2px, 0); opacity: 0.9; }
+  96% { clip-path: inset(10% 0 70% 0); transform: translate(2px, 0); opacity: 0.6; }
+  97% { clip-path: inset(80% 0 5% 0); transform: translate(-3px, 0); opacity: 0.8; }
+}
+
+@keyframes glitch-2 {
+  0%, 92%, 100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0);
+    opacity: 0;
+  }
+  93% { clip-path: inset(50% 0 20% 0); transform: translate(3px, 0); opacity: 0.7; }
+  94% { clip-path: inset(15% 0 60% 0); transform: translate(-3px, 0); opacity: 0.8; }
+  95% { clip-path: inset(70% 0 15% 0); transform: translate(2px, 0); opacity: 0.6; }
+  96% { clip-path: inset(25% 0 45% 0); transform: translate(-2px, 0); opacity: 0.9; }
+  97% { clip-path: inset(55% 0 25% 0); transform: translate(3px, 0); opacity: 0.7; }
+}
+
+.glitch-text {
+  position: relative;
+  display: inline-block;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.glitch-text::before {
+  color: var(--chaos);
+  animation: glitch-1 10s infinite linear alternate-reverse;
+  z-index: 1;
+}
+
+.glitch-text::after {
+  color: var(--crimson);
+  animation: glitch-2 10s infinite linear alternate-reverse;
+  z-index: 2;
+}
+
+/* 3. ENERGY BORDER — rotating conic gradient ───────────────────── */
+@keyframes energy-border-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.energy-border-active {
+  position: relative;
+}
+
+.energy-border-active::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    var(--void-purple),
+    var(--chaos),
+    var(--crimson),
+    var(--void-purple)
+  );
+  z-index: -1;
+  animation: energy-border-rotate 3s linear infinite;
+}
+
+/* 4. MESSAGE APPEAR — materialize from the void ────────────────── */
+@keyframes message-appear {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.message-materialize {
+  animation: message-appear 0.25s ease-out;
+}
+
+/* 5. VOID PULL — hover scale + glow ────────────────────────────── */
+@keyframes void-pull {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 rgba(204, 0, 0, 0);
+  }
+  100% {
+    transform: scale(1.02);
+    box-shadow: 0 0 20px var(--chaos-glow);
+  }
+}
+
+.void-pull {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.void-pull:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 20px var(--chaos-glow);
+}
+
+/* 6. RITUAL RING — rotating dark circle around active server ──── */
+@keyframes ritual-ring {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.ritual-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    transparent,
+    var(--void-purple),
+    var(--chaos),
+    var(--crimson),
+    transparent
+  );
+  animation: ritual-ring 3s linear infinite;
+  z-index: -1;
+  opacity: 0.7;
+}
+
+/* 7. VENOM DRIP — elastic typing dots ──────────────────────────── */
+@keyframes venom-drip {
+  0%, 80%, 100% {
+    transform: scale(0.6) translateY(0);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1.2) translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.venom-dot {
+  animation: venom-drip 1.4s ease-in-out infinite;
+}
+
+.venom-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.venom-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* 8. STATUS PULSE — glow for online/toxic status ───────────────── */
+@keyframes status-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--toxic-glow);
+  }
+  50% {
+    box-shadow: 0 0 8px 2px var(--toxic-glow);
+  }
+}
+
+@keyframes status-pulse-gold {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--gold-glow);
+    opacity: 0.7;
+  }
+  50% {
+    box-shadow: 0 0 6px 1px var(--gold-glow);
+    opacity: 1;
+  }
+}
+
+.status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+.status-pulse-gold {
+  animation: status-pulse-gold 2.5s ease-in-out infinite;
+}
+
+/* 9. PARTICLE FLOAT — random drifting paths ────────────────────── */
+@keyframes particle-float {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.5;
+  }
+  90% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(var(--drift-x, 100px), var(--drift-y, -100px));
+    opacity: 0;
+  }
+}
+
+/* 10. FLASH CHAOS — click ripple ───────────────────────────────── */
+@keyframes flash-chaos {
+  0% {
+    box-shadow: 0 0 0 0 var(--chaos-glow);
+  }
+  100% {
+    box-shadow: 0 0 0 20px transparent;
+  }
+}
+
+.flash-chaos {
+  animation: flash-chaos 0.4s ease-out;
+}
+
+/* ── BONUS: notification bounce-in ─────────────────────────────── */
+@keyframes bounce-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.bounce-in {
+  animation: bounce-in 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* ── Spin utility ──────────────────────────────────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ── Screen edge flashes (error/success) ───────────────────────── */
+@keyframes flash-edge-crimson {
+  0% { box-shadow: inset 0 0 0 0 transparent; }
+  20% { box-shadow: inset 0 0 60px 10px rgba(139, 0, 0, 0.3); }
+  100% { box-shadow: inset 0 0 0 0 transparent; }
+}
+
+@keyframes flash-edge-toxic {
+  0% { box-shadow: inset 0 0 0 0 transparent; }
+  20% { box-shadow: inset 0 0 60px 10px rgba(0, 255, 65, 0.2); }
+  100% { box-shadow: inset 0 0 0 0 transparent; }
+}
+
+.flash-error {
+  animation: flash-edge-crimson 0.6s ease-out;
+}
+
+.flash-success {
+  animation: flash-edge-toxic 0.6s ease-out;
+}

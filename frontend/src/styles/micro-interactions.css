@@ -1,0 +1,566 @@
+/* ════════════════════════════════════════════════════════════════
+   VOX — MICRO-INTERACTIONS
+   Hover states, press feedback, transitions, and entrance animations
+   for interactive elements that were missing them.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Server icon hover glow ─────────────────────────────────── */
+.server-icon:not(.active):hover {
+  border-color: var(--chaos) !important;
+  box-shadow: 0 0 14px var(--chaos-glow);
+  transform: scale(1.08);
+}
+
+.server-icon:active {
+  transform: scale(0.95) !important;
+}
+
+.server-icon.active {
+  box-shadow: 0 0 12px var(--chaos-glow);
+}
+
+/* ── Voice channel item hover ──────────────────────────────── */
+.voice-channel-item {
+  transition: background 0.15s ease, color 0.15s ease, border-left 0.15s ease;
+  border-left: 2px solid transparent;
+}
+
+.voice-channel-item:hover {
+  background: rgba(216, 74, 90, 0.06);
+  color: var(--ghost-white);
+  border-left: 2px solid rgba(216, 74, 90, 0.25);
+}
+
+/* ── DM sidebar friend item hover (fixes dead hover:bg-rim) ─ */
+.dm-friend-item {
+  transition: background 0.15s ease, color 0.15s ease;
+  border-radius: 4px;
+}
+
+.dm-friend-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ghost-white);
+}
+
+.dm-friend-item:active {
+  background: rgba(216, 74, 90, 0.08);
+}
+
+/* ── Friends page tab underline transition ──────────────────── */
+.friends-tab {
+  transition: color 0.2s ease;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 14px;
+}
+
+.friends-tab.active {
+  color: var(--ghost-white);
+  border-bottom-color: var(--chaos);
+}
+
+.friends-tab:not(.active):hover {
+  color: var(--ghost-white);
+}
+
+/* ── Accept / Decline button press ─────────────────────────── */
+.friend-action-btn {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.friend-action-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 10px var(--chaos-glow);
+}
+
+.friend-action-btn:active {
+  transform: scale(0.92);
+}
+
+/* ── Attachment file chip hover ────────────────────────────── */
+.attachment-file-chip {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.attachment-file-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  border-color: var(--chaos) !important;
+}
+
+.attachment-file-chip:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ── Attachment image hover overlay ────────────────────────── */
+.attachment-image-wrap {
+  position: relative;
+  overflow: hidden;
+  display: block;
+}
+
+.attachment-image-wrap::after {
+  content: '🔍';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  font-size: 24px;
+  pointer-events: none;
+}
+
+.attachment-image-wrap:hover::after {
+  opacity: 1;
+}
+
+.attachment-image-wrap img {
+  transition: transform 0.2s ease;
+}
+
+.attachment-image-wrap:hover img {
+  transform: scale(1.03);
+}
+
+/* ── Link preview card hover lift ─────────────────────────── */
+.vox-link-preview {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.vox-link-preview:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 12px var(--chaos-glow);
+}
+
+/* ── Profile popup entrance ────────────────────────────────── */
+@keyframes profilePopupIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.profile-popup-animate {
+  animation: profilePopupIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.profile-popup-animate .angular-button {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.profile-popup-animate .angular-button:hover {
+  transform: scale(1.04);
+  box-shadow: 0 0 12px var(--chaos-glow);
+}
+
+.profile-popup-animate .angular-button:active {
+  transform: scale(0.95);
+}
+
+/* ── Typing indicator fade ─────────────────────────────────── */
+.typing-indicator {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.typing-indicator-enter {
+  animation: typingFadeIn 0.25s ease-out forwards;
+}
+
+.typing-indicator-exit {
+  animation: typingFadeOut 0.2s ease-in forwards;
+}
+
+@keyframes typingFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes typingFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-4px); }
+}
+
+/* ── DM message entry animation ─────────────────────────────── */
+@keyframes dmMessageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.dm-message-animate {
+  animation: dmMessageIn 0.2s ease-out forwards;
+}
+
+.dm-message-row {
+  transition: background 0.15s ease;
+  border-radius: 4px;
+  padding: 6px 8px !important;
+  margin: -6px -8px;
+}
+
+.dm-message-row:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── Message input action buttons ──────────────────────────── */
+.input-action-btn {
+  transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease !important;
+}
+
+.input-action-btn:hover {
+  transform: scale(1.2);
+  color: var(--ghost-white) !important;
+}
+
+.input-action-btn:active {
+  transform: scale(0.9);
+}
+
+/* ── Reply bar dismiss button ──────────────────────────────── */
+.reply-dismiss-btn {
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.reply-dismiss-btn:hover {
+  color: var(--blood) !important;
+  transform: scale(1.15);
+}
+
+/* ── Pending attachment chip ──────────────────────────────── */
+.pending-attachment-chip {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pending-attachment-chip:hover {
+  border-color: rgba(216, 74, 90, 0.3) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Pinned message card hover ─────────────────────────────── */
+.pinned-msg-card {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.pinned-msg-card:hover {
+  border-color: var(--chaos) !important;
+  box-shadow: 0 0 12px rgba(216, 74, 90, 0.12);
+}
+
+.pinned-jump-link {
+  transition: color 0.15s ease, text-shadow 0.15s ease;
+}
+
+.pinned-jump-link:hover {
+  color: var(--electric) !important;
+  text-shadow: 0 0 8px var(--chaos-glow);
+}
+
+.pinned-close-btn {
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.pinned-close-btn:hover {
+  color: var(--ghost-white) !important;
+  transform: scale(1.15);
+}
+
+/* ── Member panel stronger hover ────────────────────────────── */
+.member-row-polished {
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+  border-radius: 4px;
+}
+
+.member-row-polished:hover {
+  background: rgba(216, 74, 90, 0.06) !important;
+  box-shadow: inset 0 0 0 1px rgba(216, 74, 90, 0.08);
+  transform: translateX(2px);
+}
+
+.member-row-polished:active {
+  transform: translateX(2px) scale(0.98);
+}
+
+/* ── Panel toggle button active glow ───────────────────────── */
+.panel-toggle-btn {
+  transition: color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease !important;
+}
+
+.panel-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.panel-toggle-btn.active {
+  color: var(--chaos) !important;
+  border-color: var(--chaos) !important;
+  box-shadow: 0 0 8px var(--chaos-glow);
+}
+
+/* ── Offline banner exit ───────────────────────────────────── */
+@keyframes slideUp {
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(-100%); opacity: 0; }
+}
+
+.offline-banner-exit {
+  animation: slideUp 0.3s ease-in forwards;
+  pointer-events: none;
+}
+
+/* ── Discover category pill transition ────────────────────── */
+.discover-category-pill {
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.discover-category-pill.active {
+  background: var(--chaos) !important;
+  color: var(--ghost-white) !important;
+  box-shadow: 0 0 10px var(--chaos-glow);
+}
+
+.discover-category-pill:not(.active):hover {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--ghost-white) !important;
+}
+
+/* ── Sidebar create-channel "+" button ────────────────────── */
+.create-channel-btn {
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.create-channel-btn:hover {
+  color: var(--chaos) !important;
+  transform: scale(1.2) rotate(90deg);
+}
+
+/* ── Empty state subtle pulse ──────────────────────────────── */
+@keyframes emptyFloat {
+  0%, 100% { transform: translateY(0); opacity: 0.15; }
+  50%      { transform: translateY(-6px); opacity: 0.25; }
+}
+
+.vox-empty-icon {
+  animation: emptyFloat 3s ease-in-out infinite;
+}
+
+/* ── Reduced motion ────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .server-icon:not(.active):hover,
+  .friend-action-btn:hover,
+  .attachment-file-chip:hover,
+  .input-action-btn:hover,
+  .member-row-polished:hover,
+  .profile-popup-animate .angular-button:hover {
+    transform: none !important;
+  }
+
+  .dm-message-animate,
+  .typing-indicator-enter,
+  .typing-indicator-exit,
+  .profile-popup-animate,
+  .offline-banner-exit,
+  .vox-empty-icon {
+    animation: none !important;
+  }
+
+  .attachment-image-wrap::after,
+  .attachment-image-wrap:hover img,
+  .discover-category-pill,
+  .voice-channel-item,
+  .dm-friend-item {
+    transition: none !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ERROR BOUNDARY — System Failure Screen
+   ════════════════════════════════════════════════════════════════ */
+
+.error-boundary-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--void);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: errorScreenIn 0.4s ease-out;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.error-boundary-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(216, 74, 90, 0.12) 0%, transparent 50%);
+  pointer-events: none;
+  animation: errorGlowPulse 3s ease-in-out infinite;
+}
+
+@keyframes errorScreenIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes errorGlowPulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+.error-boundary-icon {
+  font-size: 72px;
+  margin-bottom: 20px;
+  color: var(--blood);
+  text-shadow: 0 0 40px rgba(216, 74, 90, 0.5), 0 0 80px rgba(216, 74, 90, 0.2);
+  animation: errorIconFloat 4s ease-in-out infinite;
+  filter: grayscale(0.2);
+}
+
+@keyframes errorIconFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50%      { transform: translateY(-8px) scale(1.05); }
+}
+
+.error-boundary-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 36px;
+  color: var(--blood);
+  margin-bottom: 8px;
+  text-shadow: 0 0 24px rgba(216, 74, 90, 0.35);
+  letter-spacing: 0.08em;
+}
+
+.error-boundary-subtitle {
+  color: var(--ash);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.error-boundary-summary {
+  display: flex;
+  gap: 8px;
+  align-items: 'baseline';
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--rim);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  max-width: 600px;
+  width: 100%;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+}
+
+.error-boundary-stack-section {
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: 24px;
+}
+
+.error-boundary-toggle {
+  background: none;
+  border: 1px solid var(--rim);
+  color: var(--ash);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  padding: 4px 12px;
+  cursor: pointer;
+  letter-spacing: 0.15em;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.error-boundary-toggle:hover {
+  color: var(--ghost-white);
+  border-color: var(--chaos);
+}
+
+.error-boundary-stack {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--chaos);
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--rim);
+  border-left: 3px solid var(--blood);
+  padding: 16px;
+  margin-top: 8px;
+  max-height: 240px;
+  overflow: auto;
+  width: 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.6;
+  animation: errorStackIn 0.2s ease-out;
+}
+
+@keyframes errorStackIn {
+  from { opacity: 0; max-height: 0; }
+  to   { opacity: 1; max-height: 240px; }
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.error-boundary-reload {
+  background: var(--blood) !important;
+  border-color: var(--blood) !important;
+  color: white !important;
+  font-weight: 700;
+  box-shadow: 0 0 16px rgba(216, 74, 90, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.error-boundary-reload:hover {
+  transform: scale(1.04) !important;
+  box-shadow: 0 0 24px rgba(216, 74, 90, 0.5) !important;
+}
+
+.error-boundary-reload:active {
+  transform: scale(0.96) !important;
+}
+
+.error-boundary-copy {
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
+}
+
+.error-boundary-copy:hover {
+  border-color: var(--chaos) !important;
+  box-shadow: 0 0 10px var(--chaos-glow) !important;
+  transform: scale(1.04) !important;
+}
+
+.error-boundary-reset {
+  transition: transform 0.15s ease, border-color 0.15s ease !important;
+}
+
+.error-boundary-reset:hover {
+  border-color: var(--toxic) !important;
+  color: var(--toxic) !important;
+  transform: scale(1.04) !important;
+}
+
+.error-boundary-footer {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--shadow);
+  letter-spacing: 0.2em;
+  opacity: 0.5;
+}
