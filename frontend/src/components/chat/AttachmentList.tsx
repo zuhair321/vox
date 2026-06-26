@@ -23,16 +23,25 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
 
   if (attachment.kind === 'image') {
     return (
-      <a href={fullUrl} target="_blank" rel="noreferrer" className="attachment-image-wrap" style={{ display: 'block', marginTop: '6px' }}>
+      <a
+        href={fullUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="attachment-image-wrap"
+        style={{ display: 'block', marginTop: '6px', width: '100%', maxWidth: '100%' }}
+      >
         <img
           src={fullUrl}
           alt={attachment.name}
           loading="lazy"
           style={{
-            maxWidth: '320px',
+            width: 'auto',
+            maxWidth: '100%',
             maxHeight: '320px',
+            height: 'auto',
             borderRadius: '8px',
             display: 'block',
+            objectFit: 'contain',
             border: '1px solid rgba(255,255,255,0.08)',
           }}
         />
@@ -46,7 +55,8 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
         controls
         src={fullUrl}
         style={{
-          maxWidth: '360px',
+          width: 'min(480px, 100%)',
+          maxWidth: '100%',
           maxHeight: '320px',
           borderRadius: '8px',
           marginTop: '6px',
@@ -104,7 +114,7 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
 const AttachmentList: React.FC<{ attachments?: Attachment[] }> = ({ attachments }) => {
   if (!attachments || attachments.length === 0) return null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxWidth: '100%', minWidth: 0 }}>
       {attachments.map((a, i) => (
         <AttachmentView key={`${a.url}-${i}`} attachment={a} />
       ))}

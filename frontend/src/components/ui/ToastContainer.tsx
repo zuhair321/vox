@@ -6,8 +6,8 @@ import Toast from './Toast';
 const ToastContainer: React.FC = () => {
   const { toasts, removeToast } = useUiStore();
 
-  // Max 5 visible. Store already caps at 5, but we slice for safety.
-  const visibleToasts = toasts.slice(-5);
+  // Max 4 visible. Older toasts get pushed out.
+  const visibleToasts = toasts.slice(-4);
 
   return (
     <div className="toast-container">

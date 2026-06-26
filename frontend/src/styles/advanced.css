@@ -110,7 +110,7 @@
 }
 
 .vox-channel-link:hover {
-  background: rgba(216, 74, 90, 0.15);
+  background: color-mix(in srgb, var(--chaos) 15%, transparent);
 }
 
 /* ── Message link style ────────────────────────────────────── */
@@ -204,7 +204,7 @@
 
 .vox-link-preview:hover {
   border-color: var(--chaos);
-  box-shadow: 0 0 16px rgba(216, 74, 90, 0.15);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--chaos) 15%, transparent);
 }
 
 .vox-link-preview-image {
@@ -333,7 +333,7 @@
   background-color: rgba(102, 0, 204, 0.04);
 }
 .message-row.own-message:hover {
-  background-color: rgba(216, 74, 90, 0.04);
+  background-color: color-mix(in srgb, var(--chaos) 4%, transparent);
 }
 
 /* ── Shimmer / skeleton loading ──────────────────────────────── */

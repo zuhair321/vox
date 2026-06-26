@@ -31,6 +31,7 @@ interface ProfileStore {
   hydrateFromUser: (user: any) => void;
   setAvatarUrl: (avatarUrl: string | null) => void;
   setBannerUrl: (bannerUrl: string | null) => void;
+  reset: () => void;
 }
 
 import { api } from '../api/client';
@@ -58,6 +59,13 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   updateStatus: (status) => set({ status }),
   updateUserStatus: async (userStatus) => {
     set({ userStatus });
+    // Also broadcast via socket so other users see it immediately
+    try {
+      const { useSocketStore } = await import('./socketStore');
+      useSocketStore.getState().updateStatus(userStatus.toUpperCase());
+    } catch (err) {
+      console.warn('Failed to broadcast status', err);
+    }
     try {
       const res = await api('/api/auth/me', {
         method: 'PATCH',
@@ -96,4 +104,20 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   })),
   setAvatarUrl: (avatarUrl) => set({ avatarUrl }),
   setBannerUrl: (bannerUrl) => set({ bannerUrl }),
+
+  // Tear down the prior session so the next user starts clean. Identity,
+  // badges and connections are per-user and must not bleed into the next login.
+  reset: () => set({
+    displayName: '',
+    username: '',
+    bio: '',
+    status: '',
+    userStatus: 'online',
+    avatarUrl: null,
+    bannerUrl: null,
+    badges: [],
+    connections: [],
+    memberSince: '',
+    orbsBalance: 0,
+  }),
 }));

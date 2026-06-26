@@ -171,8 +171,8 @@ export async function register({ email, username, password }) {
   if (!/^[a-zA-Z0-9_]{3,32}$/.test(username)) {
     throw new HttpError(400, 'Username must be 3–32 chars: letters, numbers, underscore.');
   }
-  if (password.length < 8) {
-    throw new HttpError(400, 'Password must be at least 8 characters.');
+  if (password.length < 5) {
+    throw new HttpError(400, 'Password must be at least 5 characters.');
   }
 
   // Re-probe so a DB that was down at boot (or went down mid-session) is

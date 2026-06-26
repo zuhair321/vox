@@ -291,7 +291,10 @@ const Profile: React.FC = () => {
                     style={{
                       width: '10px',
                       height: '10px',
-                      boxShadow: profile.userStatus === s ? `0 0 6px 2px var(--${s === 'online' ? 'toxic' : s === 'idle' ? 'gold' : 'crimson'}-glow)` : 'none',
+                      boxShadow: profile.userStatus === s
+                        ? `0 0 6px 2px ${s === 'online' ? 'rgba(143,207,155,0.5)' : s === 'idle' ? 'rgba(217,201,141,0.5)' : 'rgba(125,31,43,0.5)'}`
+                        : 'none',
+                      backgroundColor: s === 'online' ? '#8fcf9b' : s === 'idle' ? '#d9c98d' : '#7d1f2b',
                     }}
                   />
                   {s}

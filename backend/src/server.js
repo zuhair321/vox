@@ -19,6 +19,7 @@ import { dmRouter } from './routes/dm.js';
 import { searchRouter } from './routes/search.js';
 import { insightsRouter } from './routes/insights.js';
 import { inviteRouter } from './routes/invites.js';
+import { editRouter } from './routes/edit.routes.js';
 import { linkPreviewRouter } from './routes/linkPreview.js';
 import { errorHandler, notFound } from './middleware/error.js';
 
@@ -74,6 +75,7 @@ app.use('/api', searchRouter);
 app.use('/api', insightsRouter);
 app.use('/api', inviteRouter);
 app.use('/api', linkPreviewRouter);
+app.use('/api', editRouter);
 
 app.use(notFound);
 app.use(errorHandler);

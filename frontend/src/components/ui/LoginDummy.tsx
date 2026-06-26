@@ -128,7 +128,10 @@ const LoginDummy: React.FC = () => {
         </form>
 
         <p className="vox-login-register">
-          No account? <strong>REGISTER</strong>
+          No account?{' '}
+          <button type="button" onClick={() => navigate('/register')} style={{ background: 'none', border: 'none', color: 'var(--chaos)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', textDecoration: 'underline' }}>
+            <strong>REGISTER</strong>
+          </button>
         </p>
       </section>
     </main>

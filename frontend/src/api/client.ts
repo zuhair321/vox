@@ -8,6 +8,19 @@ export function getToken() {
   return localStorage.getItem('vox_token');
 }
 
+// Dynamic import keeps the module graph acyclic at eval time: client.ts is
+// imported by stores, and auth.ts imports those same stores. The import only
+// resolves when logout() actually executes (401 path), which is always after
+// the initial module graph has fully loaded.
+let logoutFn: (() => void) | null = null;
+async function getLogout(): Promise<() => void> {
+  if (!logoutFn) {
+    const mod = await import('../utils/auth');
+    logoutFn = mod.logout;
+  }
+  return logoutFn;
+}
+
 export async function api(path: string, options: RequestInit = {}) {
   const res = await fetch(API_BASE + path, {
     ...options,
@@ -19,10 +32,10 @@ export async function api(path: string, options: RequestInit = {}) {
   });
 
   if (res.status === 401) {
-    localStorage.removeItem('vox_token');
-    localStorage.removeItem('vox_refresh_token');
-    localStorage.removeItem('vox_user');
-    window.location.href = '/login';
+    // Delegate to the central logout helper so all teardown logic lives in
+    // one place. This throws (via the redirect) so callers never proceed
+    // with a stale session.
+    (await getLogout())();
     // Throw instead of returning undefined: callers commonly `await api(...)`
     // and then destructure / chain on the result. Returning undefined turned a
     // routine auth expiry into a "cannot read properties of undefined" crash.

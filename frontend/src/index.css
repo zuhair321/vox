@@ -253,6 +253,12 @@ h1, h2, h3, h4, h5, h6, .title {
   background-color: var(--shadow);
 }
 
+/* ── Status dot pulse animation ── */
+@keyframes statusDotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(143, 207, 155, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(143, 207, 155, 0); }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -275,6 +281,8 @@ h1, h2, h3, h4, h5, h6, .title {
   height: 100vh;
   width: 100vw;
   background: #000000;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .server-rail {
@@ -303,6 +311,9 @@ h1, h2, h3, h4, h5, h6, .title {
 
 .main-content {
   flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background:
     radial-gradient(ellipse 60% 40% at 50% 0%, rgba(216, 74, 90, 0.03), transparent),
     var(--dark-matter);
@@ -1301,6 +1312,30 @@ h1, h2, h3, h4, h5, h6, .title {
 .message-row {
   transition: background 0.15s ease, border-left 0.15s ease;
   border-left: 2px solid transparent;
+  min-width: 0;
+  overflow: visible;
+}
+
+.messages-container {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+  padding: 16px 16px 20px;
+  flex: 1 1 auto;
+}
+
+.message-media-link,
+.attachment-image-wrap {
+  max-width: 100%;
+}
+
+.gif-message,
+.attachment-image-wrap img {
+  max-width: 100%;
+  height: auto;
 }
 
 .message-row:hover {
@@ -1336,4 +1371,344 @@ h1, h2, h3, h4, h5, h6, .title {
   background: var(--phantom);
   color: var(--shadow);
   box-shadow: none;
+}
+
+/* ── Day 12 / 13 additions ───────────────────────────────────── */
+
+/* Ripple animation */
+@keyframes rippleAnim {
+  to {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+.ripple-wave {
+  position: absolute;
+  border-radius: 0;
+  background: rgba(102, 0, 204, 0.3);
+  transform: scale(0);
+  animation: rippleAnim 0.5s ease-out forwards;
+  pointer-events: none;
+}
+
+/* Shimmer for lazy image skeleton */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Toast timer bar */
+.toast-timer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  animation: toastTimer linear forwards;
+}
+
+@keyframes toastTimer {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+.toast-item:hover .toast-timer {
+  animation-play-state: paused;
+}
+
+/* Toast slide animations */
+@keyframes toastSlideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toastSlideOut {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+.toast-enter {
+  animation: toastSlideIn 0.25s ease-out forwards;
+}
+
+.toast-exit {
+  animation: toastSlideOut 0.2s ease-in forwards;
+}
+
+/* Pulsing mention toast */
+@keyframes toastMentionPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(231, 237, 245, 0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(231, 237, 245, 0); }
+}
+
+.toast-mention {
+  animation: toastMentionPulse 2s ease-in-out infinite;
+}
+
+/* Spinner */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Message hover glow — left border */
+.message-row {
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.message-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.message-row:hover {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.message-row:hover::before {
+  background: rgba(102, 0, 204, 0.2);
+}
+
+.message-row.own-message:hover::before {
+  background: rgba(255, 215, 0, 0.2);
+}
+
+/* Channel item hover background slide */
+.channel-item {
+  position: relative;
+  overflow: hidden;
+}
+
+.channel-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: rgba(102, 0, 204, 0.06);
+  transition: width 0.2s ease;
+  z-index: 0;
+}
+
+.channel-item:hover::before {
+  width: 100%;
+}
+
+/* Server icon hover clip-path morph */
+.server-icon {
+  transition: clip-path 0.2s ease, transform 0.2s ease;
+}
+
+.server-icon:hover {
+  clip-path: polygon(20% 0%, 80% 0%, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0% 80%, 0% 20%);
+  transform: scale(1.05);
+}
+
+/* Input focus states */
+.angular-input:focus {
+  border-color: var(--chaos) !important;
+  box-shadow: 0 0 0 3px rgba(102, 0, 204, 0.12) !important;
+}
+
+.angular-input::placeholder {
+  transition: opacity 0.2s ease;
+}
+
+.angular-input:focus::placeholder {
+  opacity: 0.5;
+}
+
+/* Status dot pulse refined */
+@keyframes statusDotPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(143, 207, 155, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(143, 207, 155, 0); }
+}
+
+/* Copy feedback floating label */
+.copy-feedback {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  padding: 4px 10px;
+  background: var(--chaos);
+  color: var(--void);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 12px;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  animation: copyFadeIn 0.2s ease, copyFadeOut 0.2s ease 1.3s forwards;
+}
+
+@keyframes copyFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes copyFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-4px); }
+}
+
+/* Modal entrance/exit */
+.modal-backdrop {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  transition: opacity 0.2s ease;
+}
+
+.modal-panel {
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.modal-enter .modal-panel {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+}
+
+.modal-enter-active .modal-panel {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.modal-exit .modal-panel {
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+
+.modal-exit-active .modal-panel {
+  transform: scale(0.94) translateY(8px);
+  opacity: 0;
+}
+
+/* Scrollbar polish */
+.messages-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.messages-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.messages-container::-webkit-scrollbar-thumb {
+  background: var(--rim);
+  border-radius: 3px;
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: var(--ghost);
+}
+
+/* Member list hover */
+.member-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Context menu item hover */
+.context-menu-item:hover {
+  background: rgba(102, 0, 204, 0.08);
+  border-left: 2px solid var(--chaos);
+}
+
+/* Link hover */
+a:hover {
+  color: var(--chaos);
+  text-decoration: underline;
+}
+
+/* Close/X button hover */
+button[aria-label*="Close"]:hover,
+button[aria-label*="close"]:hover,
+.profile-close-button:hover {
+  color: var(--blood);
+  transform: scale(1.05);
+}
+
+/* Back arrow hover */
+button[aria-label="Back"]:hover {
+  transform: translateX(-3px);
+  color: var(--chaos);
+}
+
+/* Toggle switch thumb */
+.toggle-thumb {
+  transition: transform 0.2s ease;
+}
+
+.toggle-track {
+  transition: background 0.3s ease;
+}
+
+/* Avatar hover ring */
+.octagon:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 0 2px var(--rim), 0 0 8px var(--chaos-glow);
+}
+
+/* Send button in input */
+.send-button {
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+/* Reaction pill hover */
+.reaction-pill:hover {
+  transform: scale(1.08);
+  border-color: var(--chaos);
+  box-shadow: 0 0 6px var(--chaos-glow);
+}
+
+/* Notification badge bounce */
+@keyframes badgeBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+}
+
+.badge-new {
+  animation: badgeBounce 0.3s ease;
+}
+
+/* Offline banner slide */
+@keyframes offlineSlideIn {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+.offline-banner {
+  animation: offlineSlideIn 0.2s ease-out;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ripple-wave,
+  .toast-timer,
+  .spinner,
+  .copy-feedback,
+  .badge-new,
+  .offline-banner {
+    animation: none !important;
+  }
+  .channel-item::before,
+  .server-icon,
+  .angular-input::placeholder,
+  .send-button,
+  .reaction-pill,
+  .octagon {
+    transition: none !important;
+  }
 }

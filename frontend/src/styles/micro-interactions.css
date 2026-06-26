@@ -26,9 +26,9 @@
 }
 
 .voice-channel-item:hover {
-  background: rgba(216, 74, 90, 0.06);
+  background: color-mix(in srgb, var(--chaos) 6%, transparent);
   color: var(--ghost-white);
-  border-left: 2px solid rgba(216, 74, 90, 0.25);
+  border-left: 2px solid color-mix(in srgb, var(--chaos) 25%, transparent);
 }
 
 /* ── DM sidebar friend item hover (fixes dead hover:bg-rim) ─ */
@@ -43,7 +43,7 @@
 }
 
 .dm-friend-item:active {
-  background: rgba(216, 74, 90, 0.08);
+  background: color-mix(in srgb, var(--chaos) 8%, transparent);
 }
 
 /* ── Friends page tab underline transition ──────────────────── */
@@ -245,7 +245,7 @@
 }
 
 .pending-attachment-chip:hover {
-  border-color: rgba(216, 74, 90, 0.3) !important;
+  border-color: color-mix(in srgb, var(--chaos) 30%, transparent) !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -256,7 +256,7 @@
 
 .pinned-msg-card:hover {
   border-color: var(--chaos) !important;
-  box-shadow: 0 0 12px rgba(216, 74, 90, 0.12);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--chaos) 12%, transparent);
 }
 
 .pinned-jump-link {
@@ -284,8 +284,8 @@
 }
 
 .member-row-polished:hover {
-  background: rgba(216, 74, 90, 0.06) !important;
-  box-shadow: inset 0 0 0 1px rgba(216, 74, 90, 0.08);
+  background: color-mix(in srgb, var(--chaos) 6%, transparent) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chaos) 8%, transparent);
   transform: translateX(2px);
 }
 
@@ -405,7 +405,7 @@
 .error-boundary-glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, rgba(216, 74, 90, 0.12) 0%, transparent 50%);
+  background: radial-gradient(circle at center, color-mix(in srgb, var(--chaos) 12%, transparent) 0%, transparent 50%);
   pointer-events: none;
   animation: errorGlowPulse 3s ease-in-out infinite;
 }
@@ -424,7 +424,7 @@
   font-size: 72px;
   margin-bottom: 20px;
   color: var(--blood);
-  text-shadow: 0 0 40px rgba(216, 74, 90, 0.5), 0 0 80px rgba(216, 74, 90, 0.2);
+  text-shadow: 0 0 40px color-mix(in srgb, var(--chaos) 50%, transparent), 0 0 80px color-mix(in srgb, var(--chaos) 20%, transparent);
   animation: errorIconFloat 4s ease-in-out infinite;
   filter: grayscale(0.2);
 }
@@ -439,7 +439,7 @@
   font-size: 36px;
   color: var(--blood);
   margin-bottom: 8px;
-  text-shadow: 0 0 24px rgba(216, 74, 90, 0.35);
+  text-shadow: 0 0 24px color-mix(in srgb, var(--chaos) 35%, transparent);
   letter-spacing: 0.08em;
 }
 
@@ -524,13 +524,13 @@
   border-color: var(--blood) !important;
   color: white !important;
   font-weight: 700;
-  box-shadow: 0 0 16px rgba(216, 74, 90, 0.3);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--chaos) 30%, transparent);
   transition: transform 0.15s ease, box-shadow 0.15s ease !important;
 }
 
 .error-boundary-reload:hover {
   transform: scale(1.04) !important;
-  box-shadow: 0 0 24px rgba(216, 74, 90, 0.5) !important;
+  box-shadow: 0 0 24px color-mix(in srgb, var(--chaos) 50%, transparent) !important;
 }
 
 .error-boundary-reload:active {

@@ -1,5 +1,5 @@
 // Octagon status indicator with per-state polish.
-//   ONLINE  → toxic (theme --online) + pulsing glow ring
+//   ONLINE  → toxic green + pulsing glow ring
 //   IDLE    → idle gold, dimmed, with a crescent cutout
 //   DND     → danger crimson with a horizontal slash
 //   OFFLINE → hollow (border only, no fill)
@@ -63,7 +63,7 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
         aria-label="Status: idle"
         style={{
           ...base,
-          background: 'var(--idle, var(--gold))',
+          background: '#d9c98d',
           opacity: 0.85,
           display: 'inline-flex',
           alignItems: 'center',
@@ -93,7 +93,7 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
         aria-label="Status: do not disturb"
         style={{
           ...base,
-          background: 'var(--danger, var(--crimson))',
+          background: '#7d1f2b',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -119,7 +119,7 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
       aria-label="Status: online"
       style={{
         ...base,
-        background: 'var(--online, var(--toxic))',
+        background: '#8fcf9b',
         animation: 'statusDotPulse 2s ease-in-out infinite',
       }}
     />

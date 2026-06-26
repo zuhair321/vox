@@ -25,6 +25,7 @@ import FriendsPage from './components/friends/FriendsPage';
 import DMConversation from './components/friends/DMConversation';
 import LoginDummy from './components/ui/LoginDummy';
 import Profile from './pages/Profile';
+import RegisterPage from './pages/Register';
 import SplashScreen from './components/ui/SplashScreen';
 import InviteModal from './components/server/InviteModal';
 import CustomStatusModal from './components/ui/CustomStatusModal';
@@ -188,6 +189,7 @@ function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/login" element={<LoginDummy />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route path="/*" element={<AppLayout />} />
       </Routes>
     </ErrorBoundary>

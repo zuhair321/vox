@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format, isToday, isThisWeek, differenceInSeconds, differenceInMinutes, differenceInHours } from 'date-fns';
 import { motion } from 'framer-motion';
 import { API_BASE, api } from '../../api/client';
@@ -75,13 +75,45 @@ function formatRelativeTime(dateString: string) {
   return `${format(d, 'MMM d')} at ${format(d, 'h:mm a')}`;
 }
 
-const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
+const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn }) => {
   const { editMessage } = useSocketStore();
   const { setReplyingTo, messages } = useMessageStore();
   const { setThreadMessageId, setShowPinnedPanel, addToast } = useUiStore();
   const { show, hide, contextMenu } = useContextMenu();
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(message.body);
+
+  // Reset editValue when message changes (e.g. from socket update)
+  useEffect(() => {
+    if (!isEditing) setEditValue(message.body);
+  }, [message.body, isEditing]);
+
+  const saveEdit = async () => {
+    const newBody = editValue.trim();
+    if (!newBody || newBody === message.body) {
+      setIsEditing(false);
+      setEditValue(message.body);
+      return;
+    }
+    // Optimistic update
+    useMessageStore.getState().updateMessage(message.channelId, { ...message, body: newBody, edited: true });
+    setIsEditing(false);
+    try {
+      await api(`/api/messages/${message.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body: newBody }),
+      });
+    } catch (err: any) {
+      // Revert on error
+      useMessageStore.getState().updateMessage(message.channelId, { ...message, body: message.body, edited: message.edited });
+      addToast(err?.message || 'Failed to edit.', 'error');
+    }
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setEditValue(message.body);
+  };
 
   const role = normalizeRole(message.author?.role);
   const roleDef = ROLES[role];
@@ -98,16 +130,6 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
   const textBody = isGif
     ? message.body.replace(/^\[GIF\]\s*\S+\s*/i, '').trim()
     : message.body;
-
-  const handleEdit = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      editMessage(message.id, editValue);
-      setIsEditing(false);
-    } else if (e.key === 'Escape') {
-      setIsEditing(false);
-      setEditValue(message.body);
-    }
-  };
 
   const myRole = (() => {
     try { return (JSON.parse(localStorage.getItem('vox_user') || '{}')?.role || '').toUpperCase(); } catch { return ''; }
@@ -130,11 +152,16 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
   };
   const handleDelete = async () => {
     if (!window.confirm('Delete this message?')) return;
+    const channelId = message.channelId;
+    const msgId = message.id;
+    // Optimistic: remove immediately from UI
+    useMessageStore.getState().removeMessage(channelId, msgId);
+    addToast('🗑️ Deleted.', 'info');
     try {
-      await api(`/api/messages/${message.id}`, { method: 'DELETE' }).catch(() => {});
-      useSocketStore.getState().deleteMessage(message.id);
-      addToast('🗑️ Deleted.', 'info');
-    } catch (e: any) { addToast(e?.message || 'Failed to delete.', 'error'); }
+      await api(`/api/messages/${msgId}`, { method: 'DELETE' });
+    } catch (err: any) {
+      addToast(err?.message || 'Failed to delete on server.', 'error');
+    }
   };
   const handleAddReaction = (emoji: string) => {
     useSocketStore.getState().reactToMessage(message.id, emoji);
@@ -200,15 +227,18 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
         padding: '6px 16px',
         marginTop: isGrouped ? '0' : '14px',
         position: 'relative',
+        alignItems: 'flex-start',
+        minWidth: 0,
+        overflow: 'visible',
       }}
     >
-      <div style={{ width: '40px', flexShrink: 0 }}>
+      <div style={{ width: '48px', flexShrink: 0 }}>
         {!isGrouped && (
           <div
             className="octagon"
             style={{
-              width: '40px',
-              height: '40px',
+              width: '48px',
+              height: '48px',
               overflow: 'hidden',
               background:
                 message.author?.color ||
@@ -225,7 +255,7 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               />
             ) : (
-              <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '16px' }}>
+              <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '18px' }}>
                 {authorName.slice(0, 1).toUpperCase()}
               </span>
             )}
@@ -233,7 +263,7 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
         )}
       </div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: '1 1 auto', minWidth: 0, maxWidth: '100%', overflow: 'visible' }}>
         {!isGrouped && (
           <div
             style={{
@@ -263,14 +293,43 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
         )}
 
         {isEditing ? (
-          <input
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            onKeyDown={handleEdit}
-            className="angular-input"
-            autoFocus
-            aria-label="Edit message"
-          />
+          <div style={{ width: '100%' }}>
+            <textarea
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  saveEdit();
+                } else if (e.key === 'Escape') {
+                  cancelEdit();
+                }
+              }}
+              className="angular-input"
+              autoFocus
+              rows={Math.max(2, editValue.split('\n').length)}
+              aria-label="Edit message"
+              style={{ width: '100%', resize: 'vertical', minHeight: '48px' }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '6px' }}>
+              <button
+                type="button"
+                className="angular-button"
+                onClick={cancelEdit}
+                style={{ padding: '4px 12px', fontSize: '11px', background: 'var(--obsidian)', color: 'var(--ash)' }}
+              >
+                CANCEL
+              </button>
+              <button
+                type="button"
+                className="angular-button primary"
+                onClick={saveEdit}
+                style={{ padding: '4px 12px', fontSize: '11px' }}
+              >
+                SAVE
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             {textBody && (
@@ -279,6 +338,9 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
                   color: 'var(--ghost-white)',
                   lineHeight: 1.5,
                   wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  width: '100%',
+                  whiteSpace: 'pre-wrap',
                 }}
               >
                 <RichText text={textBody} />
@@ -291,20 +353,29 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
               </div>
             )}
             {previewUrl && (
-              <div style={{ maxWidth: '400px' }}>
+              <div style={{ maxWidth: '400px', width: '100%' }}>
                 <LinkPreviewCard url={previewUrl} />
               </div>
             )}
             {isGif && gifUrl && (
-              <a href={gifUrl} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '4px' }}>
+              <a
+                href={gifUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="message-media-link"
+                style={{ display: 'block', marginTop: '6px', width: '100%', maxWidth: 'min(420px, 100%)' }}
+              >
                 <img
                   src={gifUrl}
                   alt="GIF"
                   className="gif-message"
                   style={{
-                    maxWidth: '300px',
-                    maxHeight: '200px',
+                    width: 'auto',
+                    maxWidth: '100%',
+                    maxHeight: '320px',
+                    height: 'auto',
                     display: 'block',
+                    objectFit: 'contain',
                     clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)',
                     cursor: 'pointer',
                   }}
@@ -329,6 +400,6 @@ const MessageBubble: React.FC<Props> = ({ message, isGrouped, isOwn }) => {
       )}
     </motion.div>
   );
-};
+});
 
 export default MessageBubble;

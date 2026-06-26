@@ -70,10 +70,10 @@ const MainContent: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <MessageArea channelId={selectedChannel.id} />
-          <div style={{ padding: '0 16px 24px 16px' }}>
+          <div style={{ flexShrink: 0, padding: '0 16px 24px 16px' }}>
             <MessageInput channelId={selectedChannel.id} />
           </div>
         </div>

@@ -1,28 +1,26 @@
+/** Debounce: delay execution until `ms` after the last call. */
 export function debounce<T extends (...args: any[]) => any>(
   fn: T,
-  delay: number
+  ms: number
 ): (...args: Parameters<T>) => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
-
-  return (...args: Parameters<T>) => {
+  return (...args) => {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), delay);
+    timer = setTimeout(() => fn(...args), ms);
   };
 }
 
+/** Throttle: execute at most once per `ms`. */
 export function throttle<T extends (...args: any[]) => any>(
   fn: T,
-  limit: number
+  ms: number
 ): (...args: Parameters<T>) => void {
-  let inThrottle = false;
-
-  return (...args: Parameters<T>) => {
-    if (!inThrottle) {
+  let last = 0;
+  return (...args) => {
+    const now = Date.now();
+    if (now - last >= ms) {
+      last = now;
       fn(...args);
-      inThrottle = true;
-      setTimeout(() => {
-        inThrottle = false;
-      }, limit);
     }
   };
 }

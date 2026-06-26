@@ -80,8 +80,17 @@ export function registerHandlers(io, socket) {
   socket.on('message:edit', async ({ messageId, content }) => {
     if (!userId) return;
     try {
+      // Check if the message belongs to this user (including anonymous fallback messages)
+      const existing = await prisma.message.findUnique({ where: { id: messageId } });
+      if (!existing) return;
+      const myUsername = socket.data.user?.username;
+      const isOwner = existing.userId
+        ? existing.userId === userId
+        : existing.authorOverride === myUsername;
+      if (!isOwner) return;
+
       const message = await prisma.message.update({
-        where: { id: messageId, userId },
+        where: { id: messageId },
         data: { body: content, edited: true },
         include: { author: true, reactions: true, parent: true }
       });
@@ -93,8 +102,16 @@ export function registerHandlers(io, socket) {
   socket.on('message:delete', async ({ messageId }) => {
     if (!userId) return;
     try {
+      const existing = await prisma.message.findUnique({ where: { id: messageId } });
+      if (!existing) return;
+      const myUsername = socket.data.user?.username;
+      const isOwner = existing.userId
+        ? existing.userId === userId
+        : existing.authorOverride === myUsername;
+      if (!isOwner) return;
+
       const message = await prisma.message.update({
-        where: { id: messageId, userId },
+        where: { id: messageId },
         data: { deleted: true, body: '' }
       });
       const channelId = message.channelId;

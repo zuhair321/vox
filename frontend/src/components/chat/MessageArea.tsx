@@ -67,6 +67,23 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [channelId]);
 
+  // Auto-scroll to bottom when new messages arrive and user is near bottom.
+  const prevMessageCount = useRef(channelMessages.length);
+  useEffect(() => {
+    prevMessageCount.current = 0; // reset when channel changes
+  }, [channelId]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distance < SCROLL_THRESHOLD;
+    if (channelMessages.length > prevMessageCount.current && nearBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+    prevMessageCount.current = channelMessages.length;
+  }, [channelMessages.length]);
+
   const jumpToBottom = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     setShowJump(false);
@@ -97,19 +114,11 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
   const isLoading = !!loading[channelId] && channelMessages.length === 0;
 
   return (
-    <div style={{ position: 'relative', flex: 1, display: 'flex', minHeight: 0 }}>
+    <div style={{ position: 'relative', flex: '1 1 auto', display: 'flex', minHeight: 0, overflow: 'hidden' }}>
       <div
         ref={scrollRef}
         onScroll={onScroll}
         className="messages-container"
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '4px',
-        }}
       >
         {isLoading ? (
           <MessageListSkeleton />

@@ -163,5 +163,16 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
   updateStatus: (status) => {
     get().socket?.emit('status:update', { status });
+    // Also update our own member entry in the server store locally, so the
+    // member panel reflects our status change instantly instead of waiting
+    // for the server to echo a presence:update back to us.
+    try {
+      const me = JSON.parse(localStorage.getItem('vox_user') || '{}');
+      if (me.id) {
+        useServerStore.getState().updateMemberStatus(me.id, status.toLowerCase());
+      }
+    } catch {
+      // localStorage parse failure — non-critical.
+    }
   }
 }));

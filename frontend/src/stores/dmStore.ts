@@ -22,6 +22,7 @@ interface DMStore {
   addMessage: (message: DMMessage) => void;
   selectDM: (dmId: string) => void;
   markRead: (dmId: string) => void;
+  reset: () => void;
 }
 
 export const useDMStore = create<DMStore>((set, get) => ({
@@ -47,5 +48,8 @@ export const useDMStore = create<DMStore>((set, get) => ({
 
   markRead: (dmId) => set(state => ({
     unread: { ...state.unread, [dmId]: 0 }
-  }))
+  })),
+
+  // Tear down the prior session so the next user starts clean.
+  reset: () => set({ messages: {}, unread: {}, selectedDM: null }),
 }));

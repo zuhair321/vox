@@ -17,6 +17,8 @@ import {
   RoleKey,
 } from '../../config/roles';
 
+import { useProfileStore } from '../../stores/profileStore';
+
 const MOCK_ACTIVITIES: Record<string, { type: 'game' | 'music' | 'video' | 'voice'; name: string }> = {};
 const ACTIVITY_META = {
   game: { icon: '🎮' },
@@ -47,6 +49,10 @@ const MemberPanel: React.FC = () => {
   const { addToast } = useUiStore();
   const navigate = useNavigate();
   const memberMenu = useContextMenu();
+  const profile = useProfileStore();
+  const myUserId = (() => {
+    try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id; } catch { return ''; }
+  })();
 
   const buildMemberMenu = (member: MemberLike, isSelf: boolean): MenuItem[] => {
     if (isSelf) {
@@ -120,8 +126,9 @@ const MemberPanel: React.FC = () => {
     for (const key of ROLE_GROUP_ORDER) buckets[key] = [];
 
     for (const m of selectedServer.members as MemberLike[]) {
-      const status = String(m.user?.status || '').toLowerCase();
-      if (status === 'offline') {
+      const isMe = m.user?.id === myUserId;
+      const memberStatus = isMe ? profile.userStatus : String(m.user?.status || '').toLowerCase();
+      if (memberStatus === 'offline') {
         buckets.OFFLINE.push(m);
       } else {
         const role = normalizeRole(m.role || m.user?.role);
@@ -133,8 +140,12 @@ const MemberPanel: React.FC = () => {
     for (const key of Object.keys(buckets)) {
       if (key === 'OFFLINE') continue;
       buckets[key].sort((a, b) => {
-        const ra = statusRank[String(a.user?.status || '').toLowerCase()] ?? 3;
-        const rb = statusRank[String(b.user?.status || '').toLowerCase()] ?? 3;
+        const aIsMe = a.user?.id === myUserId;
+        const bIsMe = b.user?.id === myUserId;
+        const sa = aIsMe ? profile.userStatus : String(a.user?.status || '').toLowerCase();
+        const sb = bIsMe ? profile.userStatus : String(b.user?.status || '').toLowerCase();
+        const ra = statusRank[sa] ?? 3;
+        const rb = statusRank[sb] ?? 3;
         if (ra !== rb) return ra - rb;
         return String(a.user?.username || '').localeCompare(String(b.user?.username || ''));
       });
@@ -143,7 +154,7 @@ const MemberPanel: React.FC = () => {
     const counts: Record<string, number> = {};
     for (const key of Object.keys(buckets)) counts[key] = buckets[key].length;
     return { buckets, counts };
-  }, [selectedServer]);
+  }, [selectedServer, profile.userStatus, myUserId]);
 
   if (!selectedServer) return <div className="member-panel"></div>;
 
@@ -203,8 +214,9 @@ const MemberPanel: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {members.map((member) => {
                   const user = member.user || {};
+                  const isMe = user.id === myUserId;
                   const avatarUrl = resolveAvatar(user.avatarUrl);
-                  const status = String(user.status || 'offline').toLowerCase();
+                  const status = isMe ? profile.userStatus : String(user.status || 'offline').toLowerCase();
                   const role = normalizeRole(member.role || user.role);
                   const activity = user.id ? MOCK_ACTIVITIES[user.id] : undefined;
                   return (

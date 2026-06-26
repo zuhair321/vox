@@ -25,7 +25,7 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = ({ channelId, dmId }) => {
+const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo(({ channelId, dmId }) => {
   const [content, setContent] = useState('');
   const [pending, setPending] = useState<PendingAttachment[]>([]);
   const [busy, setBusy] = useState(false);
@@ -472,6 +472,6 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = ({ channel
       </button>
     </div>
   );
-};
+});
 
 export default MessageInput;

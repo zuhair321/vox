@@ -28,6 +28,21 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
 
   if (!selectedServer) return <div className="sidebar"></div>;
 
+  // Derive the current user's status from the SAME source the member panel
+  // uses (the server member entry), so the sidebar and member panel can never
+  // disagree. Falls back to the profile store when no server is loaded.
+  const myStatus = (() => {
+    try {
+      const me = JSON.parse(localStorage.getItem('vox_user') || '{}');
+      const member = selectedServer.members.find((m: any) => m.userId === me.id);
+      const serverStatus = String(member?.user?.status || '').toLowerCase();
+      // If the server has a real status for us, use it; otherwise fall back.
+      if (serverStatus && serverStatus !== 'offline') return serverStatus;
+      if (serverStatus === 'offline') return 'offline';
+    } catch {}
+    return (profile.userStatus || 'online').toLowerCase();
+  })();
+
   const textChannels = selectedServer.channels.filter(c => c.type === 'TEXT');
   const voiceChannels = selectedServer.channels.filter(c => c.type === 'VOICE');
 

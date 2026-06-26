@@ -41,6 +41,7 @@ interface ServerStore {
   removeServer: (serverId: string) => void;
   addChannel: (serverId: string, channel: Channel) => void;
   updateMemberStatus: (userId: string, status: string) => void;
+  reset: () => void;
 }
 
 export const useServerStore = create<ServerStore>((set, get) => ({
@@ -92,5 +93,8 @@ export const useServerStore = create<ServerStore>((set, get) => ({
       ...state.selectedServer,
       members: state.selectedServer.members.map(m => m.userId === userId ? { ...m, user: { ...m.user, status } } : m)
     } : null
-  }))
+  })),
+
+  // Tear down the prior session so the next user starts clean.
+  reset: () => set({ servers: [], selectedServer: null, selectedChannel: null, loading: false }),
 }));

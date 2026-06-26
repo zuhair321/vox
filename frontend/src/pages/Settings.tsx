@@ -31,6 +31,7 @@ import ConfirmDialog from '../components/settings/ConfirmDialog';
 import SectionHeader from '../components/settings/SectionHeader';
 import SettingsRow from '../components/settings/SettingsRow';
 import { useUiStore } from '../stores/uiStore';
+import { logout } from '../utils/auth';
 
 type SettingsItem = {
   icon: React.ComponentProps<typeof SettingsRow>['icon'];
@@ -108,13 +109,6 @@ const Settings: React.FC = () => {
       return;
     }
     addToast(`${row.label} panel is sealed for now`, 'info');
-  };
-
-  const logout = () => {
-    localStorage.removeItem('vox_token');
-    localStorage.removeItem('vox_refresh_token');
-    localStorage.removeItem('vox_user');
-    navigate('/login');
   };
 
   return (

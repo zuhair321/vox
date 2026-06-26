@@ -71,8 +71,8 @@ export const useUiStore = create<UiStore>((set) => ({
       onAction: opts?.onAction,
       duration: opts?.duration ?? 3000,
     };
-    // Keep max 5 toasts; oldest get pushed out
-    const newToasts = [...state.toasts, newToast].slice(-5);
+    // Keep max 4 toasts; oldest get pushed out
+    const newToasts = [...state.toasts, newToast].slice(-4);
     return { toasts: newToasts };
   }),
   removeToast: (id) => set((state) => ({

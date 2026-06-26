@@ -44,6 +44,7 @@ interface MessageStore {
   setTyping: (channelId: string, username: string, isTyping: boolean) => void;
   setReplyingTo: (message: Message | null) => void;
   markRead: (channelId: string) => void;
+  reset: () => void;
 }
 
 export const useMessageStore = create<MessageStore>((set) => ({
@@ -127,5 +128,8 @@ export const useMessageStore = create<MessageStore>((set) => ({
   setReplyingTo: (message) => set({ replyingTo: message }),
 
   markRead: (channelId) =>
-    set((state) => ({ unread: { ...state.unread, [channelId]: 0 } }))
+    set((state) => ({ unread: { ...state.unread, [channelId]: 0 } })),
+
+  // Tear down the prior session so the next user starts clean.
+  reset: () => set({ messages: {}, loading: {}, hasMore: {}, typingUsers: {}, replyingTo: null, unread: {} }),
 }));

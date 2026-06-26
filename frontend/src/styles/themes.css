@@ -1,149 +1,178 @@
 /* ════════════════════════════════════════════════════════════════
    VOX — THEME SYSTEM
-   Each theme overrides a small set of semantic variables only.
-   The core palette (--void, --abyss, --chaos, etc.) is NEVER touched;
-   we remap --accent / --accent-glow / --online / --idle / --danger and
-   the text scale so existing components keep working while gaining a
-   fresh hue. Switching is instant via [data-theme] on <html>.
+   Each theme overrides the FULL core palette so existing components
+   visually change. Switching is instant via [data-theme] on <html>.
    ════════════════════════════════════════════════════════════════ */
 
-/* Shared semantic defaults (VOID theme = the existing palette).
-   These variables are read by the new Day 8-9 components; legacy
-   components keep using the original tokens directly. */
-:root,
-[data-theme='void'] {
-  --accent: var(--chaos);
-  --accent-glow: var(--chaos-glow);
-  --accent-2: var(--electric, #e63232);
-  --online: var(--toxic);
-  --idle: var(--gold);
-  --danger: var(--blood);
-  --primary-bg: var(--void);
-  --secondary-bg: var(--abyss);
-  --surface: var(--dark-matter);
-  --border: var(--rim);
-  --text-primary: var(--ghost-white);
-  --text-secondary: var(--ash);
-  --text-muted: var(--shadow);
-}
+/* ─── BASE / VOID (default) ───────────────────────────────────────
+   The root palette is the existing void-dark theme. No overrides needed. */
 
-/* THEME 2 — CRIMSON BLOOD */
+/* ─── THEME 2 — CRIMSON BLOOD (dark red) ──────────────────────── */
 [data-theme='crimson-blood'] {
-  --primary-bg: #0a0000;
-  --secondary-bg: #110000;
-  --surface: #1a0000;
-  --border: #3a0000;
-  --accent: #cc0000;
-  --accent-glow: rgba(204, 0, 0, 0.4);
-  --accent-2: #ff4444;
-  --text-primary: #ffcccc;
-  --text-secondary: #aa6666;
-  --text-muted: #664444;
-  --online: #ff4444;
-  --idle: #ff8800;
-  --danger: #ff0000;
+  --void:        #0a0000;
+  --abyss:       #110000;
+  --dark-matter: #1a0000;
+  --obsidian:    #220000;
+  --phantom:     #2a0000;
+  --rim:         #3a0000;
+  --ghost:       #1e0000;
+  --chaos:       #cc0000;
+  --void-purple: #660000;
+  --crimson:     #990000;
+  --blood:       #ff0000;
+  --gold:        #ff8800;
+  --toxic:       #ff4444;
+  --ghost-white: #ffcccc;
+  --ash:         #aa6666;
+  --shadow:      #664444;
+  --chaos-glow:  rgba(204, 0, 0, 0.4);
+  --crimson-glow: rgba(255, 0, 0, 0.3);
+  --gold-glow:   rgba(255, 136, 0, 0.3);
+  --toxic-glow:  rgba(255, 68, 68, 0.3);
 }
 
-/* THEME 3 — OCEAN ABYSS */
+/* ─── THEME 3 — OCEAN ABYSS (dark blue) ───────────────────────── */
 [data-theme='ocean-abyss'] {
-  --primary-bg: #000a0f;
-  --secondary-bg: #00111a;
-  --surface: #001824;
-  --border: #002233;
-  --accent: #0066cc;
-  --accent-glow: rgba(0, 102, 204, 0.4);
-  --accent-2: #0099ff;
-  --text-primary: #c8e8ff;
-  --text-secondary: #6699aa;
-  --text-muted: #334455;
-  --online: #00ffcc;
-  --idle: #0099ff;
-  --danger: #cc0044;
+  --void:        #000a0f;
+  --abyss:       #00111a;
+  --dark-matter: #001824;
+  --obsidian:    #002233;
+  --phantom:     #002a3a;
+  --rim:         #00334d;
+  --ghost:       #001e2e;
+  --chaos:       #0066cc;
+  --void-purple: #003d66;
+  --crimson:     #004499;
+  --blood:       #0088ff;
+  --gold:        #00aaff;
+  --toxic:       #00ffcc;
+  --ghost-white: #c8e8ff;
+  --ash:         #6699aa;
+  --shadow:      #334455;
+  --chaos-glow:  rgba(0, 102, 204, 0.4);
+  --crimson-glow: rgba(0, 136, 255, 0.3);
+  --gold-glow:   rgba(0, 170, 255, 0.3);
+  --toxic-glow:  rgba(0, 255, 204, 0.3);
 }
 
-/* THEME 4 — TOXIC MATRIX */
+/* ─── THEME 4 — TOXIC MATRIX (dark green) ─────────────────────── */
 [data-theme='toxic-matrix'] {
-  --primary-bg: #000a00;
-  --secondary-bg: #001100;
-  --surface: #001800;
-  --border: #003300;
-  --accent: #00cc44;
-  --accent-glow: rgba(0, 204, 68, 0.4);
-  --accent-2: #00ff41;
-  --text-primary: #ccffcc;
-  --text-secondary: #66aa66;
-  --text-muted: #334433;
-  --online: #00ff41;
-  --idle: #88ff00;
-  --danger: #ff4400;
+  --void:        #000a00;
+  --abyss:       #001100;
+  --dark-matter: #001800;
+  --obsidian:    #002200;
+  --phantom:     #002a00;
+  --rim:         #003300;
+  --ghost:       #001e00;
+  --chaos:       #00cc44;
+  --void-purple: #006600;
+  --crimson:     #009900;
+  --blood:       #00ff41;
+  --gold:        #88ff00;
+  --toxic:       #00ff41;
+  --ghost-white: #ccffcc;
+  --ash:         #66aa66;
+  --shadow:      #334433;
+  --chaos-glow:  rgba(0, 204, 68, 0.4);
+  --crimson-glow: rgba(0, 255, 65, 0.3);
+  --gold-glow:   rgba(136, 255, 0, 0.3);
+  --toxic-glow:  rgba(0, 255, 65, 0.3);
 }
 
-/* THEME 5 — GOLD SOVEREIGN */
+/* ─── THEME 5 — GOLD SOVEREIGN (dark gold) ────────────────────── */
 [data-theme='gold-sovereign'] {
-  --primary-bg: #0a0800;
-  --secondary-bg: #110f00;
-  --surface: #1a1600;
-  --border: #332800;
-  --accent: #cc9900;
-  --accent-glow: rgba(204, 153, 0, 0.4);
-  --accent-2: #ffd700;
-  --text-primary: #fff8cc;
-  --text-secondary: #aa9944;
-  --text-muted: #665533;
-  --online: #ffd700;
-  --idle: #ffaa00;
-  --danger: #cc2200;
+  --void:        #0a0800;
+  --abyss:       #110f00;
+  --dark-matter: #1a1600;
+  --obsidian:    #221d00;
+  --phantom:     #2a2400;
+  --rim:         #332800;
+  --ghost:       #1e1a00;
+  --chaos:       #cc9900;
+  --void-purple: #665500;
+  --crimson:     #997700;
+  --blood:       #ffd700;
+  --gold:        #ffaa00;
+  --toxic:       #ffd700;
+  --ghost-white: #fff8cc;
+  --ash:         #aa9944;
+  --shadow:      #665533;
+  --chaos-glow:  rgba(204, 153, 0, 0.4);
+  --crimson-glow: rgba(255, 215, 0, 0.3);
+  --gold-glow:   rgba(255, 170, 0, 0.3);
+  --toxic-glow:  rgba(255, 215, 0, 0.3);
 }
 
-/* THEME 6 — SPECTER GRAY */
+/* ─── THEME 6 — SPECTER GRAY (monochrome) ─────────────────────── */
 [data-theme='specter-gray'] {
-  --primary-bg: #050505;
-  --secondary-bg: #0a0a0a;
-  --surface: #111111;
-  --border: #222222;
-  --accent: #888888;
-  --accent-glow: rgba(136, 136, 136, 0.3);
-  --accent-2: #aaaaaa;
-  --text-primary: #dddddd;
-  --text-secondary: #888888;
-  --text-muted: #444444;
-  --online: #aaaaaa;
-  --idle: #888888;
-  --danger: #cc4444;
+  --void:        #050505;
+  --abyss:       #0a0a0a;
+  --dark-matter: #111111;
+  --obsidian:    #181818;
+  --phantom:     #1f1f1f;
+  --rim:         #222222;
+  --ghost:       #151515;
+  --chaos:       #888888;
+  --void-purple: #444444;
+  --crimson:     #666666;
+  --blood:       #aaaaaa;
+  --gold:        #999999;
+  --toxic:       #aaaaaa;
+  --ghost-white: #dddddd;
+  --ash:         #888888;
+  --shadow:      #444444;
+  --chaos-glow:  rgba(136, 136, 136, 0.3);
+  --crimson-glow: rgba(170, 170, 170, 0.3);
+  --gold-glow:   rgba(153, 153, 153, 0.3);
+  --toxic-glow:  rgba(170, 170, 170, 0.3);
 }
 
-/* THEME 7 — SUNSET INFERNO */
+/* ─── THEME 7 — SUNSET INFERNO (dark orange) ──────────────────── */
 [data-theme='sunset-inferno'] {
-  --primary-bg: #0a0400;
-  --secondary-bg: #110800;
-  --surface: #1a0f00;
-  --border: #331800;
-  --accent: #cc4400;
-  --accent-glow: rgba(204, 68, 0, 0.4);
-  --accent-2: #ff6600;
-  --text-primary: #ffe8cc;
-  --text-secondary: #aa7744;
-  --text-muted: #664422;
-  --online: #ff6600;
-  --idle: #ffaa00;
-  --danger: #ff0000;
+  --void:        #0a0400;
+  --abyss:       #110800;
+  --dark-matter: #1a0f00;
+  --obsidian:    #221500;
+  --phantom:     #2a1a00;
+  --rim:         #331800;
+  --ghost:       #1e1400;
+  --chaos:       #cc4400;
+  --void-purple: #662200;
+  --crimson:     #993300;
+  --blood:       #ff6600;
+  --gold:        #ffaa00;
+  --toxic:       #ff6600;
+  --ghost-white: #ffe8cc;
+  --ash:         #aa7744;
+  --shadow:      #664422;
+  --chaos-glow:  rgba(204, 68, 0, 0.4);
+  --crimson-glow: rgba(255, 102, 0, 0.3);
+  --gold-glow:   rgba(255, 170, 0, 0.3);
+  --toxic-glow:  rgba(255, 102, 0, 0.3);
 }
 
-/* THEME 8 — MIDNIGHT CHERRY */
+/* ─── THEME 8 — MIDNIGHT CHERRY (dark pink) ───────────────────── */
 [data-theme='midnight-cherry'] {
-  --primary-bg: #0a0008;
-  --secondary-bg: #110010;
-  --surface: #1a0018;
-  --border: #330028;
-  --accent: #cc0066;
-  --accent-glow: rgba(204, 0, 102, 0.4);
-  --accent-2: #ff0088;
-  --text-primary: #ffccee;
-  --text-secondary: #aa6688;
-  --text-muted: #663344;
-  --online: #ff0088;
-  --idle: #ff88cc;
-  --danger: #cc0000;
+  --void:        #0a0008;
+  --abyss:       #110010;
+  --dark-matter: #1a0018;
+  --obsidian:    #220020;
+  --phantom:     #2a0028;
+  --rim:         #330028;
+  --ghost:       #1e0018;
+  --chaos:       #cc0066;
+  --void-purple: #660033;
+  --crimson:     #990044;
+  --blood:       #ff0088;
+  --gold:        #ff88cc;
+  --toxic:       #ff0088;
+  --ghost-white: #ffccee;
+  --ash:         #aa6688;
+  --shadow:      #663344;
+  --chaos-glow:  rgba(204, 0, 102, 0.4);
+  --crimson-glow: rgba(255, 0, 136, 0.3);
+  --gold-glow:   rgba(255, 136, 204, 0.3);
+  --toxic-glow:  rgba(255, 0, 136, 0.3);
 }
 
 /* Reduced motion: honor the OS preference across every theme. */

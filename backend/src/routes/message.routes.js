@@ -195,7 +195,35 @@ messageRouter.post('/messages/:id/pin', requireAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// Fetch the pinned messages for a channel.
+// Delete a message (soft delete). The user must be the author.
+messageRouter.delete('/messages/:id', requireAuth, async (req, res, next) => {
+  try {
+    const messageId = req.params.id;
+    const message = await prisma.message.update({
+      where: { id: messageId, userId: req.user.id },
+      data: { deleted: true, body: '' },
+      include: CHANNEL_MESSAGE_INCLUDE,
+    });
+    emitAll('message:deleted', { messageId, channelId: message.channelId });
+    res.json({ ok: true, message });
+  } catch (e) { next(e); }
+});
+
+// Edit a message. The user must be the author.
+messageRouter.patch('/messages/:id', requireAuth, async (req, res, next) => {
+  try {
+    const messageId = req.params.id;
+    const body = String(req.body?.body || req.body?.content || '').trim();
+    if (!body) throw new HttpError(400, 'Message body is required.');
+    const message = await prisma.message.update({
+      where: { id: messageId, userId: req.user.id },
+      data: { body: body.slice(0, 2000), edited: true },
+      include: CHANNEL_MESSAGE_INCLUDE,
+    });
+    emitAll('message:updated', { message });
+    res.json({ ok: true, message });
+  } catch (e) { next(e); }
+});
 messageRouter.get('/channels/:channelId/messages/pinned', requireAuth, async (req, res, next) => {
   try {
     const { channelId } = req.params;

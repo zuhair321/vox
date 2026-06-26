@@ -31,6 +31,7 @@ interface FriendStore {
   removeFriend: (id: string) => Promise<void>;
   blockUser: (userId: string) => Promise<void>;
   unblockUser: (userId: string) => Promise<void>;
+  reset: () => void;
 }
 
 export const useFriendStore = create<FriendStore>((set, get) => ({
@@ -92,5 +93,8 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
     // user silently did nothing. Call the unblock endpoint, then refresh.
     await unblockUser(userId);
     await get().fetchFriends();
-  }
+  },
+
+  // Tear down the prior session so the next user starts clean.
+  reset: () => set({ friends: [], incoming: [], outgoing: [], blocked: [], loading: false }),
 }));
