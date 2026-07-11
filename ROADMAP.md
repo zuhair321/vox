@@ -469,8 +469,8 @@ These features are quick to implement and make VOX feel much more complete:
 2. ✅ **Server audit log** — Track admin actions (DONE)
 3. ✅ **Slow mode** — Channel rate limiting (DONE)
 4. ✅ **Polls** — Create polls in channels (DONE)
-5. **Offline mode** — Cache data locally
-6. **Read receipts** — Show when messages are read
+5. ✅ **Read receipts** — Show when messages are read (DONE)
+6. **Offline mode** — Cache data locally
 
 ---
 
