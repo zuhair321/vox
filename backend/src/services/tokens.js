@@ -7,7 +7,7 @@
 // Refresh tokens are hashed before storage, so a DB leak doesn't expose
 // usable tokens.
 //
-// FALLBACK: When MySQL is unavailable, we use a simple in-memory Set.
+// FALLBACK: When the database is unavailable, we use a simple in-memory Set.
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { env } from '../lib/env.js';

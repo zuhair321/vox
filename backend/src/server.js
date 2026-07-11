@@ -1,5 +1,5 @@
 // VOX backend entrypoint.
-// Wires Express + Socket.io on top of Prisma/MySQL and mounts the route layer.
+// Wires Express + Socket.io on top of Prisma/PostgreSQL and mounts the route layer.
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -80,16 +80,16 @@ app.use(legalRouter);
 // ── Health / boot diagnostics (readiness check) ───────────
 app.get('/health', async (req, res) => {
   try {
-    // Probe MySQL connection
+    // Probe database connection
     await import('./lib/prisma.js').then(m => m.prisma.$queryRaw`SELECT 1`);
     res.json({
       ok: true,
       service: 'vox-backend',
       uptime: Math.round(process.uptime()),
-      mysql: 'connected',
+      database: 'connected',
     });
   } catch (e) {
-    res.status(503).json({ ok: false, error: 'MySQL unreachable' });
+    res.status(503).json({ ok: false, error: 'Database unreachable' });
   }
 });
 

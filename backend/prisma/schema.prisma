@@ -1,11 +1,11 @@
-// Prisma Schema for VOX Backend — matches actual MySQL tables exactly
+// Prisma Schema for VOX Backend — PostgreSQL
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -139,7 +139,6 @@ model Message {
   reactions      Reaction[]
   pinNotifications PinNotification[]
 
-  @@fulltext([body])
   @@index([channelId, createdAt])
   @@index([userId])
   @@index([parentId])
@@ -391,10 +390,10 @@ model Report {
 // ─── ServerRole (raw table managed manually) ─────────────────────
 
 model ServerRole {
-  id          String   @id @db.VarChar(36)
-  serverId    String   @db.VarChar(36)
-  name        String   @db.VarChar(100)
-  color       String   @default("#5865f2") @db.VarChar(7)
+  id          String   @id @default(uuid())
+  serverId    String
+  name        String
+  color       String   @default("#5865f2")
   hoist       Boolean  @default(false)
   mentionable Boolean  @default(false)
   position    Int      @default(0)
@@ -408,18 +407,18 @@ model ServerRole {
 // ─── ServerMemberRole (raw table managed manually) ──────────────
 
 model ServerMemberRole {
-  id             String   @id @db.VarChar(36)
-  serverMemberId String   @db.VarChar(36)
-  roleId         String   @db.VarChar(36)
+  id             String   @id @default(uuid())
+  serverMemberId String
+  roleId         String
   createdAt      DateTime @default(now())
 }
 
 // ─── MessageRead (raw table managed manually) ────────────────────
 
 model MessageRead {
-  id        String   @id @db.VarChar(36)
-  messageId String   @db.VarChar(36)
-  userId    String   @db.VarChar(36)
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
   readAt    DateTime @default(now())
 
   @@index([messageId])

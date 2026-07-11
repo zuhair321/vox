@@ -298,7 +298,7 @@ export function registerHandlers(io, socket) {
         fuseTime: fuseTime || null,
       };
       // Never-throw safety net: if the socket user id doesn't resolve in the DB
-      // (e.g. a stale in-memory `demo-<ts>` id from when MySQL was briefly
+      // (e.g. a stale in-memory `demo-<ts>` id from when the database was briefly
       // unreachable), the FK on Message.userId throws Prisma P2003. Retry as an
       // anonymous message via authorOverride so the message always persists and
       // broadcasts. (Once auth is healthy this branch is dormant.)

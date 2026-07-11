@@ -1,7 +1,7 @@
 // Auth business logic: register, login (with 2FA branching), 2FA setup/verify,
 // and the public user shape returned to the client.
 //
-// FALLBACK MODE: When MySQL is unavailable, we switch to in-memory demo auth
+// FALLBACK MODE: When the database is unavailable, we switch to in-memory demo auth
 // so users can still register/login and reach the app.
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
@@ -53,7 +53,7 @@ export function publicUser(user) {
   };
 }
 
-// ── In-memory fallback store (when MySQL is unavailable) ──────
+// ── In-memory fallback store (when the database is unavailable) ──────
 let databaseAvailable = true;
 const memoryUsers = new Map();
 const memoryRefreshTokens = new Set();
@@ -70,7 +70,7 @@ function probeDatabase() {
 
 // Self-healing availability check.
 //
-// The old code ran `detectDbAvailable()` exactly once at boot. If MySQL wasn't
+// The old code ran `detectDbAvailable()` exactly once at boot. If the database wasn't
 // ready that instant (common on first run / slow machine), `databaseAvailable`
 // got latched to `false` FOREVER for the auth module. Login then minted
 // in-memory users with synthetic ids (`demo-<ts>`), and every later message
@@ -78,14 +78,14 @@ function probeDatabase() {
 // 500'd.
 //
 // We now re-probe before each auth operation, and flip back to `true` the moment
-// MySQL recovers. A one-shot boot log is kept for diagnostics.
+// the database recovers. A one-shot boot log is kept for diagnostics.
 let bootProbeDone = false;
 async function checkDatabase() {
   const ok = await probeDatabase();
   if (ok && !databaseAvailable) {
-    console.log('[vox/auth] MySQL recovered — resuming DB-backed auth');
+    console.log('[vox/auth] Database recovered — resuming DB-backed auth');
   } else if (!ok && databaseAvailable) {
-    console.warn('[vox/auth] MySQL unavailable — using in-memory demo auth');
+    console.warn('[vox/auth] Database unavailable — using in-memory demo auth');
   }
   databaseAvailable = ok;
   return ok;
@@ -94,7 +94,7 @@ async function checkDatabase() {
 // One initial probe so the boot log reflects reality, without latching state.
 probeDatabase().then((ok) => {
   if (!ok) {
-    console.warn('[vox/auth] MySQL unavailable at boot — using in-memory demo auth (will retry)');
+    console.warn('[vox/auth] Database unavailable at boot — using in-memory demo auth (will retry)');
   }
   databaseAvailable = ok;
   bootProbeDone = true;
@@ -386,7 +386,7 @@ export async function refreshTokens(refreshToken) {
     return { user: publicUser(row.user), tokens };
   }
 
-  // Re-probe before touching the DB so a recovered MySQL is used, and a
+  // Re-probe before touching the DB so a recovered database is used, and a
   // freshly-failed one falls through to the memory path below.
   await checkDatabase();
   if (!databaseAvailable) {

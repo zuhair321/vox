@@ -1,67 +1,67 @@
-# VOX Deployment Guide
+# VOX Deployment Guide — Render (All-in-One)
 
-## Frontend (Vercel)
+## Prerequisites
+- A [Render](https://render.com) account (free tier works)
+- This repo pushed to GitHub (already done: `zuhair321/vox`)
 
-### Prerequisites
-- A [Vercel](https://vercel.com) account
-- Your backend deployed somewhere with a public URL (Render, Railway, Fly.io, etc.)
+## One-Click Deploy
 
-### Deploy to Vercel
+Click the buttons below to deploy each service:
 
-1. Push this repo to GitHub (already done).
-2. In Vercel, click **"Add New..." → Project**.
-3. Import the `vox` repo.
-4. Set **Root Directory** to `frontend/`.
-5. Add Environment Variable:
-   - `VITE_API_BASE` → your backend URL (e.g. `https://vox-backend.onrender.com`)
-   - Leave empty if using Vercel rewrite proxy (see below).
-6. Click **Deploy**.
+1. **Database**: Render will auto-create `vox-db` from `render.yaml`
+2. **Redis**: Render will auto-create `vox-redis` from `render.yaml`
+3. **Backend**: Render will auto-create `vox-backend` from `render.yaml`
+4. **Frontend**: Render will auto-create `vox-frontend` from `render.yaml`
 
-### Vercel Rewrite Proxy (Recommended)
+## Manual Deploy (if Blueprint isn't available)
 
-If you want the frontend and API on the same domain, add this to `frontend/vercel.json`:
+### 1. Create PostgreSQL Database
+- Render → New → PostgreSQL
+- Name: `vox-db`
+- Plan: Free
+- Copy the `Internal Database URL` (Render sets `DATABASE_URL` automatically for linked services)
 
-```json
-{
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://your-backend-url.com/api/$1" }
-  ]
-}
-```
+### 2. Create Redis Instance
+- Render → New → Redis
+- Name: `vox-redis`
+- Plan: Free
+- Copy the `Internal Redis URL`
 
-Then leave `VITE_API_BASE` empty in Vercel env vars.
+### 3. Deploy Backend
+- Render → New → Web Service
+- Connect repo: `zuhair321/vox`
+- Runtime: `Node`
+- Build Command: `cd backend && npm install && npx prisma migrate deploy`
+- Start Command: `cd backend && npm start`
+- Add Environment Variables:
+  - `DATABASE_URL` → your PostgreSQL connection string
+  - `REDIS_URL` → your Redis connection string
+  - `JWT_ACCESS_SECRET` → random secret
+  - `JWT_REFRESH_SECRET` → random secret
+  - `TWO_FACTOR_APP_NAME` → `VOX`
+  - `TWO_FACTOR_ENCRYPTION_KEY` → 64-char hex
+  - `PORT` → `4000`
+  - `CLIENT_ORIGIN` → your frontend URL (e.g. `https://vox-frontend.onrender.com`)
+  - `EXTRA_CORS_ORIGINS` → your frontend URL
+  - `RESEND_API_KEY` → `dev` (for console logging) or your Resend key
+  - `RESEND_FROM_ADDRESS` → `VOX <noreply@vox.app>`
 
-## Backend (Separate Host)
+### 4. Deploy Frontend
+- Render → New → Static Site
+- Connect repo: `zuhair321/vox`
+- Build Command: `cd frontend && npm install && npm run build`
+- Publish Directory: `frontend/dist`
+- Add Environment Variable:
+  - `VITE_API_BASE` → your backend URL (e.g. `https://vox-backend.onrender.com`)
 
-The backend requires MySQL, Redis, and Socket.io. It cannot run on Vercel.
+## Important Notes
 
-### Recommended: Render / Railway / Fly.io
+- **PostgreSQL**: Render provides managed PostgreSQL. The schema is auto-migrated via `npx prisma migrate deploy`.
+- **Redis**: Render provides managed Redis. Used for Socket.io scaling and caching.
+- **Free Tier Limits**: Render free services spin down after 15 minutes of inactivity. First request after spin-down takes ~30s.
+- **CORS**: Make sure `CLIENT_ORIGIN` and `EXTRA_CORS_ORIGINS` in the backend match your frontend URL.
+- **Migrations**: `npx prisma migrate deploy` runs automatically during backend build.
 
-1. Deploy `backend/` as a Node.js service.
-2. Set environment variables:
-   - `DATABASE_URL` → your MySQL connection string
-   - `JWT_ACCESS_SECRET` → random secret
-   - `JWT_REFRESH_SECRET` → random secret
-   - `TWO_FACTOR_APP_NAME` → VOX
-   - `TWO_FACTOR_ENCRYPTION_KEY` → 64-char hex
-   - `PORT` → 4000 (or let host assign)
-   - `CLIENT_ORIGIN` → your Vercel frontend URL
-   - `EXTRA_CORS_ORIGINS` → your Vercel frontend URL
-   - `REDIS_URL` → your Redis URL (Upstash, etc.)
-   - `RESEND_API_KEY` → your Resend key (optional)
-3. Run migrations: `npx prisma migrate deploy`
+## Custom Domains
 
-### Database
-
-- Use a managed MySQL (PlanetScale, AWS RDS, Render PostgreSQL with MySQL adapter, etc.)
-- Run `npx prisma migrate deploy` after setting `DATABASE_URL`.
-
-## Quick Start
-
-```bash
-# Frontend (Vercel)
-vercel --prod
-
-# Backend (local)
-cd backend && npm install && npx prisma migrate dev && npm start
-```
+Both frontend and backend support custom domains in Render settings.

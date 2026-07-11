@@ -46,7 +46,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
     // Users by day (last 30 days)
     const usersByDayRaw = await prisma.$queryRaw`
       SELECT DATE(createdAt) as date, COUNT(*) as count
-      FROM User
+      FROM "User"
       WHERE createdAt >= ${thirtyDaysAgo}
       GROUP BY DATE(createdAt)
       ORDER BY date ASC
@@ -55,7 +55,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
     // Messages by day (last 30 days)
     const messagesByDayRaw = await prisma.$queryRaw`
       SELECT DATE(createdAt) as date, COUNT(*) as count
-      FROM Message
+      FROM "Message"
       WHERE createdAt >= ${thirtyDaysAgo} AND deleted = false
       GROUP BY DATE(createdAt)
       ORDER BY date ASC

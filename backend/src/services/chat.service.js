@@ -42,7 +42,7 @@ const fallbackMembers = [
 let fallbackMessages = [
   { id: 'local-1', channelId: 'welcome', author: fallbackMembers[0], authorOverride: null, body: 'Welcome to VOX. The command center is awake.', createdAt: new Date(Date.now() - 1000 * 60 * 20), reactions: [{ emoji: 'pulse' }, { emoji: 'pulse' }, { emoji: 'pulse' }, { emoji: 'void' }, { emoji: 'void' }] },
   { id: 'local-2', channelId: 'general', author: fallbackMembers[1], authorOverride: null, body: 'Try sending a message, switching channels, or opening the member matrix.', createdAt: new Date(Date.now() - 1000 * 60 * 9), reactions: [{ emoji: 'boost' }, { emoji: 'boost' }, { emoji: 'boost' }, { emoji: 'boost' }] },
-  { id: 'local-3', channelId: 'ship-room', author: fallbackMembers[2], authorOverride: null, body: 'Backend heartbeat is wired in. If MySQL is offline, VOX keeps a local echo.', createdAt: new Date(Date.now() - 1000 * 60 * 5), reactions: [{ emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }] },
+  { id: 'local-3', channelId: 'ship-room', author: fallbackMembers[2], authorOverride: null, body: 'Backend heartbeat is wired in. If the database is offline, VOX keeps a local echo.', createdAt: new Date(Date.now() - 1000 * 60 * 5), reactions: [{ emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }] },
 ];
 
 function useFallback(error) {
@@ -233,7 +233,7 @@ export async function getState(userId) {
 
   const state = { channels, members, recentMessages, nitroClaimed, messagesCount };
 
-  // Cache per-user state (30s) so 500 simultaneous connects don't all hit MySQL
+  // Cache per-user state (30s) so 500 simultaneous connects don't all hit the database
   if (cacheKey) {
     await cacheSet(cacheKey, state, CACHE_TTL);
   }

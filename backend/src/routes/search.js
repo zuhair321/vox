@@ -84,10 +84,11 @@ searchRouter.get('/search', requireAuth, searchLimiter, async (req, res, next) =
       return res.json({ results: [], count: 0 });
     }
 
-    // Use MySQL FULLTEXT search via $queryRaw with MATCH...AGAINST in BOOLEAN MODE.
-    const chPlaceholders = accessibleChannelIds.map(() => '?').join(',');
-    let sql = `SELECT m.id FROM message m WHERE m.deleted = 0 AND m.channelId IN (${chPlaceholders}) AND MATCH(m.body) AGAINST(? IN BOOLEAN MODE)`;
-    const params = [...accessibleChannelIds, q];
+    // PostgreSQL full-text search via $queryRaw with ILIKE.
+    const chPlaceholders = accessibleChannelIds.map((_, i) => `$${i + 1}`).join(',');
+    const searchIdx = accessibleChannelIds.length + 1;
+    let sql = `SELECT m.id FROM "Message" m WHERE m.deleted = 0 AND m.channelId IN (${chPlaceholders}) AND m.body ILIKE $${searchIdx}`;
+    const params = [...accessibleChannelIds, `%${q}%`];
 
     // Scope to one author.
     const userParam = req.query.userId ? String(req.query.userId).trim() : '';
@@ -98,21 +99,21 @@ searchRouter.get('/search', requireAuth, searchLimiter, async (req, res, next) =
         select: { id: true },
       });
       if (user) {
-        sql += ` AND m.userId = ?`;
+        sql += ` AND m.userId = $${params.length + 1}`;
         params.push(user.id);
       } else {
-        sql += ` AND m.userId = ?`;
+        sql += ` AND m.userId = $${params.length + 1}`;
         params.push(userParam);
       }
     }
 
     // Date bounds.
     if (req.query.before) {
-      sql += ` AND m.createdAt < ?`;
+      sql += ` AND m.createdAt < $${params.length + 1}`;
       params.push(new Date(String(req.query.before)));
     }
     if (req.query.after) {
-      sql += ` AND m.createdAt > ?`;
+      sql += ` AND m.createdAt > $${params.length + 1}`;
       params.push(new Date(String(req.query.after)));
     }
 

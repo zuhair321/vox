@@ -35,7 +35,7 @@ reportsRouter.post('/', requireAuth, async (req, res, next) => {
     };
 
     await prisma.$executeRaw`
-      INSERT INTO report (id, reporterId, reportedUserId, messageId, serverId, type, reason, details, status)
+      INSERT INTO "Report" (id, reporterId, reportedUserId, messageId, serverId, type, reason, details, status)
       VALUES (
         ${report.id}, ${report.reporterId}, ${report.reportedUserId},
         ${report.messageId}, ${report.serverId}, ${report.type},
@@ -62,10 +62,10 @@ reportsRouter.get('/', requireAuth, async (req, res, next) => {
       }
     }
 
-    let query = 'SELECT * FROM report WHERE 1=1';
+    let query = 'SELECT * FROM "Report" WHERE 1=1';
     const params = [];
-    if (serverId) { query += ' AND serverId = ?'; params.push(serverId); }
-    if (status) { query += ' AND status = ?'; params.push(status); }
+    if (serverId) { query += ` AND serverId = $${params.length + 1}`; params.push(serverId); }
+    if (status) { query += ` AND status = $${params.length + 1}`; params.push(status); }
     query += ' ORDER BY createdAt DESC LIMIT 50';
 
     const reports = await prisma.$queryRaw(query, ...params);

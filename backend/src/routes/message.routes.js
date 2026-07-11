@@ -401,10 +401,11 @@ messageRouter.get('/messages/search', requireAuth, async (req, res, next) => {
       if (accessibleChannelIds.length === 0) return res.json({ query, messages: [] });
     }
 
-    // Use MySQL FULLTEXT search via raw query for the body search.
-    const chPlaceholders = accessibleChannelIds.map(() => '?').join(',');
-    let sql = `SELECT m.id FROM message m WHERE m.deleted = 0 AND m.channelId IN (${chPlaceholders}) AND MATCH(m.body) AGAINST(? IN BOOLEAN MODE)`;
-    const params = [...accessibleChannelIds, query];
+    // PostgreSQL full-text search via $queryRaw with ILIKE.
+    const chPlaceholders = accessibleChannelIds.map((_, i) => `$${i + 1}`).join(',');
+    const searchIdx = accessibleChannelIds.length + 1;
+    let sql = `SELECT m.id FROM "Message" m WHERE m.deleted = 0 AND m.channelId IN (${chPlaceholders}) AND m.body ILIKE $${searchIdx}`;
+    const params = [...accessibleChannelIds, `%${query}%`];
 
     // Scope to one author if requested.
     const userParam = req.query.userId ? String(req.query.userId).trim() : '';
@@ -415,18 +416,18 @@ messageRouter.get('/messages/search', requireAuth, async (req, res, next) => {
         select: { id: true },
       });
       if (user) {
-        sql += ` AND m.userId = ?`;
+        sql += ` AND m.userId = $${params.length + 1}`;
         params.push(user.id);
       }
     }
 
     // Date bounds.
     if (req.query.before) {
-      sql += ` AND m.createdAt < ?`;
+      sql += ` AND m.createdAt < $${params.length + 1}`;
       params.push(new Date(String(req.query.before)));
     }
     if (req.query.after) {
-      sql += ` AND m.createdAt > ?`;
+      sql += ` AND m.createdAt > $${params.length + 1}`;
       params.push(new Date(String(req.query.after)));
     }
 

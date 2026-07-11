@@ -1,7 +1,7 @@
 {
   "name": "vox-backend",
   "version": "0.2.0",
-  "description": "VOX backend — Express + Prisma (MySQL) + JWT + 2FA + Socket.io",
+  "description": "VOX backend — Express + Prisma (PostgreSQL) + JWT + 2FA + Socket.io",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -36,7 +36,6 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
-    "mysql2": "^3.22.5",
     "node-fetch": "^3.3.2",
     "otplib": "^13.4.1",
     "qrcode": "^1.5.4",
