@@ -99,7 +99,7 @@
 - [ ] **Discovery** — Public server listing (optional)
 
 ### 2.3 Channel Management
-- [ ] **Channel categories** — Collapsible groups
+- [x] **Channel categories** — Collapsible groups
 - [ ] **Channel permissions** — Per-channel role overrides
 - [ ] **Channel lock** — Prevent new members from seeing
 - [ ] **Channel auto-archive** — Archive old threads after X days

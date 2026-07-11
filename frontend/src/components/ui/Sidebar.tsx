@@ -21,6 +21,127 @@ function resolveMediaUrl(url: string | null | undefined) {
   return `${API_BASE}${url}`;
 }
 
+// ── Channel Row (used by both categorized and uncategorized sections) ──
+const ChannelRow: React.FC<{
+  channel: any;
+  selectedChannel: any;
+  unread: Record<string, number>;
+  onSelect: (ch: any) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}> = ({ channel, selectedChannel, unread, onSelect, onContextMenu }) => (
+  <div
+    className="channel-item ripple-container"
+    onClick={() => onSelect(channel)}
+    onContextMenu={(e) => { e.preventDefault(); onContextMenu(e); }}
+    style={{
+      padding: '6px 8px',
+      cursor: 'pointer',
+      backgroundColor: selectedChannel?.id === channel.id ? 'rgba(216,74,90,0.08)' : 'transparent',
+      borderLeft: selectedChannel?.id === channel.id ? '2px solid var(--chaos)' : '2px solid transparent',
+      color: selectedChannel?.id === channel.id ? 'var(--ghost-white)' : 'var(--ash)',
+      display: 'flex', alignItems: 'center', gap: '8px',
+      transition: 'all 0.2s'
+    }}
+  >
+    <span style={{ color: 'var(--shadow)' }}>#</span> {channel.name}
+    {unread[channel.id] > 0 && (
+      <span style={{
+        marginLeft: 'auto',
+        background: 'var(--blood)',
+        color: 'white',
+        fontSize: '10px',
+        fontWeight: 'bold',
+        minWidth: '18px',
+        height: '18px',
+        borderRadius: '9px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '0 5px',
+      }}>
+        {unread[channel.id] > 99 ? '99+' : unread[channel.id]}
+      </span>
+    )}
+    {(() => {
+      try {
+        const setting = JSON.parse(localStorage.getItem('vox_notif_settings') || '{}')[channel.id];
+        if (setting === 'none') return <span style={{ marginLeft: '4px', fontSize: '10px', opacity: 0.5 }}>🔇</span>;
+        if (setting === 'mentions') return <span style={{ marginLeft: '4px', fontSize: '10px', opacity: 0.5 }}>@</span>;
+        return null;
+      } catch { return null; }
+    })()}
+  </div>
+);
+
+// ── Voice Channel Row ──
+const VoiceChannelRow: React.FC<{
+  channel: any;
+  voice: any;
+  profile: any;
+  socket: any;
+  selectedServer: any;
+  channelMenu: any;
+  buildChannelMenu: (ch: any) => any[];
+  addToast: any;
+}> = ({ channel, voice, profile, socket, selectedServer, channelMenu, buildChannelMenu, addToast }) => {
+  const isInThisChannel = voice.channelId === channel.id;
+  const channelUsers = isInThisChannel
+    ? [{ socketId: 'local', userId: (() => { try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id || ''; } catch { return ''; } })(), username: profile.displayName || 'You', avatarUrl: profile.avatarUrl, speaking: voice.localSpeaking, muted: voice.localMuted, deafened: voice.localDeafened, screenSharing: voice.screenSharing }, ...voice.voiceUsers]
+    : voice.voiceUsers;
+  const hasParticipants = channelUsers.length > 0;
+
+  return (
+    <div key={channel.id}>
+      <div
+        className="channel-item ripple-container voice-channel-item"
+        onClick={() => {
+          if (isInThisChannel) return;
+          getMicrophoneStream()
+            .then(stream => {
+              voice.setLocalStream(stream);
+              voice.setChannel(channel.id, selectedServer.id);
+              voice.setJoinedAt(Date.now());
+              socket.socket?.emit('voice:join', { channelId: channel.id, serverId: selectedServer.id });
+            })
+            .catch(() => addToast('Microphone access denied.', 'error'));
+        }}
+        onContextMenu={(e) => { e.preventDefault(); channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel)); }}
+        style={{
+          padding: '6px 8px', cursor: 'pointer',
+          backgroundColor: isInThisChannel ? 'rgba(74,194,82,0.1)' : 'transparent',
+          color: isInThisChannel ? 'var(--toxic)' : 'var(--ash)',
+          borderLeft: isInThisChannel ? '2px solid var(--toxic)' : '2px solid transparent',
+          display: 'flex', alignItems: 'center', gap: '8px',
+          transition: 'all 0.2s', borderRadius: '4px',
+        }}
+      >
+        <span style={{ color: isInThisChannel ? 'var(--toxic)' : 'var(--shadow)' }}>🔊</span>
+        <span style={{ flex: 1 }}>{channel.name}</span>
+        {hasParticipants && <span style={{ fontSize: '10px', color: 'var(--shadow)', background: 'var(--phantom)', padding: '1px 6px', borderRadius: '8px' }}>{channelUsers.length}</span>}
+        {isInThisChannel && voice.localMuted && <MicOff size={12} style={{ color: 'var(--blood)' }} />}
+        {isInThisChannel && voice.localDeafened && <VolumeX size={12} style={{ color: 'var(--blood)' }} />}
+        {isInThisChannel && <VoiceTimer startedAt={voice.joinedAt || undefined} variant="member" />}
+      </div>
+      {hasParticipants && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', padding: '2px 0 4px 20px' }}>
+          {channelUsers.map((user: any) => (
+            <div key={user.socketId} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 6px', fontSize: '12px', color: user.speaking ? 'var(--toxic)' : 'var(--ash)', borderRadius: '4px' }}>
+              <div style={{ position: 'relative' }}>
+                {user.avatarUrl ? <img src={user.avatarUrl.startsWith('http') ? user.avatarUrl : `${API_BASE}${user.avatarUrl}`} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} /> : <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--obsidian)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', color: 'var(--ash)' }}>{(user.username || '?').slice(0, 1).toUpperCase()}</div>}
+                {user.speaking && <div style={{ position: 'absolute', bottom: -1, right: -1, width: 8, height: 8, borderRadius: '50%', background: 'var(--toxic)', border: '1px solid var(--abyss)' }} />}
+                {user.muted && <MicOff size={8} style={{ color: 'var(--blood)', position: 'absolute', top: -4, right: -4 }} />}
+              </div>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.socketId === 'local' ? `${user.username} (You)` : user.username}</span>
+              {user.screenSharing && <Monitor size={10} style={{ color: 'var(--toxic)', flexShrink: 0 }} />}
+              {user.deafened && <VolumeX size={10} style={{ color: 'var(--blood)', flexShrink: 0 }} />}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 import { useMessageStore } from '../../stores/messageStore';
 
 const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
@@ -35,6 +156,7 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
 
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [channelSettingsId, setChannelSettingsId] = useState<string | null>(null);
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const channelMenu = useContextMenu();
 
   if (!selectedServer) return <div className="sidebar"></div>;
@@ -56,6 +178,49 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
 
   const textChannels = selectedServer.channels.filter(c => c.type === 'TEXT');
   const voiceChannels = selectedServer.channels.filter(c => c.type === 'VOICE');
+
+  // Group text channels by category
+  const textByCategory: Record<string, typeof textChannels> = {};
+  const uncategorizedText: typeof textChannels = [];
+  for (const ch of textChannels) {
+    if (ch.categoryId) {
+      if (!textByCategory[ch.categoryId]) textByCategory[ch.categoryId] = [];
+      textByCategory[ch.categoryId].push(ch);
+    } else {
+      uncategorizedText.push(ch);
+    }
+  }
+  // Sort channels within each category by position
+  Object.keys(textByCategory).forEach(key => {
+    textByCategory[key].sort((a, b) => (a.position || 0) - (b.position || 0));
+  });
+
+  // Group voice channels by category
+  const voiceByCategory: Record<string, typeof voiceChannels> = {};
+  const uncategorizedVoice: typeof voiceChannels = [];
+  for (const ch of voiceChannels) {
+    if (ch.categoryId) {
+      if (!voiceByCategory[ch.categoryId]) voiceByCategory[ch.categoryId] = [];
+      voiceByCategory[ch.categoryId].push(ch);
+    } else {
+      uncategorizedVoice.push(ch);
+    }
+  }
+  Object.keys(voiceByCategory).forEach(key => {
+    voiceByCategory[key].sort((a, b) => (a.position || 0) - (b.position || 0));
+  });
+
+  // Get categories from server
+  const categories: any[] = selectedServer.categories || [];
+
+  const toggleCategory = (catId: string) => {
+    setCollapsedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId);
+      else next.add(catId);
+      return next;
+    });
+  };
 
   const myRole = (() => {
     try {
@@ -285,53 +450,38 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
               <div className="vox-empty-desc" style={{ fontSize: '10px' }}>Open a channel to begin.</div>
             </div>
           )}
-          {textChannels.map(channel => (
-            <div
-              key={channel.id}
-              className="channel-item ripple-container"
-              onClick={() => selectChannel(channel)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel));
-              }}
-              style={{
-                padding: '6px 8px',
-                cursor: 'pointer',
-                backgroundColor: selectedChannel?.id === channel.id ? 'rgba(216,74,90,0.08)' : 'transparent',
-                borderLeft: selectedChannel?.id === channel.id ? '2px solid var(--chaos)' : '2px solid transparent',
-                color: selectedChannel?.id === channel.id ? 'var(--ghost-white)' : 'var(--ash)',
-                display: 'flex', alignItems: 'center', gap: '8px',
-                transition: 'all 0.2s'
-              }}
-            >
-              <span style={{ color: 'var(--shadow)' }}>#</span> {channel.name}
-              {unread[channel.id] > 0 && (
-                <span style={{
-                  marginLeft: 'auto',
-                  background: 'var(--blood)',
-                  color: 'white',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  minWidth: '18px',
-                  height: '18px',
-                  borderRadius: '9px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '0 5px',
-                }}>
-                  {unread[channel.id] > 99 ? '99+' : unread[channel.id]}
-                </span>
-              )}
-              {(() => {
-                try {
-                  const setting = JSON.parse(localStorage.getItem('vox_notif_settings') || '{}')[channel.id];
-                  if (setting === 'none') return <span style={{ marginLeft: '4px', fontSize: '10px', opacity: 0.5 }}>🔇</span>;
-                  if (setting === 'mentions') return <span style={{ marginLeft: '4px', fontSize: '10px', opacity: 0.5 }}>@</span>;
-                  return null;
-                } catch { return null; }
-              })()}
-            </div>
+
+          {/* Render categories with channels */}
+          {categories.sort((a, b) => a.position - b.position).map(cat => {
+            const catChannels = textByCategory[cat.id] || [];
+            if (catChannels.length === 0) return null;
+            const isCollapsed = collapsedCategories.has(cat.id);
+            return (
+              <div key={cat.id} style={{ marginBottom: '2px' }}>
+                <button
+                  onClick={() => toggleCategory(cat.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    padding: '4px 2px', width: '100%',
+                    color: 'var(--ash)', fontSize: '11px', fontWeight: 'bold',
+                    letterSpacing: '0.05em', textTransform: 'uppercase',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: '8px', transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+                  {cat.name}
+                </button>
+                {!isCollapsed && catChannels.map(channel => (
+                  <ChannelRow key={channel.id} channel={channel} selectedChannel={selectedChannel} unread={unread} onSelect={selectChannel} onContextMenu={(e) => channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel))} />
+                ))}
+              </div>
+            );
+          })}
+
+          {/* Uncategorized channels */}
+          {uncategorizedText.length > 0 && uncategorizedText.sort((a, b) => (a.position || 0) - (b.position || 0)).map(channel => (
+            <ChannelRow key={channel.id} channel={channel} selectedChannel={selectedChannel} unread={unread} onSelect={selectChannel} onContextMenu={(e) => channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel))} />
           ))}
         </div>
 
@@ -347,112 +497,39 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
               <div className="vox-empty-desc" style={{ fontSize: '10px' }}>Silence reigns.</div>
             </div>
           )}
-          {voiceChannels.map(channel => {
-            const isInThisChannel = voice.channelId === channel.id;
-            // Get users in this specific voice channel
-            const channelUsers = isInThisChannel
-              ? [{ socketId: 'local', userId: (() => { try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id || ''; } catch { return ''; } })(), username: profile.displayName || 'You', avatarUrl: profile.avatarUrl, speaking: voice.localSpeaking, muted: voice.localMuted, deafened: voice.localDeafened, screenSharing: voice.screenSharing }, ...voice.voiceUsers]
-              : voice.voiceUsers;
-            const hasParticipants = channelUsers.length > 0;
+
+          {/* Voice categories */}
+          {categories.sort((a: any, b: any) => a.position - b.position).map((cat: any) => {
+            const catChannels = (voiceByCategory as any)[cat.id] || [];
+            if (catChannels.length === 0) return null;
+            const isCollapsed = collapsedCategories.has(`voice-${cat.id}`);
             return (
-              <div key={channel.id}>
-                <div
-                  className="channel-item ripple-container voice-channel-item"
-                  onClick={() => {
-                    if (isInThisChannel) return;
-                    getMicrophoneStream()
-                      .then(stream => {
-                        voice.setLocalStream(stream);
-                        voice.setChannel(channel.id, selectedServer.id);
-                        voice.setJoinedAt(Date.now());
-                        socket.socket?.emit('voice:join', { channelId: channel.id, serverId: selectedServer.id });
-                      })
-                      .catch(() => addToast('Microphone access denied. Check browser permissions.', 'error'));
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel));
-                  }}
+              <div key={`voice-cat-${cat.id}`} style={{ marginBottom: '2px' }}>
+                <button
+                  onClick={() => toggleCategory(`voice-${cat.id}`)}
                   style={{
-                    padding: '6px 8px',
-                    cursor: 'pointer',
-                    backgroundColor: isInThisChannel ? 'rgba(74,194,82,0.1)' : 'transparent',
-                    color: isInThisChannel ? 'var(--toxic)' : 'var(--ash)',
-                    borderLeft: isInThisChannel ? '2px solid var(--toxic)' : '2px solid transparent',
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    transition: 'all 0.2s',
-                    borderRadius: '4px',
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    padding: '4px 2px', width: '100%',
+                    color: 'var(--ash)', fontSize: '11px', fontWeight: 'bold',
+                    letterSpacing: '0.05em', textTransform: 'uppercase',
+                    textAlign: 'left',
                   }}
                 >
-                  <span style={{ color: isInThisChannel ? 'var(--toxic)' : 'var(--shadow)' }}>🔊</span>
-                  <span style={{ flex: 1 }}>{channel.name}</span>
-                  {hasParticipants && (
-                    <span style={{ fontSize: '10px', color: 'var(--shadow)', background: 'var(--phantom)', padding: '1px 6px', borderRadius: '8px' }}>
-                      {channelUsers.length}
-                    </span>
-                  )}
-                  {isInThisChannel && voice.localMuted && <MicOff size={12} style={{ color: 'var(--blood)' }} />}
-                  {isInThisChannel && voice.localDeafened && <VolumeX size={12} style={{ color: 'var(--blood)' }} />}
-                  {isInThisChannel && <VoiceTimer startedAt={voice.joinedAt || undefined} variant="member" />}
-                </div>
-                {/* Participant list */}
-                {hasParticipants && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', padding: '2px 0 4px 20px' }}>
-                    {channelUsers.map((user: any) => (
-                      <div
-                        key={user.socketId}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          padding: '2px 6px',
-                          borderRadius: '3px',
-                          fontSize: '12px',
-                          color: user.speaking ? 'var(--toxic)' : 'var(--ash)',
-                          transition: 'color 0.15s',
-                        }}
-                      >
-                        <div
-                          className="octagon"
-                          style={{
-                            width: '20px',
-                            height: '20px',
-                            flexShrink: 0,
-                            background: user.speaking
-                              ? 'linear-gradient(135deg, rgba(74,194,82,0.3), var(--obsidian))'
-                              : 'var(--obsidian)',
-                            border: user.speaking ? '1px solid rgba(74,194,82,0.5)' : '1px solid var(--rim)',
-                            display: 'grid',
-                            placeItems: 'center',
-                            fontSize: '9px',
-                            fontWeight: 700,
-                            color: 'var(--ghost-white)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          {user.avatarUrl ? (
-                            <img
-                              src={user.avatarUrl.startsWith('http') ? user.avatarUrl : `${API_BASE}${user.avatarUrl}`}
-                              alt=""
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                          ) : (
-                            user.username?.slice(0, 1).toUpperCase() || '?'
-                          )}
-                        </div>
-                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {user.socketId === 'local' ? `${user.username} (You)` : user.username}
-                        </span>
-                        {user.screenSharing && <Monitor size={10} style={{ color: 'var(--toxic)', flexShrink: 0 }} />}
-                        {user.muted && <MicOff size={10} style={{ color: 'var(--blood)', flexShrink: 0 }} />}
-                        {user.deafened && <VolumeX size={10} style={{ color: 'var(--blood)', flexShrink: 0 }} />}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  <span style={{ fontSize: '8px', transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+                  {cat.name}
+                </button>
+                {!isCollapsed && catChannels.map((channel: any) => (
+                  <VoiceChannelRow key={channel.id} channel={channel} voice={voice} profile={profile} socket={socket} selectedServer={selectedServer} channelMenu={channelMenu} buildChannelMenu={buildChannelMenu} addToast={addToast} />
+                ))}
               </div>
             );
           })}
+
+          {/* Uncategorized voice channels */}
+          {uncategorizedVoice.sort((a: any, b: any) => (a.position || 0) - (b.position || 0)).map((channel: any) => (
+            <VoiceChannelRow key={channel.id} channel={channel} voice={voice} profile={profile} socket={socket} selectedServer={selectedServer} channelMenu={channelMenu} buildChannelMenu={buildChannelMenu} addToast={addToast} />
+          ))}
         </div>
       </div>
 

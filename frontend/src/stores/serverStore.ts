@@ -8,6 +8,15 @@ export interface Channel {
   serverId?: string;
   topic?: string | null;
   nsfw?: boolean;
+  categoryId?: string | null;
+  position?: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  position: number;
+  serverId: string;
 }
 
 export interface ServerMember {
