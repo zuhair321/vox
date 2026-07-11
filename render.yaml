@@ -3,8 +3,11 @@ services:
     name: vox-backend
     runtime: node
     plan: starter
+    autoDeploy: true
+    branch: master
     buildCommand: cd backend && npm install && npx prisma generate && npx prisma migrate deploy
     startCommand: cd backend && npm start
+    healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -49,6 +52,8 @@ services:
 
   - type: static
     name: vox-frontend
+    autoDeploy: true
+    branch: master
     buildCommand: cd frontend && npm install && npm run build
     staticPublishPath: frontend/dist
     envVars:
