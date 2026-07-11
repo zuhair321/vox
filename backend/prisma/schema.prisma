@@ -51,6 +51,8 @@ model User {
   blocks          Block[]         @relation("BlockUser")
   blockedBy       Block[]         @relation("BlockedUser")
   reports         Report[]        @relation("ReportReporter")
+  polls           Poll[]
+  pollVotes       PollVote[]
   reportedBy      Report[]        @relation("ReportedUser")
   userNotes       UserNote[]      @relation("UserNoteAuthor")
   notesAbout      UserNote[]      @relation("UserNoteTarget")
@@ -112,6 +114,7 @@ model Channel {
   permissions Permission[]
   webhooks    Webhook[]
   archiveConfig ChannelArchiveConfig?
+  polls       Poll[]
   pinNotifications PinNotification[]
   scheduledMsgs ScheduledMessage[]
 }
@@ -248,6 +251,44 @@ model AuditLog {
   user   User   @relation(fields: [userId], references: [id])
 
   @@index([serverId, createdAt])
+}
+
+// ─── Poll ────────────────────────────────────────────────────────
+
+model Poll {
+  id        String   @id @default(uuid())
+  channelId String
+  userId    String
+  question  String
+  options   PollOption[]
+  ended     Boolean  @default(false)
+  maxVotes  Int      @default(1) // 0 = unlimited
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PollOption {
+  id      String @id @default(uuid())
+  pollId  String
+  text    String
+  votes   PollVote[]
+
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+}
+
+model PollVote {
+  id       String @id @default(uuid())
+  optionId String
+  userId   String
+  createdAt DateTime @default(now())
+
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([optionId, userId])
 }
 
 // ─── Category ────────────────────────────────────────────────────

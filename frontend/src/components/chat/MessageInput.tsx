@@ -7,6 +7,7 @@ import { uploadChatAttachment } from '../../api/uploads';
 import { sendDMHTTP } from '../../api/dm';
 import { useUiStore } from '../../stores/uiStore';
 import EmojiPicker from '../ui/EmojiPicker';
+import CreatePollModal from './CreatePollModal';
 import type { Attachment } from '../../types';
 import { playMessageSend, playError } from '../../utils/sounds';
 
@@ -33,6 +34,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
   const [busy, setBusy] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [slowmodeCooldown, setSlowmodeCooldown] = useState(0); // seconds remaining
+  const [showPollModal, setShowPollModal] = useState(false);
   const { sendDM, startTyping, stopTyping, startDmTyping, stopDmTyping } = useSocketStore();
   const { addToast } = useUiStore();
   const { selectedServer } = useServerStore();
@@ -399,7 +401,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         aria-expanded={emojiOpen}
         style={{
           position: 'absolute',
-          right: '104px',
+          right: '128px',
           top: '50%',
           transform: 'translateY(-50%)',
           background: 'none',
@@ -412,6 +414,30 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
       >
         😊
       </button>
+
+      {channelId && (
+        <button
+          type="button"
+          onClick={() => setShowPollModal(true)}
+          className="input-action-btn"
+          title="Create a poll"
+          aria-label="Create a poll"
+          style={{
+            position: 'absolute',
+            right: '104px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--ash, #8a93a3)',
+            fontSize: '16px',
+            padding: 0,
+          }}
+        >
+          📊
+        </button>
+      )}
 
       <button
         type="button"
@@ -582,6 +608,13 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
           </div>
         )}
       </div>
+
+      {showPollModal && channelId && (
+        <CreatePollModal
+          channelId={channelId}
+          onCreated={() => setShowPollModal(false)}
+        />
+      )}
     </div>
   );
 });

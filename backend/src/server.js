@@ -34,6 +34,7 @@ import { adminRouter } from './routes/admin.routes.js';
 import { turboRouter } from './routes/turbo.routes.js';
 import { legalRouter } from './routes/legal.routes.js';
 import { clientRouter } from './routes/client.routes.js';
+import { pollRouter } from './routes/poll.routes.js';
 import { requireAuth } from './middleware/auth.js';
 import { startDiscovery, stopDiscovery } from './lib/discovery.js';
 import { errorHandler, notFound } from './middleware/error.js';
@@ -144,6 +145,7 @@ app.use('/api', reportsRouter);
 app.use('/api', readReceiptRouter);
 app.use('/api/admin', requireAuth, adminRouter);
 app.use('/api/turbo', turboRouter);
+app.use('/api', pollRouter);
 app.use('/api', clientRouter);
 
 app.use(notFound);

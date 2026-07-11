@@ -111,7 +111,7 @@
 ### 3.1 Rich Messaging
 - [ ] **Markdown support** — Bold, italic, code blocks, links
 - [ ] **Embeds** — Rich link previews (YouTube, Twitter, etc.)
-- [ ] **Polls** — Create polls with multiple options
+- [x] **Polls** — Create polls with multiple options
 - [ ] **Scheduled messages** — Send message at specific time
 - [ ] **Reminders** — Bot reminder at specific time
 - [ ] **Message threads** — Start threads from any message
@@ -468,8 +468,8 @@ These features are quick to implement and make VOX feel much more complete:
 1. ✅ **Server insights** — Analytics dashboard (DONE)
 2. ✅ **Server audit log** — Track admin actions (DONE)
 3. ✅ **Slow mode** — Channel rate limiting (DONE)
-4. **Offline mode** — Cache data locally
-5. **Polls** — Create polls in channels
+4. ✅ **Polls** — Create polls in channels (DONE)
+5. **Offline mode** — Cache data locally
 6. **Read receipts** — Show when messages are read
 
 ---
