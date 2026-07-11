@@ -53,7 +53,7 @@
 - [x] **Empty states** — Show helpful UI when no servers/channels/messages
 - [x] **Loading states** — Skeleton loaders for channels, messages, users
 - [x] **Error handling** — Toast notifications for network errors
-- [ ] **Offline mode** — Cache data locally, show offline indicator
+- [x] **Offline mode** — Cache data locally, show offline indicator
 - [x] **Connection recovery** — Auto-reconnect WebSocket implemented
 
 ### 1.2 Message Features
