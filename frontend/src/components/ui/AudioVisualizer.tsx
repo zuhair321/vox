@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 interface AudioVisualizerProps {
   active: boolean;
@@ -6,21 +6,23 @@ interface AudioVisualizerProps {
   width?: number;
   height?: number;
   bars?: number;
+  amplitude?: number; // 0-1 from voice activity detection
 }
 
-// A self-contained bar visualizer that animates pseudo-random audio levels.
-// We don't have a real mic stream wired up yet (Phase 5), so we drive the bars
-// with a smoothed random walk while `active` is true. Drop-in for a real
-// AnalyserNode later: swap the source inside the rAF loop.
+// Enhanced bar visualizer with gradient colors and smooth animation.
+// When `amplitude` is provided (0-1), it drives the bars realistically.
+// Otherwise falls back to a smoothed random walk for visual appeal.
 const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
   active,
   color,
   width = 120,
   height = 36,
   bars = 16,
+  amplitude = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const levelsRef = useRef<number[]>(new Array(bars).fill(0));
+  const targetLevelsRef = useRef<number[]>(new Array(bars).fill(0));
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -34,28 +36,56 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
-    const barColor = color || getComputedStyle(document.documentElement)
-      .getPropertyValue('--accent')
-      .trim() || '#b1121b';
     const gap = 2;
     const barWidth = (width - gap * (bars - 1)) / bars;
 
     const draw = () => {
       ctx.clearRect(0, 0, width, height);
       const levels = levelsRef.current;
+      const targets = targetLevelsRef.current;
+      const time = Date.now() / 1000;
+
       for (let i = 0; i < bars; i++) {
         if (active) {
-          // Random walk toward a new random target each frame.
-          const target = 0.2 + Math.random() * 0.8;
-          levels[i] += (target - levels[i]) * 0.35;
+          if (amplitude > 0) {
+            // Real amplitude drives the center bars harder
+            const centerFactor = 1 - Math.abs(i - bars / 2) / (bars / 2);
+            const wave = Math.sin(time * 3 + i * 0.5) * 0.15;
+            targets[i] = Math.min(1, amplitude * (0.5 + centerFactor * 0.5) + wave * amplitude);
+          } else {
+            // Random walk fallback
+            if (Math.random() < 0.1) {
+              targets[i] = 0.2 + Math.random() * 0.8;
+            }
+          }
         } else {
-          levels[i] += (0.05 - levels[i]) * 0.2;
+          targets[i] = 0.03;
         }
-        const h = Math.max(2, levels[i] * height);
+        // Smooth interpolation
+        levels[i] += (targets[i] - levels[i]) * 0.25;
+        const h = Math.max(2, levels[i] * height * 0.9);
         const x = i * (barWidth + gap);
         const y = (height - h) / 2;
+
+        // Gradient color based on level
+        const intensity = levels[i];
+        let barColor: string;
+        if (color) {
+          barColor = color;
+        } else if (intensity > 0.7) {
+          barColor = '#d84a5a'; // chaos red for loud
+        } else if (intensity > 0.4) {
+          barColor = '#d9c98d'; // gold for medium
+        } else {
+          barColor = '#3b0a12'; // void-purple for quiet
+        }
+
         ctx.fillStyle = barColor;
-        ctx.fillRect(x, y, barWidth, h);
+        ctx.beginPath();
+        // Rounded bars
+        const radius = Math.min(barWidth / 2, 2);
+        ctx.roundRect(x, y, barWidth, h, radius);
+        ctx.fill();
       }
       rafRef.current = requestAnimationFrame(draw);
     };
@@ -64,7 +94,7 @@ const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [active, color, width, height, bars]);
+  }, [active, color, width, height, bars, amplitude]);
 
   return (
     <canvas

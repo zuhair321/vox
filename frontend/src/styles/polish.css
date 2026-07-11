@@ -39,6 +39,48 @@
   }
 }
 
+@keyframes livePulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes fuseGlow {
+  0%, 100% {
+    opacity: 0.4;
+    box-shadow: 0 0 4px rgba(217, 201, 141, 0.3);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(217, 201, 141, 0.6);
+  }
+}
+
+@keyframes particleDissolve {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-10px);
+    filter: blur(8px);
+  }
+}
+
+.message-dissolve {
+  animation: particleDissolve 0.4s ease-in forwards;
+}
+
 @keyframes shimmer {
   0% {
     background-position: -400px 0;
@@ -595,4 +637,138 @@
 
 .member-row-polished:hover {
   background: rgba(255, 255, 255, 0.03);
+}
+
+
+/* ════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — keyboard navigation & screen reader support
+   ════════════════════════════════════════════════════════════════ */
+
+/* Replace default browser focus ring with a custom VOX-style ring */
+:focus {
+  outline: none; /* Browser default ring removed */
+}
+
+:focus-visible {
+  outline: 2px solid var(--chaos);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Danger buttons get a red focus ring for extra clarity */
+button.danger:focus-visible,
+.angular-button.danger:focus-visible {
+  outline-color: var(--blood);
+}
+
+/* Remove focus ring on pointer (mouse/touch) interaction — keep for keyboard */
+:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Ensure interactive elements have reasonable touch targets
+   (relaxed WCAG 2.5.5 — full 44px breaks small UI elements) */
+input[type="checkbox"],
+input[type="radio"],
+select {
+  min-height: 20px;
+  min-width: 20px;
+}
+
+/* Links — underline on keyboard focus only */
+a:not([class]) {
+  text-decoration: none;
+}
+a:not([class]):focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Ensure all icon-only buttons have an accessible label.
+   Classes used: .icon-btn, .icon-button */
+.icon-btn,
+.icon-button,
+.icon-btn-sm,
+.icon-button-sm {
+  position: relative;
+}
+
+/* The aria-label / aria-labelledby attribute should be set on the
+   component using these classes — the CSS ensures no visual overflow
+   when the tooltip/popover extends beyond the button bounds */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.icon-btn:hover {
+  background: var(--bg-modifier-hover);
+  color: var(--text-primary);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--chaos);
+  outline-offset: 1px;
+}
+
+.icon-btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.icon-btn-sm:hover {
+  background: var(--bg-modifier-hover);
+  color: var(--text-primary);
+}
+
+/* Skip-to-content link — visually hidden until focused */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 8px;
+  background: var(--discord-blurple);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 9999;
+  transition: top 0.2s;
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: 8px;
+}
+
+/* High contrast mode: boost border contrast for borders that may be
+   invisible in Windows High Contrast mode */
+@media (forced-colors: active) {
+  :root {
+    --rim: ButtonText;
+  }
+
+  button,
+  [role="button"] {
+    forced-color-adjust: none;
+  }
 }

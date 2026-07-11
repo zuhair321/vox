@@ -238,12 +238,18 @@ function renderToken(token: Token, key: string): React.ReactNode {
         </a>
       );
 
-    case 'mention':
+    case 'mention': {
+      const isEveryone = token.content === '@everyone' || token.content === '@here';
       return (
-        <span key={key} className="mention-chip">
+        <span
+          key={key}
+          className="mention-chip"
+          style={isEveryone ? { background: 'linear-gradient(135deg, #7d1f2b, #d84a5a)', color: '#fff', fontWeight: 700 } : undefined}
+        >
           {token.content}
         </span>
       );
+    }
 
     case 'channel_link':
       return (

@@ -7,8 +7,9 @@ import TypingIndicator from './TypingIndicator';
 import { fetchMessages } from '../../api/messages';
 import { useSocketStore } from '../../stores/socketStore';
 import { MessageListSkeleton } from '../ui/Skeleton';
+import { analyzeMood, applyMoodShift } from '../../utils/moodShift';
 
-const SCROLL_THRESHOLD = 300; // px from bottom before the jump button shows
+const SCROLL_THRESHOLD = 300;
 
 const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
   const { messages, setMessages, loading } = useMessageStore();
@@ -18,26 +19,20 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showJump, setShowJump] = useState(false);
   const [newCount, setNewCount] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
   const myId = (() => {
-    try {
-      return JSON.parse(localStorage.getItem('vox_user') || '{}')?.id;
-    } catch {
-      return undefined;
-    }
+    try { return JSON.parse(localStorage.getItem('vox_user') || '{}')?.id; } catch { return undefined; }
+  })();
+  const myUsername = (() => {
+    try { return JSON.parse(localStorage.getItem('vox_user') || '{}')?.username; } catch { return undefined; }
   })();
 
   useEffect(() => {
     let alive = true;
     fetchMessages(channelId)
-      .then((loaded) => {
-        if (alive && Array.isArray(loaded)) setMessages(channelId, loaded);
-      })
-      .catch(() => {
-        if (alive) setMessages(channelId, []);
-      });
-    return () => {
-      alive = false;
-    };
+      .then((loaded) => { if (alive && Array.isArray(loaded)) setMessages(channelId, loaded); })
+      .catch(() => { if (alive) setMessages(channelId, []); });
+    return () => { alive = false; };
   }, [channelId, setMessages]);
 
   useEffect(() => {
@@ -45,8 +40,19 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
     return () => leaveChannel(channelId);
   }, [channelId, joinChannel, leaveChannel]);
 
-  // Track whether the user is near the bottom; if not, count new messages for
-  // the jump-to-bottom pill.
+  // Ambient mood shift — analyze recent messages and shift background glow
+  useEffect(() => {
+    if (channelMessages.length === 0) return;
+    const result = analyzeMood(channelMessages);
+    applyMoodShift(result);
+    return () => {
+      // Reset on unmount
+      document.documentElement.style.removeProperty('--mood-glow');
+      document.documentElement.style.removeProperty('--mood-intensity');
+      document.documentElement.style.removeProperty('--mood-size');
+    };
+  }, [channelMessages]);
+
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
@@ -56,23 +62,12 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
     if (nearBottom) setNewCount(0);
   };
 
-  // When new messages arrive and the user is scrolled up, bump the unread count.
-  useEffect(() => {
-    if (showJump) setNewCount((c) => c + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelMessages.length]);
+  useEffect(() => { if (showJump) setNewCount((c) => c + 1); }, [channelMessages.length, showJump]);
 
-  // Auto-scroll to bottom when near it (or when the channel changes).
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [channelId]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelId]);
 
-  // Auto-scroll to bottom when new messages arrive and user is near bottom.
   const prevMessageCount = useRef(channelMessages.length);
-  useEffect(() => {
-    prevMessageCount.current = 0; // reset when channel changes
-  }, [channelId]);
-
+  useEffect(() => { prevMessageCount.current = 0; }, [channelId]);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -90,7 +85,28 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
     setNewCount(0);
   };
 
-  // Build a flat render list with date separators interleaved between days.
+  // Drag & drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      // Trigger upload via custom event
+      window.dispatchEvent(new CustomEvent('vox:upload-files', { detail: { files, channelId } }));
+    }
+  };
+
   const rows = useMemo(() => {
     const out: Array<{ type: 'sep'; key: string; label: string } | { type: 'msg'; key: string; index: number }> = [];
     let lastDay = '';
@@ -99,11 +115,7 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
       const dayKey = format(d, 'yyyy-MM-dd');
       if (dayKey !== lastDay) {
         lastDay = dayKey;
-        const label = isToday(d)
-          ? 'TODAY'
-          : isYesterday(d)
-          ? 'YESTERDAY'
-          : format(d, 'EEE, MMM d').toUpperCase();
+        const label = isToday(d) ? 'TODAY' : isYesterday(d) ? 'YESTERDAY' : format(d, 'EEE, MMM d').toUpperCase();
         out.push({ type: 'sep', key: `sep-${dayKey}`, label });
       }
       out.push({ type: 'msg', key: msg.id, index });
@@ -114,12 +126,26 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
   const isLoading = !!loading[channelId] && channelMessages.length === 0;
 
   return (
-    <div style={{ position: 'relative', flex: '1 1 auto', display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        className="messages-container"
-      >
+    <div
+      style={{ position: 'relative', flex: '1 1 auto', display: 'flex', minHeight: 0, overflow: 'hidden' }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragOver && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 50,
+          background: 'rgba(16, 185, 129, 0.1)',
+          border: '2px dashed var(--toxic)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <div style={{ color: 'var(--toxic)', fontSize: 18, fontWeight: 'bold', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.1em' }}>
+            DROP FILES TO UPLOAD
+          </div>
+        </div>
+      )}
+      <div ref={scrollRef} onScroll={onScroll} className="messages-container">
         {isLoading ? (
           <MessageListSkeleton />
         ) : rows.length === 0 ? (
@@ -141,15 +167,12 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
             }
             const msg = channelMessages[row.index];
             const prevMsg = channelMessages[row.index - 1];
-            // Group same-author messages within 5 minutes, but never across a
-            // date separator.
             let isGrouped = false;
             if (prevMsg && prevMsg.userId === msg.userId) {
               const prevDay = format(new Date(prevMsg.createdAt), 'yyyy-MM-dd');
               const thisDay = format(new Date(msg.createdAt), 'yyyy-MM-dd');
               if (prevDay === thisDay) {
-                const timeDiff =
-                  new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime();
+                const timeDiff = new Date(msg.createdAt).getTime() - new Date(prevMsg.createdAt).getTime();
                 if (timeDiff < 5 * 60 * 1000) isGrouped = true;
               }
             }
@@ -158,7 +181,8 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
                 key={row.key}
                 message={msg}
                 isGrouped={isGrouped}
-                isOwn={msg.userId === myId}
+                isOwn={msg.userId === myId || (!msg.userId && msg.authorOverride === myUsername)}
+                myUsername={myUsername}
               />
             );
           })

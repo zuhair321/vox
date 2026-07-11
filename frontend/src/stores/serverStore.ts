@@ -6,6 +6,8 @@ export interface Channel {
   name: string;
   type: 'TEXT' | 'VOICE';
   serverId?: string;
+  topic?: string | null;
+  nsfw?: boolean;
 }
 
 export interface ServerMember {
@@ -17,13 +19,17 @@ export interface ServerMember {
     username: string;
     status: string;
     avatarUrl?: string;
+    role?: string;
   };
 }
 
 export interface Server {
   id: string;
   name: string;
-  icon?: string;
+  description?: string | null;
+  icon?: string | null;
+  banner?: string | null;
+  ownerId?: string;
   channels: Channel[];
   members: ServerMember[];
 }
@@ -40,6 +46,8 @@ interface ServerStore {
   addServer: (server: Server) => void;
   removeServer: (serverId: string) => void;
   addChannel: (serverId: string, channel: Channel) => void;
+  updateChannel: (serverId: string, channelId: string, data: Partial<Channel>) => void;
+  removeChannel: (serverId: string, channelId: string) => void;
   updateMemberStatus: (userId: string, status: string) => void;
   reset: () => void;
 }
@@ -54,13 +62,18 @@ export const useServerStore = create<ServerStore>((set, get) => ({
     set({ loading: true });
     try {
       const servers = await fetchServers();
-      set({ servers, loading: false });
-      if (servers.length > 0 && !get().selectedServer) {
-        set({ selectedServer: servers[0] });
-        if (servers[0].channels.length > 0) {
-          set({ selectedChannel: servers[0].channels[0] });
-        }
-      }
+      // Keep selectedServer in sync: if we already have one, replace its data
+      // with the freshly fetched copy (so icon/banner updates are visible immediately).
+      const currentId = get().selectedServer?.id;
+      const updated = currentId
+        ? servers.find((s: any) => s.id === currentId) || get().selectedServer
+        : servers[0] || null;
+      set({
+        servers,
+        loading: false,
+        selectedServer: updated,
+        selectedChannel: updated?.channels?.[0] || get().selectedChannel,
+      });
     } catch (e) {
       set({ loading: false });
     }
@@ -81,6 +94,24 @@ export const useServerStore = create<ServerStore>((set, get) => ({
     ),
     selectedServer: state.selectedServer?.id === serverId 
       ? { ...state.selectedServer, channels: [...state.selectedServer.channels, channel] }
+      : state.selectedServer
+  })),
+
+  updateChannel: (serverId, channelId, data) => set((state) => ({
+    servers: state.servers.map(s =>
+      s.id === serverId ? { ...s, channels: s.channels.map(c => c.id === channelId ? { ...c, ...data } : c) } : s
+    ),
+    selectedServer: state.selectedServer?.id === serverId
+      ? { ...state.selectedServer, channels: state.selectedServer.channels.map(c => c.id === channelId ? { ...c, ...data } : c) }
+      : state.selectedServer
+  })),
+
+  removeChannel: (serverId, channelId) => set((state) => ({
+    servers: state.servers.map(s =>
+      s.id === serverId ? { ...s, channels: s.channels.filter(c => c.id !== channelId) } : s
+    ),
+    selectedServer: state.selectedServer?.id === serverId
+      ? { ...state.selectedServer, channels: state.selectedServer.channels.filter(c => c.id !== channelId) }
       : state.selectedServer
   })),
 

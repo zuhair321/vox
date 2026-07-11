@@ -19,9 +19,25 @@ import { dmRouter } from './routes/dm.js';
 import { searchRouter } from './routes/search.js';
 import { insightsRouter } from './routes/insights.js';
 import { inviteRouter } from './routes/invites.js';
-import { editRouter } from './routes/edit.routes.js';
 import { linkPreviewRouter } from './routes/linkPreview.js';
+import { rolesRouter } from './routes/roles.routes.js';
+import { permissionsRouter } from './routes/permissions.routes.js';
+import { bansRouter } from './routes/bans.routes.js';
+import { categoriesRouter } from './routes/categories.routes.js';
+import { webhooksRouter } from './routes/webhooks.routes.js';
+import { emojiRouter } from './routes/emoji.routes.js';
+import { auditRouter } from './routes/audit.routes.js';
+import { blockRouter } from './routes/blocks.routes.js';
+import { reportsRouter } from './routes/reports.routes.js';
+import { readReceiptRouter } from './routes/readReceipts.routes.js';
+import { adminRouter } from './routes/admin.routes.js';
+import { turboRouter } from './routes/turbo.routes.js';
+import { legalRouter } from './routes/legal.routes.js';
+import { clientRouter } from './routes/client.routes.js';
+import { requireAuth } from './middleware/auth.js';
+import { startDiscovery, stopDiscovery } from './lib/discovery.js';
 import { errorHandler, notFound } from './middleware/error.js';
+import { getIO } from './sockets/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -58,16 +74,56 @@ app.use(
   }),
 );
 
-// ── Health / boot diagnostics ───────────────────────────────
-app.get('/health', (req, res) => {
-  res.json({ ok: true, service: 'vox-backend', uptime: Math.round(process.uptime()) });
+// ── Legal / public pages (privacy policy for Play Console + in-app) ──
+app.use(legalRouter);
+
+// ── Health / boot diagnostics (readiness check) ───────────
+app.get('/health', async (req, res) => {
+  try {
+    // Probe MySQL connection
+    await import('./lib/prisma.js').then(m => m.prisma.$queryRaw`SELECT 1`);
+    res.json({
+      ok: true,
+      service: 'vox-backend',
+      uptime: Math.round(process.uptime()),
+      mysql: 'connected',
+    });
+  } catch (e) {
+    res.status(503).json({ ok: false, error: 'MySQL unreachable' });
+  }
+});
+
+// ── Detailed health / diagnostics ────────────────────────────
+app.get('/health/detailed', async (req, res) => {
+  try {
+    const { prisma } = await import('./lib/prisma.js');
+    let dbStatus = 'disconnected';
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      dbStatus = 'connected';
+    } catch { /* ignore */ }
+
+    const io = getIO();
+    const socketCount = io ? io.engine.clientsCount : 0;
+
+    res.json({
+      status: 'ok',
+      db: dbStatus,
+      uptime: Math.round(process.uptime()),
+      memoryUsage: process.memoryUsage(),
+      socketCount,
+      activeUsers: 0,
+    });
+  } catch (e) {
+    res.status(503).json({ status: 'error', db: 'disconnected' });
+  }
 });
 
 // ── Routes ──────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
-app.use('/api', stateRouter);      // GET /api/state, POST /api/nitro/claim
-app.use('/api', messageRouter);    // POST /api/messages, reactions
-app.use('/api', uploadRouter);     // POST /api/upload/avatar|banner
+app.use('/api', stateRouter);
+app.use('/api', messageRouter);
+app.use('/api', uploadRouter);
 app.use('/api', serverRouter);
 app.use('/api', friendRouter);
 app.use('/api', dmRouter);
@@ -75,23 +131,37 @@ app.use('/api', searchRouter);
 app.use('/api', insightsRouter);
 app.use('/api', inviteRouter);
 app.use('/api', linkPreviewRouter);
-app.use('/api', editRouter);
+app.use('/api', rolesRouter);
+app.use('/api', permissionsRouter);
+app.use('/api', bansRouter);
+app.use('/api', categoriesRouter);
+app.use('/api', webhooksRouter);
+app.use('/api', emojiRouter);
+app.use('/api', auditRouter);
+app.use('/api', blockRouter);
+app.use('/api', reportsRouter);
+app.use('/api', readReceiptRouter);
+app.use('/api/admin', requireAuth, adminRouter);
+app.use('/api/turbo', turboRouter);
+app.use('/api', clientRouter);
 
 app.use(notFound);
 app.use(errorHandler);
 
 // ── Sockets ─────────────────────────────────────────────────
-initSockets(server);
+await initSockets(server);
 
 // ── Start ───────────────────────────────────────────────────
 server.listen(env.port, () => {
   // The string 'listening' is what electron-main.js watches for.
   console.log(`VOX backend listening on http://127.0.0.1:${env.port}`);
+  startDiscovery();
 });
 
 // Graceful shutdown so Prisma disconnects cleanly.
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
+    stopDiscovery();
     server.close(() => process.exit(0));
   });
 }

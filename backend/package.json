@@ -7,6 +7,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "cluster": "pm2 start ../ecosystem.config.json",
+    "cluster:restart": "pm2 restart vox-backend",
+    "cluster:stop": "pm2 stop vox-backend",
+    "cluster:logs": "pm2 logs vox-backend",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.js",
@@ -21,6 +25,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
@@ -31,9 +36,13 @@
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
+    "mysql2": "^3.22.5",
     "node-fetch": "^3.3.2",
     "otplib": "^13.4.1",
     "qrcode": "^1.5.4",
+    "redis": "^4.6.12",
+    "resend": "^6.16.0",
+    "sanitize-html": "^2.17.5",
     "socket.io": "^4.8.3",
     "zod": "^4.4.3"
   },
@@ -42,6 +51,7 @@
     "@types/cookie-parser": "^1.4.9",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/qrcode": "^1.5.5",
+    "pm2": "^7.0.3",
     "prisma": "^6.19.3",
     "tsx": "^4.20.6"
   }

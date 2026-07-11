@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# runtime data (push tokens, crash logs) — not source
+logs/
+data/
+
+# env
+.env
+.env.local
+
+# OS
+.DS_Store

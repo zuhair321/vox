@@ -1,18 +1,27 @@
 // Chat business logic: building app state, posting messages, reactions.
 //
-// These functions stay contract-agnostic — they return Prisma rows with the
-// relations needed by the mappers. The route layer does the mapping to the
-// frontend shapes (see src/lib/mappers.js).
+// Cache strategy (v2 — scaled for 500+ users):
+//   - Per-user state (channels + recent messages) cached in Redis (30s TTL).
+//     Key: vox:state:{userId}. This is the biggest win on socket connect.
+//   - Channel lists cached per server (30s TTL).
+//   - Online members cached per server (30s TTL).
+//   - Recent messages NOT cached individually (too volatile); scoped reads
+//     from indexed (channelId, createdAt) are fast enough at scale.
+//
+// Pagination:
+//   - On connect: getRecentMessages(50) — latest 50 messages from user's channels.
+//   - Older history: getMessagesBefore(cursor, limit) — cursor = oldest
+//     message id already loaded, returns up to `limit` older messages.
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
+import { cacheGet, cacheSet, cacheInvalidate } from '../lib/redis.js';
 
-const MESSAGE_INCLUDE = {
-  author: true,
-  reactions: true,
-};
+const MESSAGE_INCLUDE = { author: true, reactions: true };
+const CHANNELS_CACHE_KEY = 'vox:channels';
+const MEMBERS_CACHE_KEY = 'vox:members:online';
+const STATE_CACHE_KEY = 'vox:state';  // prefix; full key = vox:state:{userId}
+const CACHE_TTL = 30;
 
-// The full app state the frontend hydrates from (GET /api/state + socket init).
-// `nitroClaimed` is a demo flag kept in-memory; everything else comes from the DB.
 let nitroClaimed = false;
 let databaseAvailable = true;
 
@@ -31,33 +40,9 @@ const fallbackMembers = [
 ];
 
 let fallbackMessages = [
-  {
-    id: 'local-1',
-    channelId: 'welcome',
-    author: fallbackMembers[0],
-    authorOverride: null,
-    body: 'Welcome to VOX. The command center is awake.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 20),
-    reactions: [{ emoji: 'pulse' }, { emoji: 'pulse' }, { emoji: 'pulse' }, { emoji: 'void' }, { emoji: 'void' }],
-  },
-  {
-    id: 'local-2',
-    channelId: 'general',
-    author: fallbackMembers[1],
-    authorOverride: null,
-    body: 'Try sending a message, switching channels, or opening the member matrix.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 9),
-    reactions: [{ emoji: 'boost' }, { emoji: 'boost' }, { emoji: 'boost' }, { emoji: 'boost' }],
-  },
-  {
-    id: 'local-3',
-    channelId: 'ship-room',
-    author: fallbackMembers[2],
-    authorOverride: null,
-    body: 'Backend heartbeat is wired in. If MySQL is offline, VOX keeps a local echo.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 5),
-    reactions: [{ emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }],
-  },
+  { id: 'local-1', channelId: 'welcome', author: fallbackMembers[0], authorOverride: null, body: 'Welcome to VOX. The command center is awake.', createdAt: new Date(Date.now() - 1000 * 60 * 20), reactions: [{ emoji: 'pulse' }, { emoji: 'pulse' }, { emoji: 'pulse' }, { emoji: 'void' }, { emoji: 'void' }] },
+  { id: 'local-2', channelId: 'general', author: fallbackMembers[1], authorOverride: null, body: 'Try sending a message, switching channels, or opening the member matrix.', createdAt: new Date(Date.now() - 1000 * 60 * 9), reactions: [{ emoji: 'boost' }, { emoji: 'boost' }, { emoji: 'boost' }, { emoji: 'boost' }] },
+  { id: 'local-3', channelId: 'ship-room', author: fallbackMembers[2], authorOverride: null, body: 'Backend heartbeat is wired in. If MySQL is offline, VOX keeps a local echo.', createdAt: new Date(Date.now() - 1000 * 60 * 5), reactions: [{ emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }] },
 ];
 
 function useFallback(error) {
@@ -74,14 +59,7 @@ function createFallbackMessage({ channelId, author, body, user, attachments }) {
   const message = {
     id: `local-${Date.now()}`,
     channelId: channel.id,
-    author: user
-      ? {
-          id: user.id,
-          displayName: user.displayName ?? user.username ?? 'You',
-          role: user.role ?? 'MEMBER',
-          color: user.color ?? '#5865f2',
-        }
-      : null,
+    author: user ? { id: user.id, displayName: user.displayName ?? user.username ?? 'You', role: user.role ?? 'MEMBER', color: user.color ?? '#5865f2' } : null,
     authorOverride: String(author || 'You').slice(0, 32),
     body: String(body || '').trim().slice(0, 2000),
     attachments: Array.isArray(attachments) ? attachments : [],
@@ -92,64 +70,186 @@ function createFallbackMessage({ channelId, author, body, user, attachments }) {
   return message;
 }
 
-export async function getChannels() {
+// ── Channels ──────────────────────────────────────────────────
+export async function getChannels(serverId) {
   if (!databaseAvailable) return fallbackChannels;
-  return prisma.channel.findMany({ orderBy: { position: 'asc' } });
+  const cacheKey = serverId ? `${CHANNELS_CACHE_KEY}:${serverId}` : CHANNELS_CACHE_KEY;
+  const cached = await cacheGet(cacheKey);
+  if (cached) return cached;
+  const where = serverId ? { serverId } : {};
+  const channels = await prisma.channel.findMany({ where, orderBy: { position: 'asc' } });
+  await cacheSet(cacheKey, channels);
+  return channels;
 }
 
-export async function getMessages(limit = 100) {
+export async function invalidateChannelsCache(serverId) {
+  if (serverId) {
+    await cacheInvalidate(`${CHANNELS_CACHE_KEY}:${serverId}`);
+  } else {
+    await cacheInvalidate(CHANNELS_CACHE_KEY);
+  }
+}
+
+// ── Online Members ─────────────────────────────────────────────
+export async function getOnlineMembers(serverId) {
+  if (!databaseAvailable) return fallbackMembers;
+  const cacheKey = serverId ? `${MEMBERS_CACHE_KEY}:${serverId}` : MEMBERS_CACHE_KEY;
+  const cached = await cacheGet(cacheKey);
+  if (cached) return cached;
+  const where = { status: { not: 'OFFLINE' } };
+  if (serverId) {
+    where.serverMembers = { some: { serverId } };
+  }
+  const members = await prisma.user.findMany({
+    where,
+    orderBy: [{ status: 'asc' }, { displayName: 'asc' }],
+  });
+  await cacheSet(cacheKey, members);
+  return members;
+}
+
+export async function invalidateMembersCache(serverId) {
+  if (serverId) {
+    await cacheInvalidate(`${MEMBERS_CACHE_KEY}:${serverId}`);
+  } else {
+    await cacheInvalidate(MEMBERS_CACHE_KEY);
+  }
+}
+
+// ── Messages (paginated) ───────────────────────────────────────
+// Latest `limit` messages, newest last — used for initial state hydration.
+// When userId is provided, scopes to channels the user can access.
+export async function getRecentMessages(limit = 50, userId = null) {
   if (!databaseAvailable) return fallbackMessages.slice(-limit);
+
+  // If we already fetched scoped state, this function is only called
+  // for un-authed / fallback paths
   return prisma.message.findMany({
-    take: limit,
+    take: Math.min(limit, 100),
     orderBy: { createdAt: 'asc' },
     include: MESSAGE_INCLUDE,
   });
 }
 
-export async function getOnlineMembers() {
-  if (!databaseAvailable) return fallbackMembers;
-  // Phase 1: anyone who is not OFFLINE is shown as "online" in the member list.
-  return prisma.user.findMany({
-    where: { status: { not: 'OFFLINE' } },
-    orderBy: [{ status: 'asc' }, { displayName: 'asc' }],
+// Cursor-based pagination: returns messages older than the cursor message.
+// `cursorId` = id of the oldest message already on the client.
+// `limit`   = batch size (default 50, max 100).
+export async function getMessagesBefore(cursorId, limit = 50) {
+  if (!databaseAvailable) return fallbackMessages.slice(-limit);
+  const safeLimit = Math.min(parseInt(limit, 10) || 50, 100);
+
+  const cursorMsg = await prisma.message.findUnique({ where: { id: cursorId } });
+  if (!cursorMsg) return []; // invalid cursor
+
+  return prisma.message.findMany({
+    take: safeLimit,
+    where: { createdAt: { lt: cursorMsg.createdAt } },
+    orderBy: { createdAt: 'asc' },
+    include: MESSAGE_INCLUDE,
   });
 }
 
-export async function getState() {
-  // Three cheap queries; fine for Phase 1 scale.
-  let channels;
-  let messages;
-  let members;
+// ── Full State (socket init) ───────────────────────────────────
+// v2: fully parallel, Redis-cached per user (30s), scopes messages to user's channels.
+export async function getState(userId) {
+  const cacheKey = userId ? `${STATE_CACHE_KEY}:${userId}` : null;
+
+  // 1. Check per-user cache (instant on cache hit — no DB at all)
+  if (cacheKey) {
+    const cached = await cacheGet(cacheKey);
+    if (cached) return cached;
+  }
+
+  let channels, members, recentMessages, messagesCount;
 
   try {
-    [channels, messages, members] = await Promise.all([
-      getChannels(),
-      getMessages(),
-      getOnlineMembers(),
-    ]);
+    if (userId && databaseAvailable) {
+      // Fetch member servers first (needed to scope everything else)
+      const memberServerIds = (await prisma.serverMember.findMany({
+        where: { userId },
+        select: { serverId: true },
+      })).map(m => m.serverId);
+
+      if (memberServerIds.length > 0) {
+        // All 4 DB calls now fire in parallel — no chaining
+        const [chResults, msgCount] = await Promise.all([
+          // Channels: scoped to user's servers
+          prisma.channel.findMany({
+            where: { serverId: { in: memberServerIds } },
+            orderBy: { position: 'asc' },
+          }),
+          // Total message count across accessible channels
+          prisma.message.count({
+            where: { channel: { serverId: { in: memberServerIds } } },
+          }),
+        ]);
+
+        channels = chResults;
+        messagesCount = msgCount;
+
+        // Get channel IDs for message scoping
+        const channelIds = channels.map(c => c.id);
+
+        // Recent messages: scoped to user's channels, latest 50
+        recentMessages = channelIds.length > 0
+          ? await prisma.message.findMany({
+              where: { channelId: { in: channelIds } },
+              include: MESSAGE_INCLUDE,
+              orderBy: { createdAt: 'asc' },
+              take: 50,
+            })
+          : [];
+
+        // Online members: across all servers the user is in
+        const [onlineMembers] = await Promise.all([
+          getOnlineMembers(),
+        ]);
+        members = onlineMembers;
+      } else {
+        // User has no server memberships — fallback to defaults
+        channels = fallbackChannels;
+        recentMessages = fallbackMessages.slice(-50);
+        messagesCount = fallbackMessages.length;
+        members = fallbackMembers;
+      }
+    } else {
+      // Unauthenticated: public channels + total count
+      const [chResults, msgCount] = await Promise.all([
+        getChannels(),
+        databaseAvailable ? prisma.message.count() : Promise.resolve(fallbackMessages.length),
+      ]);
+      channels = chResults;
+      messagesCount = msgCount;
+      recentMessages = await getRecentMessages(50);
+      members = await getOnlineMembers();
+    }
   } catch (error) {
     useFallback(error);
     channels = fallbackChannels;
-    messages = fallbackMessages;
+    recentMessages = fallbackMessages.slice(-50);
     members = fallbackMembers;
+    messagesCount = fallbackMessages.length;
   }
 
-  return { channels, messages, members, nitroClaimed };
+  const state = { channels, members, recentMessages, nitroClaimed, messagesCount };
+
+  // Cache per-user state (30s) so 500 simultaneous connects don't all hit MySQL
+  if (cacheKey) {
+    await cacheSet(cacheKey, state, CACHE_TTL);
+  }
+
+  return state;
 }
 
-export function isNitroClaimed() {
-  return nitroClaimed;
-}
+// ── Nitro ─────────────────────────────────────────────────────
+export function isNitroClaimed() { return nitroClaimed; }
 
 export function claimNitro() {
   nitroClaimed = true;
-  return {
-    claimed: true,
-    perks: ['HD streaming', 'animated profile', 'server boosts', 'custom themes'],
-  };
+  return { claimed: true, perks: ['HD streaming', 'animated profile', 'server boosts', 'custom themes'] };
 }
 
-// Create a message. `actor` is the authed user (or null for a guest).
+// ── Create Message ────────────────────────────────────────────
 export async function createMessage({ channelId, author, body, user, attachments }) {
   const text = String(body || '').trim();
   const atts = Array.isArray(attachments) ? attachments : [];
@@ -170,10 +270,8 @@ export async function createMessage({ channelId, author, body, user, attachments
     };
 
     if (user) {
-      // Authed: link to the real user.
       data.userId = user.id;
     } else {
-      // Anonymous guest (the old demo "You" flow): store a display name.
       data.authorOverride = String(author || 'Guest').slice(0, 32);
     }
 

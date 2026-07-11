@@ -20,7 +20,7 @@ const InviteModal: React.FC = () => {
   const serverName = server?.name || 'Server';
 
   const generateLink = () => {
-    return `vox.gg/invite/${code}`;
+    return `https://vox.gg/invite/${code}`;
   };
 
   const loadInvites = () => {

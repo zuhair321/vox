@@ -1,9 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 
 export interface MenuItem {
   id: string;
   label: string;
-  icon?: string;
+  // `icon` accepts either a plain string (legacy emoji) or a ReactNode so
+  // menu items can render SVG glyphs from `components/chat/Icons.tsx` for a
+  // stroke-based look that matches the Vox aesthetic.
+  icon?: ReactNode;
   color?: string;
   danger?: boolean;
   disabled?: boolean;

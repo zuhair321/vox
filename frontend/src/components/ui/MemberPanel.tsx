@@ -1,23 +1,21 @@
 import React, { useMemo } from 'react';
-import { motion } from 'framer-motion';
 import { useServerStore } from '../../stores/serverStore';
 import { useContextMenu, MenuItem } from '../../hooks/useContextMenu';
 import ContextMenu from './ContextMenu';
 import { useUiStore } from '../../stores/uiStore';
+import { useVoiceStore } from '../../stores/voiceStore';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../../api/client';
-import RoleBadge from './RoleBadge';
-import StatusDot from '../void/StatusDot';
 import { MemberListSkeleton } from './Skeleton';
 import {
   ROLES,
   ROLE_GROUP_ORDER,
   normalizeRole,
-  roleGlowShadow,
   RoleKey,
 } from '../../config/roles';
 
 import { useProfileStore } from '../../stores/profileStore';
+import { buildDmId } from '../../api/dm';
 
 const MOCK_ACTIVITIES: Record<string, { type: 'game' | 'music' | 'video' | 'voice'; name: string }> = {};
 const ACTIVITY_META = {
@@ -35,6 +33,7 @@ function resolveAvatar(url?: string | null) {
 type MemberLike = {
   id: string;
   role?: string;
+  nick?: string | null;
   user?: {
     id?: string;
     username?: string;
@@ -50,6 +49,7 @@ const MemberPanel: React.FC = () => {
   const navigate = useNavigate();
   const memberMenu = useContextMenu();
   const profile = useProfileStore();
+  const voice = useVoiceStore();
   const myUserId = (() => {
     try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id; } catch { return ''; }
   })();
@@ -83,15 +83,87 @@ const MemberPanel: React.FC = () => {
     const username = member.user?.username || 'Unknown';
 
     return [
-      { id: 'profile', label: 'View Profile', icon: '👤', onClick: () => addToast(`Profile for ${username} — coming soon.`, 'info') },
-      { id: 'msg', label: 'Send Message', icon: '💬', onClick: () => addToast('DM — coming soon.', 'info') },
+      { id: 'profile', label: 'View Profile', icon: '👤', onClick: () => {
+        const u = member.user || member;
+        useUiStore.getState().openProfilePopup(u, { x: 300, y: 200 });
+      }},
+      { id: 'msg', label: 'Send Message', icon: '💬', onClick: () => {
+        const memberId = member.user?.id;
+        if (myUserId && memberId) {
+          navigate(`/dm/${buildDmId(myUserId, memberId)}`);
+        } else {
+          addToast('Cannot open this conversation.', 'error');
+        }
+      }},
       { id: 'd1', label: '', divider: true },
       { id: 'call', label: 'Call', icon: '📞', onClick: () => addToast('Voice call — Phase 7.', 'info') },
+      {
+        id: 'block',
+        label: 'Block User',
+        icon: '🚫',
+        danger: true,
+        onClick: async () => {
+          if (!window.confirm(`Block ${username}? They won't be able to DM you.`)) return;
+          const token = localStorage.getItem('vox_token');
+          try {
+            const res = await fetch(`${API_BASE}/api/blocks`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ userId: member.user?.id }),
+            });
+            if (!res.ok) throw new Error('Failed');
+            addToast(`${username} blocked.`, 'success');
+          } catch (e) {
+            addToast('Failed to block user.', 'error');
+          }
+        },
+      },
       ...(canMod
         ? [
             { id: 'd2', label: '', divider: true },
-            { id: 'roles', label: 'Manage Roles', icon: '🎭', onClick: () => addToast('Roles — coming soon.', 'info') },
-            { id: 'nick', label: 'Change Nickname', icon: '✏️', onClick: () => addToast('Nicknames — coming soon.', 'info') },
+            { id: 'roles', label: 'Manage Roles', icon: '🎭', onClick: () => navigate('/server-settings/' + (selectedServer?.id || '')) },
+            {
+              id: 'nick',
+              label: 'Change Nickname',
+              icon: '✏️',
+              onClick: async () => {
+                const newNick = prompt(`Set nickname for ${username}:`, member.nick || '');
+                if (newNick === null) return;
+                const token = localStorage.getItem('vox_token');
+                try {
+                  const res = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/members/${member.user?.id}/nickname`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ nick: newNick }),
+                  });
+                  if (!res.ok) throw new Error('Failed');
+                  addToast(`Nickname updated to "${newNick || '(none)'}"`, 'success');
+                } catch (e) {
+                  addToast('Failed to change nickname.', 'error');
+                }
+              },
+            },
+            {
+              id: 'ban',
+              label: 'Ban Member',
+              icon: '🚫',
+              danger: true,
+              onClick: async () => {
+                if (!window.confirm(`Ban ${username}? They won't be able to rejoin.`)) return;
+                const token = localStorage.getItem('vox_token');
+                try {
+                  const res = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/bans`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ userId: member.user?.id }),
+                  });
+                  if (!res.ok) throw new Error('Failed');
+                  addToast(`${username} banned.`, 'success');
+                } catch (e) {
+                  addToast('Failed to ban user.', 'error');
+                }
+              },
+            },
             { id: 'mute', label: 'Mute Member', icon: '🔇', onClick: () => addToast('Muted.', 'info') },
             { id: 'deafen', label: 'Deafen Member', icon: '🔕', onClick: () => addToast('Deafened.', 'info') },
             { id: 'd3', label: '', divider: true },
@@ -105,36 +177,55 @@ const MemberPanel: React.FC = () => {
                 { id: 't5', label: '5 minutes', onClick: () => addToast('Timed out 5m.', 'info') },
                 { id: 't10', label: '10 minutes', onClick: () => addToast('Timed out 10m.', 'info') },
                 { id: 't1h', label: '1 hour', onClick: () => addToast('Timed out 1h.', 'info') },
-                { id: 'tc', label: 'Custom...', onClick: () => addToast('Custom timeout — coming soon.', 'info') },
+                { id: 'tc', label: 'Custom...', onClick: () => addToast('Custom timeout — open server settings to configure.', 'info') },
               ],
             },
-            { id: 'kick', label: 'Kick Member', icon: '👢', danger: true, onClick: () => addToast('Kick — coming soon.', 'info') },
-            { id: 'ban', label: 'Ban Member', icon: '🔨', danger: true, onClick: () => addToast('Ban — coming soon.', 'info') },
-            { id: 'd4', label: '', divider: true },
-            { id: 'block', label: 'Block User', icon: '🚫', danger: true, onClick: () => addToast('Blocked.', 'info') },
+            {
+              id: 'kick',
+              label: 'Kick Member',
+              icon: '👢',
+              danger: true,
+              onClick: async () => {
+                if (!window.confirm(`Kick ${username}?`)) return;
+                const token = localStorage.getItem('vox_token');
+                try {
+                  const res = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/kick/${member.user?.id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  });
+                  if (!res.ok) throw new Error('Failed');
+                  addToast(`${username} kicked.`, 'success');
+                } catch (e) {
+                  addToast('Failed to kick user.', 'error');
+                }
+              },
+            },
           ]
-        : []),
+        : [])
     ];
   };
 
-  const { buckets, counts } = useMemo(() => {
-    const empty: Record<string, MemberLike[]> = {};
-    for (const key of ROLE_GROUP_ORDER) empty[key] = [];
-    if (!selectedServer) return { buckets: empty, counts: {} as Record<string, number> };
+  const buildMemberBuckets = () => {
+    if (!selectedServer) return { buckets: {}, counts: {} };
 
-    const buckets: Record<string, MemberLike[]> = {};
-    for (const key of ROLE_GROUP_ORDER) buckets[key] = [];
+    const buckets: Record<string, MemberLike[]> = {
+      OWNER: [],
+      FOUNDER: [],
+      ADMIN: [],
+      MODERATOR: [],
+      MEMBER: [],
+      OFFLINE: [],
+    };
 
-    for (const m of selectedServer.members as MemberLike[]) {
-      const isMe = m.user?.id === myUserId;
-      const memberStatus = isMe ? profile.userStatus : String(m.user?.status || '').toLowerCase();
-      if (memberStatus === 'offline') {
-        buckets.OFFLINE.push(m);
-      } else {
-        const role = normalizeRole(m.role || m.user?.role);
-        buckets[role].push(m);
-      }
-    }
+    selectedServer.members.forEach((member) => {
+      const user = member.user || {};
+      const status = String(user.status || 'offline').toLowerCase();
+      const key = status === 'online' || status === 'idle' || status === 'dnd'
+        ? normalizeRole(member.role || user.role || 'MEMBER')
+        : 'OFFLINE';
+      if (key === 'OFFLINE') return;
+      buckets[key].push(member);
+    });
 
     const statusRank: Record<string, number> = { online: 0, idle: 1, dnd: 2 };
     for (const key of Object.keys(buckets)) {
@@ -154,7 +245,9 @@ const MemberPanel: React.FC = () => {
     const counts: Record<string, number> = {};
     for (const key of Object.keys(buckets)) counts[key] = buckets[key].length;
     return { buckets, counts };
-  }, [selectedServer, profile.userStatus, myUserId]);
+  };
+
+  const { buckets, counts } = useMemo(buildMemberBuckets, [selectedServer, profile.userStatus, myUserId]);
 
   if (!selectedServer) return <div className="member-panel"></div>;
 
@@ -196,22 +289,24 @@ const MemberPanel: React.FC = () => {
               : `OFFLINE — ${counts[key] || 0}`;
 
           return (
-            <div key={key} style={{ marginBottom: '20px' }}>
+            <div key={key} style={{ marginBottom: '16px' }}>
               <h3
                 className="member-group-header"
                 style={{
-                  fontFamily: "'Bebas Neue', sans-serif",
+                  fontFamily: "'Share Tech Mono', monospace",
                   fontSize: '10px',
-                  letterSpacing: '0.3em',
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
                   color: headerColor,
-                  padding: '12px 0 6px',
+                  padding: '8px 8px 4px',
                   textTransform: 'uppercase',
+                  opacity: 0.8,
                 }}
               >
                 {headerLabel}
               </h3>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
                 {members.map((member) => {
                   const user = member.user || {};
                   const isMe = user.id === myUserId;
@@ -219,13 +314,11 @@ const MemberPanel: React.FC = () => {
                   const status = isMe ? profile.userStatus : String(user.status || 'offline').toLowerCase();
                   const role = normalizeRole(member.role || user.role);
                   const activity = user.id ? MOCK_ACTIVITIES[user.id] : undefined;
+                  const statusColor = status === 'online' ? '#3ba55c' : status === 'idle' ? '#faa61a' : status === 'dnd' ? '#ed4245' : '#747f8d';
                   return (
-                    <motion.div
+                    <div
                       key={member.id}
-                      initial={{ x: -20, opacity: 0 }}
-                      animate={{ x: 0, opacity: 1 }}
-                      transition={{ duration: 0.2 }}
-                      className="member-row-polished ripple-container"
+                      className="member-row-polished"
                       onContextMenu={(e) => {
                         e.preventDefault();
                         let isSelf = false;
@@ -238,78 +331,94 @@ const MemberPanel: React.FC = () => {
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '12px',
+                        gap: '10px',
                         cursor: 'pointer',
                         padding: '4px 8px',
-                        opacity: isOffline ? 0.5 : 1,
+                        borderRadius: '4px',
+                        opacity: isOffline ? 0.35 : 1,
+                        transition: 'background 0.1s',
+                        minHeight: '40px',
                       }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                     >
-                      <div style={{ position: 'relative' }}>
-                        <div
-                          className="octagon"
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            backgroundColor: 'var(--obsidian)',
-                            backgroundImage: avatarUrl ? `url(${avatarUrl})` : undefined,
-                            backgroundSize: 'cover',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--ghost-white)',
-                            fontWeight: 800,
-                          }}
-                        >
-                          {!avatarUrl &&
-                            String(user.username || '?').slice(0, 1).toUpperCase()}
-                        </div>
+                      {/* Avatar with status dot */}
+                      <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0 }}>
+                        {/* Main avatar */}
+                        {avatarUrl ? (
+                          <img
+                            src={avatarUrl}
+                            alt=""
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                              background: 'var(--obsidian)',
+                              display: 'block',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '50%',
+                              background: 'var(--obsidian)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'var(--ghost-white)',
+                              fontWeight: 700,
+                              fontSize: '14px',
+                            }}
+                          >
+                            {String(user.username || '?').slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                        {/* Status dot — bottom-right */}
                         <div
                           style={{
                             position: 'absolute',
-                            bottom: -2,
-                            right: -2,
-                            background: 'var(--abyss)',
-                            padding: 1,
-                            display: 'flex',
+                            bottom: 0,
+                            right: 0,
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '50%',
+                            background: statusColor,
+                            border: '2.5px solid var(--abyss)',
                           }}
-                        >
-                          <StatusDot status={status} size={10} />
-                        </div>
+                        />
                       </div>
 
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span
-                            style={{
-                              color: isOffline ? 'var(--shadow)' : ROLES[role].color,
-                              textShadow: isOffline ? 'none' : roleGlowShadow(role),
-                              fontWeight: 600,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {user.username || 'Unknown'}
-                          </span>
-                          {!isOffline && <RoleBadge role={role} />}
+                      {/* Name and info */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: isMe ? 600 : 500,
+                          color: isOffline ? 'var(--shadow)' : ROLES[role].color,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          lineHeight: '32px',
+                        }}>
+                          {user.username || 'Unknown'}
+                          {isMe && <span style={{ fontSize: '11px', color: 'var(--shadow)', fontStyle: 'italic', marginLeft: '4px' }}>(you)</span>}
                         </div>
                         {activity && !isOffline && (
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              fontSize: '11px',
-                              fontStyle: 'italic',
-                              color: activity.type === 'voice' ? 'var(--accent)' : 'var(--shadow)',
-                            }}
-                          >
-                            <span aria-hidden="true">{ACTIVITY_META[activity.type].icon}</span>
-                            {activity.name}
+                          <div style={{
+                            fontSize: '11px',
+                            color: 'var(--shadow)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            marginTop: '-4px',
+                          }}>
+                            {ACTIVITY_META[activity.type].icon} {activity.name}
                           </div>
                         )}
                       </div>
-                    </motion.div>
+                    </div>
                   );
                 })}
               </div>

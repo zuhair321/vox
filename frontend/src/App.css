@@ -395,6 +395,23 @@
   font-size: 11px;
 }
 
+.turbo-badge {
+  display: inline-block;
+  background: #f5a623;
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-weight: bold;
+  vertical-align: middle;
+}
+
+.turbo-badge:hover {
+  background: #e6951f;
+  cursor: default;
+}
+
 .logout-btn {
   display: grid;
   width: 30px;
@@ -745,8 +762,8 @@
 
 .action-toolbar {
   position: absolute;
-  top: -7px;
-  right: 15px;
+  top: 6px;
+  right: 8px;
   display: flex;
   gap: 2px;
   padding: 3px;
@@ -754,13 +771,19 @@
   background: var(--dark-matter);
   border: 1px solid var(--rim);
   opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(0);
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+  z-index: 10;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }
 
-.message-row:hover .action-toolbar {
+.message-row:hover .action-toolbar,
+.message-row:focus-within .action-toolbar,
+.action-toolbar:hover,
+.action-toolbar:focus-within {
   opacity: 1;
-  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .action-toolbar button {
@@ -769,15 +792,77 @@
   width: 28px;
   height: 26px;
   color: var(--shadow);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: color 0.12s ease, background 0.12s ease;
 }
 
 .action-toolbar button:hover {
   color: var(--ghost-white);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.action-toolbar button:last-child:hover {
+.action-toolbar button.danger:hover {
   color: var(--blood);
+}
+
+/* ── "more" chevron affordance ───────────────────────────────
+   A single small button anchored to the top-right of each message row.
+   Sits inline next to the timestamp on hover, clicks to open the
+   action popover. Uses the same cut-corner shape and crimson accent
+   as the rest of the void-shell UI so it reads as native. */
+.vox-message-more {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  color: var(--shadow);
+  border: 1px solid transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  z-index: 5;
+  /* Subtle angular shape — matches --cut-corner-all but tighter (4px). */
+  clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px), 0 4px);
+}
+
+.message-row:hover .vox-message-more,
+.message-row:focus-within .vox-message-more,
+.vox-message-more[aria-expanded="true"],
+.vox-message-more:focus {
+  opacity: 1;
+}
+
+.vox-message-more:hover {
+  color: var(--chaos);
+  background: rgba(177, 18, 27, 0.08);
+  border-color: var(--rim);
+}
+
+.vox-message-more[aria-expanded="true"] {
+  color: var(--chaos);
+  background: rgba(177, 18, 27, 0.12);
+  border-color: var(--rim);
+  /* Soft crimson glow so the open state reads as "armed", not just "hovered". */
+  box-shadow: 0 0 0 1px rgba(177, 18, 27, 0.25), 0 0 12px -2px var(--chaos-glow);
+}
+
+.vox-message-more svg {
+  display: block;
+  transition: transform 0.15s ease;
+}
+
+.vox-message-more[aria-expanded="true"] svg {
+  /* Flip the chevron up so it reads as "collapse" once the menu is open. */
+  transform: rotate(180deg);
 }
 
 .typing-indicator {

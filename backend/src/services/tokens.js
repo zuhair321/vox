@@ -17,9 +17,9 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-export async function mintTokenPair(user) {
+export async function mintTokenPair(user, deviceInfo, ipAddress, userAgent) {
   const access = jwt.sign(
-    { username: user.username, role: user.role },
+    { username: user.username, role: user.role || 'MEMBER', userId: user.id },
     env.jwt.accessSecret,
     { subject: user.id, expiresIn: env.jwt.accessTtl },
   );
@@ -30,7 +30,7 @@ export async function mintTokenPair(user) {
     expiresIn: env.jwt.refreshTtl,
   });
 
-  // Persist the refresh token (hashed) — fail silently if DB is down
+  // Persist the refresh token (hashed) with device info — fail silently if DB is down
   try {
     const decoded = jwt.decode(refresh);
     await prisma.refreshToken.create({
@@ -38,6 +38,9 @@ export async function mintTokenPair(user) {
         userId: user.id,
         tokenHash: hashToken(refresh),
         expiresAt: new Date(decoded.exp * 1000),
+        deviceInfo: deviceInfo || null,
+        ipAddress: ipAddress || null,
+        userAgent: userAgent || null,
       },
     });
   } catch {

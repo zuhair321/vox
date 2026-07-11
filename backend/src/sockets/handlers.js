@@ -1,21 +1,71 @@
 import { prisma } from '../lib/prisma.js';
-import { emitAll } from './index.js';
+import { deliverWebhooks } from '../services/webhook.service.js';
+import { sanitize } from '../middleware/sanitize.js';
+import { normalizeAttachments } from '../lib/attachments.js';
+import { isRateLimited } from '../lib/redis.js';
+import { getState } from '../services/chat.service.js';
 
-// Defensive attachment coercion shared by channel + DM socket sends.
-const ALLOWED_ATTACHMENT_KINDS = new Set(['image', 'video', 'file']);
-function normalizeAttachments(raw) {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((a) => a && typeof a === 'object')
-    .map((a) => ({
-      url: String(a.url || '').slice(0, 1024),
-      kind: ALLOWED_ATTACHMENT_KINDS.has(a.kind) ? a.kind : 'file',
-      name: String(a.name || 'file').slice(0, 200),
-      size: Number.isFinite(Number(a.size)) ? Number(a.size) : 0,
-      mime: String(a.mime || '').slice(0, 200),
-    }))
-    .filter((a) => a.url)
-    .slice(0, 10);
+const voiceChannelBySocket = new Map();
+const voiceServerBySocket = new Map();
+const voiceUserBySocket = new Map();
+const screenSharingBySocket = new Map();
+
+// ── Socket event rate limits (Redis-backed sliding window) ────
+const RATE_LIMITS = {
+  'message:send': { max: 30, windowMs: 60_000 },
+  'dm:send': { max: 30, windowMs: 60_000 },
+  'message:react': { max: 60, windowMs: 60_000 },
+  'typing:start': { max: 20, windowMs: 10_000 },
+  'dm:typing:start': { max: 20, windowMs: 10_000 },
+};
+
+async function checkRateLimit(userId, event) {
+  const limit = RATE_LIMITS[event];
+  if (!limit) return false;
+  return isRateLimited(userId, event, limit.max, limit.windowMs);
+}
+
+function getSocketUser(socket) {
+  const user = socket.data.user;
+  if (!user?.id) return null;
+  return { id: user.id, username: user.username || 'Unknown' };
+}
+
+function handleVoiceLeave(io, socket) {
+  const channelId = voiceChannelBySocket.get(socket.id);
+  if (!channelId) return;
+
+  const serverId = voiceServerBySocket.get(socket.id);
+  const user = voiceUserBySocket.get(socket.id) || getSocketUser(socket);
+  const room = `voice:${channelId}`;
+  const wasScreenSharing = screenSharingBySocket.get(socket.id) === true;
+
+  socket.leave(room);
+  socket.to(room).emit('voice:user-left', {
+    socketId: socket.id,
+    userId: user?.id,
+  });
+
+  if (wasScreenSharing) {
+    socket.to(room).emit('voice:screen', {
+      socketId: socket.id,
+      userId: user?.id,
+      screen: false,
+    });
+  }
+
+  if (serverId && user) {
+    io.to(`server:${serverId}`).emit('voice:member-update', {
+      channelId,
+      action: 'leave',
+      user,
+    });
+  }
+
+  voiceChannelBySocket.delete(socket.id);
+  voiceServerBySocket.delete(socket.id);
+  voiceUserBySocket.delete(socket.id);
+  screenSharingBySocket.delete(socket.id);
 }
 
 export function registerHandlers(io, socket) {
@@ -24,8 +74,18 @@ export function registerHandlers(io, socket) {
   // On connect, join personal user room for DMs
   if (userId) {
     socket.join(`user:${userId}`);
-    // Broadcast presence
-    io.emit('presence:update', { userId, status: 'online' });
+    // Join all server rooms so we can scope presence broadcasts.
+    // getState() is cached so this is fast even on every connect.
+    (async () => {
+      const state = await getState(userId).catch(() => ({}));
+      const serverIds = (state.memberServers || []).map((s) => s.serverId);
+      socket.data.serverIds = serverIds;
+      for (const serverId of serverIds) socket.join(`server:${serverId}`);
+      // Broadcast to every socket in every server this user is in
+      for (const serverId of serverIds) {
+        io.to(`server:${serverId}`).emit('presence:update', { userId, status: 'online' });
+      }
+    })();
   }
 
   socket.on('server:join', (serverId) => {
@@ -40,15 +100,202 @@ export function registerHandlers(io, socket) {
     socket.leave(`channel:${channelId}`);
   });
 
-  socket.on('message:send', async ({ channelId, content, parentId, attachments }) => {
+  socket.on('voice:join', async ({ channelId, serverId }) => {
+    const user = getSocketUser(socket);
+    if (!user || !channelId || !serverId) return;
+
+    // Fetch avatar URL from DB for the joining user
+    let avatarUrl = null;
+    try {
+      const dbUser = await prisma.user.findUnique({ where: { id: user.id }, select: { avatarUrl: true } });
+      avatarUrl = dbUser?.avatarUrl ?? null;
+    } catch { /* ignore */ }
+
+    handleVoiceLeave(io, socket);
+
+    const room = `voice:${channelId}`;
+    const existingPeers = [];
+    const activeScreenSharers = [];
+    const clients = io.sockets.adapter.rooms.get(room);
+    if (clients) {
+      for (const socketId of clients) {
+        if (socketId === socket.id) continue;
+        const peerUser = voiceUserBySocket.get(socketId);
+        // Fetch avatar for each existing peer
+        let peerAvatar = null;
+        try {
+          const dbUser = await prisma.user.findUnique({ where: { id: peerUser?.id }, select: { avatarUrl: true } });
+          peerAvatar = dbUser?.avatarUrl ?? null;
+        } catch { /* ignore */ }
+        const peerInfo = {
+          socketId,
+          userId: peerUser?.id,
+          username: peerUser?.username || 'Unknown',
+          avatarUrl: peerAvatar,
+        };
+        existingPeers.push(peerInfo);
+        if (screenSharingBySocket.get(socketId) === true) {
+          activeScreenSharers.push(peerInfo);
+        }
+      }
+    }
+
+    socket.join(room);
+    socket.join(`server:${serverId}`);
+    voiceChannelBySocket.set(socket.id, channelId);
+    voiceServerBySocket.set(socket.id, serverId);
+    voiceUserBySocket.set(socket.id, user);
+
+    socket.emit('voice:existing-peers', {
+      peers: existingPeers,
+      activeScreenSharers,
+    });
+    socket.to(room).emit('voice:user-joined', {
+      socketId: socket.id,
+      userId: user.id,
+      username: user.username,
+      avatarUrl,
+    });
+    io.to(`server:${serverId}`).emit('voice:member-update', {
+      channelId,
+      action: 'join',
+      user,
+    });
+  });
+
+  socket.on('voice:leave', () => {
+    handleVoiceLeave(io, socket);
+  });
+
+  socket.on('voice:offer', ({ to, offer }) => {
+    const user = getSocketUser(socket);
+    if (!user || !to || !offer) return;
+    io.to(to).emit('voice:offer', {
+      from: socket.id,
+      fromUser: user,
+      offer,
+    });
+  });
+
+  socket.on('voice:answer', ({ to, answer }) => {
+    if (!to || !answer) return;
+    io.to(to).emit('voice:answer', { from: socket.id, answer });
+  });
+
+  socket.on('voice:ice-candidate', ({ to, candidate }) => {
+    if (!to || !candidate) return;
+    io.to(to).emit('voice:ice-candidate', { from: socket.id, candidate });
+  });
+
+  socket.on('voice:mute', ({ muted }) => {
+    const channelId = voiceChannelBySocket.get(socket.id);
+    const user = getSocketUser(socket);
+    if (!channelId || !user) return;
+    io.to(`voice:${channelId}`).emit('voice:user-muted', {
+      socketId: socket.id,
+      userId: user.id,
+      muted: Boolean(muted),
+    });
+  });
+
+  socket.on('voice:deafen', ({ deafened }) => {
+    const channelId = voiceChannelBySocket.get(socket.id);
+    const user = getSocketUser(socket);
+    if (!channelId || !user) return;
+    io.to(`voice:${channelId}`).emit('voice:user-deafened', {
+      socketId: socket.id,
+      userId: user.id,
+      deafened: Boolean(deafened),
+    });
+  });
+
+  socket.on('voice:speaking', ({ speaking }) => {
+    const channelId = voiceChannelBySocket.get(socket.id);
+    const user = getSocketUser(socket);
+    if (!channelId || !user) return;
+    socket.to(`voice:${channelId}`).emit('voice:user-speaking', {
+      socketId: socket.id,
+      userId: user.id,
+      speaking: Boolean(speaking),
+    });
+  });
+
+  socket.on('voice:screen', ({ screen }) => {
+    const channelId = voiceChannelBySocket.get(socket.id);
+    const user = getSocketUser(socket);
+    if (!channelId || !user) return;
+    const enabled = Boolean(screen);
+    screenSharingBySocket.set(socket.id, enabled);
+    io.to(`voice:${channelId}`).emit('voice:screen', {
+      socketId: socket.id,
+      userId: user.id,
+      username: user.username,
+      screen: enabled,
+    });
+  });
+
+  socket.on('voice:screen-request', ({ to }) => {
+    // Late joiner asks an active screen sharer to renegotiate so it can
+    // receive the screen track. The sharer is expected to send a fresh offer.
+    if (!to) return;
+    const sharerId = to;
+    const sharer = voiceUserBySocket.get(sharerId);
+    if (!sharer || screenSharingBySocket.get(sharerId) !== true) return;
+    io.to(sharerId).emit('voice:screen-request', {
+      from: socket.id,
+      fromUser: getSocketUser(socket),
+    });
+  });
+
+  // Amplitude relay — throttle to 10Hz server-side to prevent floods
+  const AMPLITUDE_COOLDOWN_MS = 100;
+  let lastAmplitudeRelay = 0;
+  socket.on('voice:amplitude', ({ amplitude }) => {
+    const now = Date.now();
+    if (now - lastAmplitudeRelay < AMPLITUDE_COOLDOWN_MS) return;
+    lastAmplitudeRelay = now;
+    const channelId = voiceChannelBySocket.get(socket.id);
+    if (!channelId) return;
+    socket.to(`voice:${channelId}`).emit('voice:amplitude', {
+      socketId: socket.id,
+      amplitude: Number(amplitude) || 0,
+    });
+  });
+
+  // Camera toggle broadcast
+  socket.on('voice:video', ({ video }) => {
+    const channelId = voiceChannelBySocket.get(socket.id);
+    const user = getSocketUser(socket);
+    if (!channelId || !user) return;
+    io.to(`voice:${channelId}`).emit('voice:user-video', {
+      socketId: socket.id,
+      userId: user.id,
+      video: Boolean(video),
+    });
+  });
+
+  // Screen share emoji reactions
+  socket.on('screen:reaction', ({ emoji, x, y, channelId }) => {
+    if (!userId || !emoji || !channelId) return;
+    io.to(`voice:${channelId}`).emit('screen:reaction', {
+      userId,
+      emoji,
+      x: Number(x) || 0,
+      y: Number(y) || 0,
+    });
+  });
+
+  socket.on('message:send', async ({ channelId, content, parentId, attachments, fuseTime }) => {
     if (!userId) return;
+    if (isRateLimited(userId, 'message:send')) return;
     try {
       const atts = normalizeAttachments(attachments);
       const base = {
         channelId,
-        body: String(content || ''),
+        body: sanitize(String(content || '')),
         parentId,
         attachments: atts.length ? atts : undefined,
+        fuseTime: fuseTime || null,
       };
       // Never-throw safety net: if the socket user id doesn't resolve in the DB
       // (e.g. a stale in-memory `demo-<ts>` id from when MySQL was briefly
@@ -59,7 +306,7 @@ export function registerHandlers(io, socket) {
       try {
         message = await prisma.message.create({
           data: { ...base, userId },
-          include: { author: true, reactions: true, parent: true },
+          include: { author: true, reactions: true, parentMessage: true },
         });
       } catch (createErr) {
         const code = createErr?.code || createErr?.constructor?.name;
@@ -70,45 +317,85 @@ export function registerHandlers(io, socket) {
             userId: null,
             authorOverride: socket.data.user?.username || 'Guest',
           },
-          include: { author: true, reactions: true, parent: true },
+          include: { author: true, reactions: true, parentMessage: true },
         });
       }
       io.to(`channel:${channelId}`).emit('message:new', { message });
+
+      // Deliver to registered outgoing webhooks (non-blocking)
+      deliverWebhooks(channelId, message).catch(err => {
+        console.error('[webhook] delivery error:', err.message);
+      });
     } catch (e) { console.error('Error sending message:', e); }
   });
 
   socket.on('message:edit', async ({ messageId, content }) => {
     if (!userId) return;
     try {
-      // Check if the message belongs to this user (including anonymous fallback messages)
-      const existing = await prisma.message.findUnique({ where: { id: messageId } });
-      if (!existing) return;
+      // Check if the message belongs to this user (including anonymous fallback messages).
+      // Moderators (FOUNDER/ADMIN/MODERATOR) in the channel's server may also edit.
+      const existing = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: { channel: true },
+      });
+      if (!existing || existing.deleted) return;
       const myUsername = socket.data.user?.username;
       const isOwner = existing.userId
         ? existing.userId === userId
         : existing.authorOverride === myUsername;
-      if (!isOwner) return;
+      let isModerator = false;
+      if (!isOwner && existing.channel?.serverId) {
+        const member = await prisma.serverMember.findUnique({
+          where: { serverId_userId: { serverId: existing.channel.serverId, userId } },
+        });
+        isModerator = !!member && ['FOUNDER', 'ADMIN', 'MODERATOR'].includes(member.role);
+      }
+      if (!isOwner && !isModerator) return;
 
       const message = await prisma.message.update({
         where: { id: messageId },
-        data: { body: content, edited: true },
-        include: { author: true, reactions: true, parent: true }
+        data: { body: sanitize(String(content || '')), edited: true },
+        include: { author: true, reactions: true, parentMessage: true }
       });
       const channelId = message.channelId;
       io.to(`channel:${channelId}`).emit('message:updated', { message });
+
+      // Audit log when a moderator edits someone else's message.
+      if (isModerator && !isOwner && existing.channel?.serverId) {
+        prisma.auditLog.create({
+          data: {
+            serverId: existing.channel.serverId,
+            userId,
+            action: 'MESSAGE_EDIT',
+            targetId: messageId,
+            details: { by: 'moderator' },
+          },
+        }).catch((e) => console.warn('[audit] socket message edit log failed:', e?.message));
+      }
     } catch (e) { console.error('Error editing message:', e); }
   });
 
   socket.on('message:delete', async ({ messageId }) => {
     if (!userId) return;
     try {
-      const existing = await prisma.message.findUnique({ where: { id: messageId } });
-      if (!existing) return;
+      // Same author-or-moderator permission as the HTTP route.
+      const existing = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: { channel: true },
+      });
+      if (!existing || existing.deleted) return;
       const myUsername = socket.data.user?.username;
       const isOwner = existing.userId
         ? existing.userId === userId
         : existing.authorOverride === myUsername;
-      if (!isOwner) return;
+      let isModerator = false;
+      if (!isOwner && existing.channel?.serverId) {
+        const member = await prisma.serverMember.findUnique({
+          where: { serverId_userId: { serverId: existing.channel.serverId, userId } },
+        });
+        isModerator = !!member && ['FOUNDER', 'ADMIN', 'MODERATOR'].includes(member.role);
+      }
+      if (!isOwner && !isModerator) return;
 
       const message = await prisma.message.update({
         where: { id: messageId },
@@ -116,11 +403,25 @@ export function registerHandlers(io, socket) {
       });
       const channelId = message.channelId;
       io.to(`channel:${channelId}`).emit('message:deleted', { messageId, channelId });
+
+      // Audit log when a moderator deletes someone else's message.
+      if (isModerator && !isOwner && existing.channel?.serverId) {
+        prisma.auditLog.create({
+          data: {
+            serverId: existing.channel.serverId,
+            userId,
+            action: 'MESSAGE_DELETE',
+            targetId: messageId,
+            details: { by: 'moderator' },
+          },
+        }).catch((e) => console.warn('[audit] socket message delete log failed:', e?.message));
+      }
     } catch (e) { console.error('Error deleting message:', e); }
   });
 
   socket.on('message:react', async ({ messageId, emoji }) => {
     if (!userId) return;
+    if (isRateLimited(userId, 'message:react')) return;
     try {
       const existing = await prisma.reaction.findUnique({
         where: { messageId_userId_emoji: { messageId, userId, emoji } }
@@ -134,7 +435,7 @@ export function registerHandlers(io, socket) {
 
       const message = await prisma.message.findUnique({
         where: { id: messageId },
-        include: { author: true, reactions: true, parent: true }
+        include: { author: true, reactions: true, parentMessage: true }
       });
       const channelId = message.channelId;
       io.to(`channel:${channelId}`).emit('message:updated', { message });
@@ -143,6 +444,7 @@ export function registerHandlers(io, socket) {
 
   socket.on('typing:start', ({ channelId }) => {
     if (!userId) return;
+    if (isRateLimited(userId, 'typing:start')) return;
     const username = socket.data.user.username;
     socket.to(`channel:${channelId}`).emit('typing:start', { userId, username, channelId });
   });
@@ -152,23 +454,58 @@ export function registerHandlers(io, socket) {
     socket.to(`channel:${channelId}`).emit('typing:stop', { userId, channelId });
   });
 
-  socket.on('dm:send', async ({ recipientId, content, attachments }) => {
-    if (!userId) return;
+  socket.on('dm:send', async ({ recipientId, content, attachments }, ack) => {
+    if (!userId) {
+      if (typeof ack === 'function') ack({ error: 'Not authenticated' });
+      socket.emit('dm:error', { error: 'Not authenticated' });
+      return;
+    }
+    if (isRateLimited(userId, 'dm:send')) {
+      if (typeof ack === 'function') ack({ error: 'You are sending messages too fast.' });
+      socket.emit('dm:error', { error: 'You are sending messages too fast.' });
+      return;
+    }
     try {
       const atts = normalizeAttachments(attachments);
-      // Coerce recipientId out of whatever the client sent. The frontend
-      // historically passed the full `userId1_userId2` dmId here by mistake; if
-      // so, recover the actual recipient by dropping our own id from the string.
       let recipient = String(recipientId || '');
-      if (recipient.includes('_')) {
-        recipient = recipient.split('_').find((part) => part && part !== userId) || recipient;
+      // If the client sent a full dmId (with underscores in IDs), extract the
+      // other user by removing our own ID and stripping separator underscores.
+      if (recipient.includes(userId)) {
+        recipient = recipient.replace(userId, '').replace(/^_+|_+$/g, '');
       }
-      if (!recipient || recipient === userId) return;
+      if (!recipient || recipient === userId) {
+        if (typeof ack === 'function') ack({ error: 'Invalid recipient' });
+        socket.emit('dm:error', { error: 'Invalid recipient' });
+        return;
+      }
+
+      // Block check — either party may have blocked the other.
+      const block = await prisma.block.findFirst({
+        where: {
+          OR: [
+            { blockerId: userId, blockedId: recipient },
+            { blockerId: recipient, blockedId: userId },
+          ],
+        },
+      });
+      if (block) {
+        if (typeof ack === 'function') ack({ error: 'Cannot send messages to this user.' });
+        socket.emit('dm:error', { error: 'Cannot send messages to this user.' });
+        return;
+      }
+
+      // Validate content — don't allow empty messages with no attachments
+      const text = sanitize(String(content || ''));
+      if (!text && atts.length === 0) {
+        if (typeof ack === 'function') ack({ error: 'Message cannot be empty' });
+        socket.emit('dm:error', { error: 'Message cannot be empty' });
+        return;
+      }
 
       const dmId = [userId, recipient].sort().join('_');
-      const message = await prisma.dMMessage.create({
+      const message = await prisma.dmMessage.create({
         data: {
-          content: String(content || ''),
+          content: text,
           attachments: atts.length ? atts : undefined,
           dmId,
           senderId: userId,
@@ -178,18 +515,52 @@ export function registerHandlers(io, socket) {
       });
       io.to(`user:${recipient}`).emit('dm:new', { message });
       socket.emit('dm:new', { message });
+      if (typeof ack === 'function') ack({ ok: true });
     } catch (e) {
-      // DM model has no anonymous/override field, so a FK failure on a stale
-      // sender id can't be retried. We log and swallow — the socket path never
-      // surfaces an error to the client. (Dormant once auth is healthy.)
       console.error('Error sending DM:', e?.code || e?.message);
+      if (typeof ack === 'function') ack({ error: 'Failed to send message. Please try again.' });
+      socket.emit('dm:error', { error: 'Failed to send message. Please try again.' });
     }
+  });
+
+  socket.on('dm:join', ({ dmId }) => {
+    socket.join(`dm:${dmId}`);
+  });
+
+  socket.on('dm:leave', ({ dmId }) => {
+    socket.leave(`dm:${dmId}`);
+  });
+
+  socket.on('dm:typing:start', ({ recipientId }) => {
+    if (!userId) return;
+    if (isRateLimited(userId, 'dm:typing:start')) return;
+    const username = socket.data.user?.username;
+    const dmId = [userId, recipientId].sort().join('_');
+    socket.to(`user:${recipientId}`).emit('dm:typing:start', { userId, username, dmId });
+  });
+
+  socket.on('dm:typing:stop', ({ recipientId }) => {
+    if (!userId) return;
+    const dmId = [userId, recipientId].sort().join('_');
+    socket.to(`user:${recipientId}`).emit('dm:typing:stop', { userId, dmId });
+  });
+
+  socket.on('dm:read', async ({ dmId }) => {
+    if (!userId) return;
+    try {
+      await prisma.dmMessage.updateMany({
+        where: { dmId, recipientId: userId, read: false },
+        data: { read: true },
+      });
+      const otherId = dmId.replace(userId, '').replace(/^_+|_+$/g, '');
+      if (otherId) {
+        io.to(`user:${otherId}`).emit('dm:read', { dmId, by: userId });
+      }
+    } catch (e) { console.error('Error marking DM read:', e); }
   });
 
   socket.on('status:update', async ({ status }) => {
     if (!userId) return;
-    // Validate against the Status enum so a bad/missing value can't throw on
-    // .toUpperCase() or write an invalid enum (Prisma would reject it anyway).
     const normalized = String(status || '').toUpperCase();
     const VALID = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
     if (!VALID.includes(normalized)) return;
@@ -198,19 +569,28 @@ export function registerHandlers(io, socket) {
         where: { id: userId },
         data: { status: normalized },
       });
-      // Emit the lowercase form the client renders by (see StatusDot/mapMember).
-      io.emit('presence:update', { userId, status: normalized.toLowerCase() });
+      // Scope to all server rooms this user is in (set during connect)
+      const serverIds = socket.data.serverIds || [];
+      const lowercase = normalized.toLowerCase();
+      for (const serverId of serverIds) {
+        io.to(`server:${serverId}`).emit('presence:update', { userId, status: lowercase });
+      }
     } catch (e) { console.error('Error updating status:', e); }
   });
 
   socket.on('disconnect', async () => {
+    handleVoiceLeave(io, socket);
     if (userId) {
       try {
         await prisma.user.update({
           where: { id: userId },
           data: { status: 'OFFLINE' }
         });
-        io.emit('presence:update', { userId, status: 'offline' });
+        // Scope to all server rooms this user was in
+        const serverIds = socket.data.serverIds || [];
+        for (const serverId of serverIds) {
+          io.to(`server:${serverId}`).emit('presence:update', { userId, status: 'offline' });
+        }
       } catch (e) { console.error('Error on disconnect:', e); }
     }
   });

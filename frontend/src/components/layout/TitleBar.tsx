@@ -2,10 +2,16 @@ import React, { useEffect, useState } from 'react';
 
 const TitleBar: React.FC = () => {
   const [platform, setPlatform] = useState<string>('win32');
+  const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
-    if ((window as any).electronAPI?.windowControls?.platform) {
-      setPlatform((window as any).electronAPI.windowControls.platform);
+    const api = (window as any).electronAPI;
+    if (api?.windowControls?.platform) {
+      setPlatform(api.windowControls.platform);
+      // Get initial state
+      api.windowControls.isMaximized?.().then((max: boolean) => setIsMaximized(max));
+      // Listen for changes
+      api.onMaximizeChange?.((max: boolean) => setIsMaximized(max));
     }
   }, []);
 
@@ -25,9 +31,11 @@ const TitleBar: React.FC = () => {
 
   const winControls = (
     <div className="no-drag" style={{ display: 'flex', height: '100%' }}>
-      <button className="win-ctrl min" onClick={handleMinimize}>−</button>
-      <button className="win-ctrl max" onClick={handleMaximize}>□</button>
-      <button className="win-ctrl close" onClick={handleClose}>×</button>
+      <button className="win-ctrl min" onClick={handleMinimize} title="Minimize">−</button>
+      <button className="win-ctrl max" onClick={handleMaximize} title={isMaximized ? 'Restore' : 'Maximize'}>
+        {isMaximized ? '❐' : '□'}
+      </button>
+      <button className="win-ctrl close" onClick={handleClose} title="Close">×</button>
     </div>
   );
 
@@ -37,7 +45,7 @@ const TitleBar: React.FC = () => {
         .vox-titlebar {
           height: 32px;
           background: #060709;
-          border-bottom: 1px solid rgba(102, 0, 204, 0.1);
+          border-bottom: 1px solid rgba(216, 74, 90, 0.15);
           display: flex;
           align-items: center;
           justify-content: space-between;

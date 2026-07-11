@@ -33,7 +33,10 @@ interface MessageStore {
   messages: Record<string, Message[]>;
   loading: Record<string, boolean>;
   hasMore: Record<string, boolean>;
+  /** Map of channelId → usernames currently typing text. */
   typingUsers: Record<string, string[]>;
+  /** Map of channelId → activity kinds: 'text' | 'voice' | 'screen' */
+  typingKinds: Record<string, string>;
   replyingTo: Message | null;
   unread: Record<string, number>;
   
@@ -41,9 +44,11 @@ interface MessageStore {
   addMessage: (channelId: string, message: Message) => void;
   updateMessage: (channelId: string, message: Message) => void;
   removeMessage: (channelId: string, messageId: string) => void;
-  setTyping: (channelId: string, username: string, isTyping: boolean) => void;
+  setTyping: (channelId: string, username: string, isTyping: boolean, kind?: string) => void;
   setReplyingTo: (message: Message | null) => void;
   markRead: (channelId: string) => void;
+  markAsRead: (channelId: string) => void;
+  markAllAsRead: () => void;
   reset: () => void;
 }
 
@@ -52,6 +57,7 @@ export const useMessageStore = create<MessageStore>((set) => ({
   loading: {},
   hasMore: {},
   typingUsers: {},
+  typingKinds: {},
   replyingTo: null,
   unread: {},
 
@@ -114,13 +120,21 @@ export const useMessageStore = create<MessageStore>((set) => ({
       };
     }),
 
-  setTyping: (channelId, username, isTyping) =>
+  setTyping: (channelId, username, isTyping, kind = 'text') =>
     set((state) => {
       const users = state.typingUsers[channelId] || [];
       if (isTyping && !users.includes(username)) {
-        return { typingUsers: { ...state.typingUsers, [channelId]: [...users, username] } };
+        return {
+          typingUsers: { ...state.typingUsers, [channelId]: [...users, username] },
+          typingKinds: { ...state.typingKinds, [`${channelId}:${username}`]: kind },
+        };
       } else if (!isTyping && users.includes(username)) {
-        return { typingUsers: { ...state.typingUsers, [channelId]: users.filter((u) => u !== username) } };
+        const kinds = { ...state.typingKinds };
+        delete kinds[`${channelId}:${username}`];
+        return {
+          typingUsers: { ...state.typingUsers, [channelId]: users.filter((u) => u !== username) },
+          typingKinds: kinds,
+        };
       }
       return state;
     }),
@@ -130,6 +144,18 @@ export const useMessageStore = create<MessageStore>((set) => ({
   markRead: (channelId) =>
     set((state) => ({ unread: { ...state.unread, [channelId]: 0 } })),
 
+  markAsRead: (channelId) =>
+    set((state) => ({ unread: { ...state.unread, [channelId]: 0 } })),
+
+  markAllAsRead: () =>
+    set((state) => {
+      const unread = Object.keys(state.unread).reduce(
+        (acc, k) => ({ ...acc, [k]: 0 }),
+        {} as Record<string, number>
+      );
+      return { unread };
+    }),
+
   // Tear down the prior session so the next user starts clean.
-  reset: () => set({ messages: {}, loading: {}, hasMore: {}, typingUsers: {}, replyingTo: null, unread: {} }),
+  reset: () => set({ messages: {}, loading: {}, hasMore: {}, typingUsers: {}, typingKinds: {}, replyingTo: null, unread: {} }),
 }));

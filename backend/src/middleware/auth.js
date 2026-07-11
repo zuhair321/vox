@@ -30,6 +30,13 @@ function loadUser(req) {
   }
   try {
     const payload = jwt.verify(token, env.jwt.accessSecret);
+    // Reject 2FA challenge temp tokens — they should NOT grant API access.
+    // These are short-lived tokens issued during the 2FA login flow and must
+    // only be accepted by the dedicated /2fa/login endpoint.
+    if (payload.twoFactorChallenge) {
+      req.user = null;
+      return;
+    }
     req.user = { id: payload.sub, username: payload.username, role: payload.role };
   } catch {
     req.user = null;

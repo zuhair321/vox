@@ -308,6 +308,51 @@
   box-shadow: 0 0 8px var(--chaos-glow);
 }
 
+/* ── Message action chevron button ──────────────────────────── */
+.vox-message-more {
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  color: var(--ash);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.message-row:hover .vox-message-more {
+  opacity: 1;
+}
+
+.vox-message-more:hover {
+  background: var(--obsidian) !important;
+  border-color: var(--rim) !important;
+  color: var(--ghost-white) !important;
+}
+
+.vox-message-more:active {
+  transform: scale(0.9);
+}
+
+/* ── Context menu item hover effect ─────────────────────────── */
+.vox-context-menu-item {
+  position: relative;
+}
+
+.vox-context-menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleX(0);
+  width: 2px;
+  height: 60%;
+  background: var(--blood);
+  border-radius: 0 2px 2px 0;
+  transition: transform 0.15s ease;
+}
+
+.vox-context-menu-item:hover::before {
+  transform: translateY(-50%) scaleX(1);
+}
+
 /* ── Offline banner exit ───────────────────────────────────── */
 @keyframes slideUp {
   from { transform: translateY(0); opacity: 1; }
@@ -453,7 +498,7 @@
 .error-boundary-summary {
   display: flex;
   gap: 8px;
-  align-items: 'baseline';
+  align-items: baseline;
   font-family: 'Share Tech Mono', monospace;
   font-size: 13px;
   background: rgba(0, 0, 0, 0.4);

@@ -24,6 +24,8 @@ export interface User {
   status: UserStatus;
   activity?: string;
   role?: UserRole;
+  hasTurbo?: boolean;
+  turboSince?: string | null;
 }
 
 export interface Server {

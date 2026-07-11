@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
+import crypto from 'node:crypto';
 
 export const inviteRouter = Router();
 
@@ -28,6 +29,7 @@ const EXPIRY_MS = {
   '6hours': 6 * 60 * 60 * 1000,
   '1day': 24 * 60 * 60 * 1000,
   '7days': 7 * 24 * 60 * 60 * 1000,
+  'never': 0,
 };
 
 const MAX_USES_OPTIONS = new Set([0, 1, 5, 10, 25, 50, 100]);
@@ -124,6 +126,21 @@ inviteRouter.post('/invites/:code/join', requireAuth, async (req, res, next) => 
     }
     if (invite.maxUses > 0 && invite.uses >= invite.maxUses) {
       throw new HttpError(410, 'This invite is full.');
+    }
+
+    // Check if user is banned from this server
+    const ban = await prisma.serverBan.findUnique({
+      where: { serverId_userId: { serverId: invite.serverId, userId: req.user.id } },
+    });
+    if (ban) {
+      if (ban.expiresAt && ban.expiresAt > new Date()) {
+        throw new HttpError(403, 'You are banned from this server.');
+      }
+      if (ban.expiresAt && ban.expiresAt <= new Date()) {
+        await prisma.serverBan.delete({ where: { id: ban.id } });
+      } else {
+        throw new HttpError(403, 'You are banned from this server.');
+      }
     }
 
     // Idempotent join: if already a member, just return the server.

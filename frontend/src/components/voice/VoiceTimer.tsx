@@ -73,7 +73,7 @@ const VoiceTimer: React.FC<VoiceTimerProps> = ({
         style={{
           width: '6px',
           height: '6px',
-          borderRadius: 0,
+          borderRadius: '50%',
           background: 'var(--toxic)',
           display: 'inline-block',
           animation: 'voiceTimerPulse 1.6s ease-in-out infinite',

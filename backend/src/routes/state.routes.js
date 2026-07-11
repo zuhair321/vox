@@ -8,16 +8,19 @@ export const stateRouter = Router();
 
 stateRouter.get('/state', async (req, res, next) => {
   try {
-    const { channels, messages, members, nitroClaimed } = await getState();
+    // getState() now returns channels, recentMessages, members, and messagesCount
+    // in a single call (cached per-user when authed, or public fallback when not).
+    const { channels, members, recentMessages, nitroClaimed, messagesCount } = await getState();
     res.json({
       ok: true,
       name: 'VOX',
       version: '0.2.0',
       uptime: Math.round(process.uptime()),
       channels: channels.map(mapChannel),
-      messages: messages.map(mapMessage),
+      messages: (recentMessages || []).map(mapMessage),
       onlineMembers: members.map(mapMember),
       nitroClaimed,
+      hasMore: messagesCount > 50,
     });
   } catch (e) { next(e); }
 });

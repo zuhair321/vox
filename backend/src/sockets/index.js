@@ -7,18 +7,25 @@
 //     anonymous guest. This keeps the existing demo (and the Electron build
 //     before the login UI lands) working without auth.
 //
+// Redis adapter:
+//   When REDIS_URL is set, Socket.io uses a Redis adapter so multiple
+//   Node.js workers (PM2 cluster) share events and scale horizontally.
+//   Falls back to in-memory (single-process) when Redis is unavailable.
+//
 // Events emitted:   state:init, message:new, message:reactions, nitro:claimed, typing
 // Events received:  typing
 import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import jwt from 'jsonwebtoken';
 import { env } from '../lib/env.js';
 import { getState } from '../services/chat.service.js';
 import { mapChannel, mapMessage, mapMember } from '../lib/mappers.js';
 import { registerHandlers } from './handlers.js';
+import { getPubSub } from '../lib/redis.js';
 
 let io = null;
 
-export function initSockets(server) {
+export async function initSockets(server) {
   io = new Server(server, {
     cors: {
       origin: env.corsOrigins,
@@ -27,37 +34,46 @@ export function initSockets(server) {
     },
   });
 
+  // ── Redis adapter for horizontal scaling ─────────────────
+  const { publisher, subscriber } = await getPubSub();
+  if (publisher && subscriber) {
+    io.adapter(createAdapter(publisher, subscriber));
+    console.log('[socket.io] Redis adapter active');
+  } else {
+    console.log('[socket.io] Running in single-process mode (no Redis)');
+  }
+
   // ── Auth middleware (runs once per connection) ────────────
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
-    if (token) {
-      try {
-        const payload = jwt.verify(token, env.jwt.accessSecret);
-        socket.data.user = {
-          id: payload.sub,
-          username: payload.username,
-          role: payload.role,
-        };
-      } catch {
-        // Invalid token → treat as anonymous rather than rejecting, so a
-        // stale token on the client doesn't hard-break the demo.
-        socket.data.user = null;
-      }
-    } else {
-      socket.data.user = null;
+    if (!token) {
+      return next(new Error('Authentication required'));
     }
-    next();
+    try {
+      const payload = jwt.verify(token, env.jwt.accessSecret);
+      socket.data.user = {
+        id: payload.sub,
+        username: payload.username,
+        role: payload.role,
+      };
+      next();
+    } catch {
+      next(new Error('Invalid or expired token'));
+    }
   });
 
   io.on('connection', async (socket) => {
-    // Send full state on connect so the client hydrates immediately.
     try {
-      const { channels, messages, members, nitroClaimed } = await getState();
+      const userId = socket.data.user?.id;
+      // getState() now returns channels, members, recentMessages, and messagesCount
+      // all in a single cached call — no second query needed.
+      const state = await getState(userId);
       socket.emit('state:init', {
-        channels: channels.map(mapChannel),
-        messages: messages.map(mapMessage),
-        onlineMembers: members.map(mapMember),
-        nitroClaimed,
+        channels: state.channels.map(mapChannel),
+        messages: (state.recentMessages || []).map(mapMessage),
+        onlineMembers: state.members.map(mapMember),
+        nitroClaimed: state.nitroClaimed,
+        hasMore: state.messagesCount > 50,
       });
     } catch (e) {
       console.error('[socket] failed to send state:init', e.message);

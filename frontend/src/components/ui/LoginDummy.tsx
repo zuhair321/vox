@@ -27,7 +27,9 @@ const LoginDummy: React.FC = () => {
       localStorage.setItem('vox_token', data.tokens.access);
       localStorage.setItem('vox_refresh_token', data.tokens.refresh);
       localStorage.setItem('vox_user', JSON.stringify(data.user));
-      navigate('/friends');
+      // Navigate to / — SplashScreen will detect the token and skip its delay,
+      // then AppLayout's root-redirect will take over cleanly.
+      navigate('/');
     } catch (err: any) {
       addToast(err.message, 'error');
     } finally {
@@ -59,7 +61,10 @@ const LoginDummy: React.FC = () => {
       </div>
 
       <section className="vox-login-stage">
-        <form onSubmit={handleLogin} className="vox-login-card">
+        <form onSubmit={handleLogin} className="vox-login-card" autoComplete="off">
+          {/* Hidden dummy fields to defeat browser autofill detection */}
+          <input type="text" name="fakeuser" autoComplete="username" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0 }} tabIndex={-1} aria-hidden="true" />
+          <input type="password" name="fakepass" autoComplete="current-password" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0 }} tabIndex={-1} aria-hidden="true" />
           {/* animated border glow */}
           <span className="vox-login-border-glow" aria-hidden="true" />
 
@@ -93,7 +98,7 @@ const LoginDummy: React.FC = () => {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                autoComplete="username"
+                autoComplete="off"
                 placeholder="founder@vox"
               />
             </div>
@@ -109,7 +114,7 @@ const LoginDummy: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
-                autoComplete="current-password"
+                autoComplete="off"
                 placeholder="enter passcode"
               />
             </div>

@@ -1,0 +1,137 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.3);
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.5);
+  }
+
+  ::selection {
+    background: rgba(99, 102, 241, 0.4);
+    color: white;
+  }
+
+  body {
+    overflow: hidden;
+  }
+
+  input, textarea, select {
+    @apply bg-surface-2 border border-surface-4 text-white placeholder-gray-500 
+           rounded-lg px-3 py-2 text-sm outline-none transition-all duration-200
+           focus:border-accent focus:ring-1 focus:ring-accent/30;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-surface-2/80 backdrop-blur-xl border border-surface-4/50 rounded-xl;
+  }
+
+  .glass-panel-hover {
+    @apply glass-panel hover:border-accent/30 hover:bg-surface-3/80 transition-all duration-300;
+  }
+
+  .glow-border {
+    @apply border border-accent/20 shadow-[0_0_15px_rgba(99,102,241,0.1)];
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-accent to-purple-400 bg-clip-text text-transparent;
+  }
+
+  .btn-primary {
+    @apply bg-accent hover:bg-accent-hover text-white font-medium px-4 py-2 rounded-lg 
+           transition-all duration-200 active:scale-[0.98] shadow-lg shadow-accent/20
+           hover:shadow-xl hover:shadow-accent/30 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply text-gray-400 hover:text-white hover:bg-surface-4 px-3 py-2 rounded-lg 
+           transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-danger/10 hover:bg-danger/20 text-danger border border-danger/20 
+           hover:border-danger/40 px-4 py-2 rounded-lg transition-all duration-200;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-success { @apply bg-success/10 text-success border border-success/20; }
+  .badge-warning { @apply bg-warning/10 text-warning border border-warning/20; }
+  .badge-danger { @apply bg-danger/10 text-danger border border-danger/20; }
+  .badge-info { @apply bg-info/10 text-info border border-info/20; }
+  .badge-accent { @apply bg-accent/10 text-accent border border-accent/20; }
+
+  .table-row {
+    @apply border-b border-surface-4/50 hover:bg-surface-3/50 transition-colors duration-150;
+  }
+
+  .skeleton {
+    @apply bg-surface-4/50 rounded animate-shimmer bg-[length:200%_100%];
+  }
+}
+
+/* Recharts custom styling */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: rgba(99, 102, 241, 0.06);
+}
+
+.recharts-text {
+  fill: #9ca3af;
+  font-size: 11px;
+}
+
+/* Tooltip */
+.vox-tooltip {
+  @apply glass-panel px-3 py-2 text-sm shadow-xl;
+}
+
+/* Smooth page transitions */
+.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+}
+
+/* Electron frameless window drag regions */
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Ensure inputs/buttons are interactive in frameless mode */
+input, button, select, textarea, a {
+  -webkit-app-region: no-drag;
+}

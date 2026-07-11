@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
+import { sanitize } from '../middleware/sanitize.js';
 
 export const serverRouter = Router();
 
@@ -15,13 +16,31 @@ function newChannelId() {
 }
 
 // Fetch servers the user is a member of
+// Supports ?members=offset,limit query param for lazy-loading members.
+// Default: first 50 members included. Additional members via the query param.
 serverRouter.get('/servers', requireAuth, async (req, res, next) => {
   try {
+    const membersParam = req.query.members;
+    let memberSkip = 0;
+    let memberTake = 50;
+    if (membersParam) {
+      const parts = String(membersParam).split(',').map(Number);
+      if (parts.length === 2 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+        memberSkip = Math.max(0, parts[0]);
+        memberTake = Math.min(Math.max(1, parts[1]), 100);
+      }
+    }
+
     const servers = await prisma.server.findMany({
       where: { members: { some: { userId: req.user.id } } },
       include: {
         channels: true,
-        members: { include: { user: true } },
+        members: {
+          include: { user: true },
+          skip: memberSkip,
+          take: memberTake,
+          orderBy: { joinedAt: 'asc' },
+        },
       },
     });
     res.json(servers);
@@ -84,6 +103,45 @@ serverRouter.post('/servers/:id/channels', requireAuth, async (req, res, next) =
   } catch (e) { next(e); }
 });
 
+// Add a member directly by username. Founder/Admin only.
+serverRouter.post('/servers/:id/members', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    const username = String(req.body?.username || '').trim();
+    if (!username) throw new HttpError(400, 'Username is required');
+
+    const member = await prisma.serverMember.findUnique({
+      where: { serverId_userId: { serverId, userId: req.user.id } },
+    });
+    if (!member || !['FOUNDER', 'ADMIN'].includes(member.role)) {
+      throw new HttpError(403, 'Only admins may add members.');
+    }
+
+    const user = await prisma.user.findUnique({ where: { username } });
+    if (!user) throw new HttpError(404, 'User not found.');
+
+    const existing = await prisma.serverMember.findUnique({
+      where: { serverId_userId: { serverId, userId: user.id } },
+    });
+    if (existing) {
+      const server = await prisma.server.findUnique({
+        where: { id: serverId },
+        include: { channels: true, members: { include: { user: true } } },
+      });
+      return res.json({ server, alreadyMember: true });
+    }
+
+    await prisma.serverMember.create({
+      data: { serverId, userId: user.id, role: 'MEMBER' },
+    });
+    const server = await prisma.server.findUnique({
+      where: { id: serverId },
+      include: { channels: true, members: { include: { user: true } } },
+    });
+    res.status(201).json({ server, member: user, alreadyMember: false });
+  } catch (e) { next(e); }
+});
+
 // Delete a server
 serverRouter.delete('/servers/:id', requireAuth, async (req, res, next) => {
   try {
@@ -97,7 +155,38 @@ serverRouter.delete('/servers/:id', requireAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// Update a server (name/description/icon/banner/category/public). Founder/Admin.
+// Transfer server ownership
+serverRouter.post('/servers/:id/transfer', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    const { newOwnerId } = req.body || {};
+    if (!newOwnerId) throw new HttpError(400, 'newOwnerId required');
+
+    const server = await prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) throw new HttpError(404, 'Server not found');
+    if (server.ownerId !== req.user.id) throw new HttpError(403, 'Only owner can transfer');
+
+    // Verify new owner is a member
+    const newOwnerMember = await prisma.serverMember.findUnique({
+      where: { serverId_userId: { serverId, userId: newOwnerId } },
+    });
+    if (!newOwnerMember) throw new HttpError(400, 'New owner must be a member');
+
+    await prisma.$transaction([
+      prisma.server.update({ where: { id: serverId }, data: { ownerId: newOwnerId } }),
+      prisma.serverMember.update({ where: { serverId_userId: { serverId, userId: newOwnerId } }, data: { role: 'FOUNDER' } }),
+      prisma.serverMember.update({ where: { serverId_userId: { serverId, userId: req.user.id } }, data: { role: 'ADMIN' } }),
+    ]);
+
+    const updated = await prisma.server.findUnique({
+      where: { id: serverId },
+      include: { channels: true, members: { include: { user: true } } },
+    });
+    res.json({ server: updated });
+  } catch (e) { next(e); }
+});
+
+// Update a server (name/description/icon/banner/category/public/verification/vanity). Founder/Admin.
 serverRouter.patch('/servers/:id', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;
@@ -107,14 +196,27 @@ serverRouter.patch('/servers/:id', requireAuth, async (req, res, next) => {
     if (!member || !['FOUNDER', 'ADMIN'].includes(member.role)) {
       throw new HttpError(403, 'Not authorized');
     }
-    const { name, description, icon, banner, category, isPublic } = req.body || {};
+    const { name, description, icon, banner, category, isPublic, verificationLevel, vanityUrl, defaultChannelId } = req.body || {};
     const data = {};
-    if (typeof name === 'string' && name.trim()) data.name = name.trim().slice(0, 100);
-    if (typeof description === 'string') data.description = description.slice(0, 500);
+    if (typeof name === 'string' && name.trim()) data.name = sanitize(name).slice(0, 100);
+    if (typeof description === 'string') data.description = sanitize(description).slice(0, 500);
     if (typeof icon === 'string') data.icon = icon.slice(0, 1024);
     if (typeof banner === 'string') data.banner = banner.slice(0, 1024);
-    if (typeof category === 'string') data.category = category.slice(0, 40);
+    if (typeof category === 'string') data.category = sanitize(category).slice(0, 40);
     if (typeof isPublic === 'boolean') data.isPublic = isPublic;
+    if (['NONE', 'LOW', 'MEDIUM', 'HIGH'].includes(verificationLevel)) data.verificationLevel = verificationLevel;
+    if (typeof vanityUrl === 'string' || vanityUrl === null) {
+      const slug = vanityUrl ? vanityUrl.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 32) : null;
+      if (slug) {
+        // Check uniqueness
+        const existing = await prisma.server.findFirst({ where: { vanityUrl: slug, id: { not: serverId } } });
+        if (existing) throw new HttpError(409, 'Vanity URL already taken');
+      }
+      data.vanityUrl = slug;
+    }
+    if (typeof defaultChannelId === 'string' || defaultChannelId === null) {
+      data.defaultChannelId = defaultChannelId || null;
+    }
 
     const updated = await prisma.server.update({
       where: { id: serverId },
@@ -189,14 +291,88 @@ serverRouter.get('/servers/discover', optionalAuth, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// Join a server directly by id (no invite code). Public servers allow this;
-// otherwise a member/admin invitation flow is used via /api/invites/:code/join.
+// Kick a member (moderator+ only, can't kick owner or higher role)
+serverRouter.post('/servers/:id/kick/:userId', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    const targetId = req.params.userId;
+
+    const server = await prisma.server.findUnique({ where: { id: serverId }, include: { members: { where: { userId: req.user.id } } } });
+    if (!server) throw new HttpError(404, 'Server not found');
+    if (server.ownerId === targetId) throw new HttpError(403, 'Cannot kick the owner');
+
+    const myMember = server.members[0];
+    if (!myMember || !['FOUNDER', 'ADMIN', 'MODERATOR'].includes(myMember.role)) {
+      throw new HttpError(403, 'Not authorized');
+    }
+
+    const targetMember = await prisma.serverMember.findUnique({
+      where: { serverId_userId: { serverId, userId: targetId } },
+    });
+    if (!targetMember) throw new HttpError(404, 'Member not found');
+
+    // Can't kick someone with equal or higher role
+    const rolePower = { FOUNDER: 4, ADMIN: 3, MODERATOR: 2, MEMBER: 1 };
+    if (rolePower[targetMember.role] >= rolePower[myMember.role]) {
+      throw new HttpError(403, 'Cannot kick a member with equal or higher rank');
+    }
+
+    await prisma.serverMember.delete({ where: { serverId_userId: { serverId, userId: targetId } } });
+    res.json({ kicked: true });
+  } catch (e) { next(e); }
+});
+
+// Change nickname (admin can change anyone, member can change own)
+serverRouter.patch('/servers/:id/members/:userId/nickname', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    const targetId = req.params.userId;
+    const { nick } = req.body || {};
+
+    const server = await prisma.server.findUnique({ where: { id: serverId }, include: { members: { where: { userId: req.user.id } } } });
+    if (!server) throw new HttpError(404, 'Server not found');
+
+    const myMember = server.members[0];
+    const isAdmin = myMember && ['FOUNDER', 'ADMIN'].includes(myMember.role);
+    const isSelf = req.user.id === targetId;
+
+    if (!isAdmin && !isSelf) throw new HttpError(403, 'Not authorized to change this nickname');
+
+    const member = await prisma.serverMember.findFirst({ where: { serverId, userId: targetId } });
+    if (!member) throw new HttpError(404, 'Member not found');
+
+    await prisma.serverMember.update({
+      where: { id: member.id },
+      data: { nick: (nick || '').slice(0, 32) || null },
+    });
+
+    res.json({ nick: (nick || '').slice(0, 32) || null });
+  } catch (e) { next(e); }
+});
+
+// Ban a member (admin+ only)
 serverRouter.post('/servers/:id/join', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;
     const server = await prisma.server.findUnique({ where: { id: serverId } });
     if (!server) throw new HttpError(404, 'Server not found.');
     if (!server.isPublic) throw new HttpError(403, 'This realm is invite-only.');
+
+    // Check if user is banned
+    const ban = await prisma.serverBan.findUnique({
+      where: { serverId_userId: { serverId, userId: req.user.id } },
+    });
+    if (ban) {
+      if (ban.expiresAt && ban.expiresAt > new Date()) {
+        throw new HttpError(403, 'You are banned from this server.');
+      }
+      // Ban has expired — remove it
+      if (ban.expiresAt && ban.expiresAt <= new Date()) {
+        await prisma.serverBan.delete({ where: { id: ban.id } });
+      } else {
+        throw new HttpError(403, 'You are banned from this server.');
+      }
+    }
 
     const existing = await prisma.serverMember.findUnique({
       where: { serverId_userId: { serverId, userId: req.user.id } },
@@ -231,5 +407,73 @@ serverRouter.post('/servers/:id/leave', requireAuth, async (req, res, next) => {
     }
     await prisma.serverMember.deleteMany({ where: { serverId, userId: req.user.id } });
     res.json({ left: true });
+  } catch (e) { next(e); }
+});
+
+// Delete a channel
+serverRouter.delete('/servers/:id/channels/:channelId', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    const channelId = req.params.channelId;
+    const server = await prisma.server.findUnique({ where: { id: serverId } });
+    if (!server) throw new HttpError(404, 'Server not found');
+    if (server.ownerId !== req.user.id) throw new HttpError(403, 'Only owner can delete channels');
+    await prisma.channel.delete({ where: { id: channelId, serverId } });
+    res.json({ deleted: true });
+  } catch (e) { next(e); }
+});
+
+// Update a channel (name, type, position, topic, nsfw, slowmode)
+serverRouter.patch('/servers/:id/channels/:channelId', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    const channelId = req.params.channelId;
+    const member = await prisma.serverMember.findUnique({
+      where: { serverId_userId: { serverId, userId: req.user.id } },
+    });
+    if (!member || !['FOUNDER', 'ADMIN'].includes(member.role)) {
+      throw new HttpError(403, 'Not authorized');
+    }
+    const { name, type, position, topic, nsfw, slowmode } = req.body || {};
+    const data = {};
+    if (typeof name === 'string') data.name = name.toLowerCase().replace(/\s+/g, '-').slice(0, 50);
+    if (type === 'TEXT' || type === 'VOICE') data.type = type;
+    if (typeof position === 'number') data.position = position;
+    if (typeof topic === 'string') data.topic = sanitize(topic).slice(0, 1024);
+    if (typeof nsfw === 'boolean') data.nsfw = nsfw;
+    if (typeof slowmode === 'number') data.slowmode = Math.min(Math.max(0, Math.floor(slowmode)), 3600);
+    const updated = await prisma.channel.update({
+      where: { id: channelId, serverId },
+      data,
+    });
+    res.json({ channel: updated });
+  } catch (e) { next(e); }
+});
+
+// Reorder channels
+serverRouter.patch('/servers/:id/channels/reorder', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    const member = await prisma.serverMember.findUnique({
+      where: { serverId_userId: { serverId, userId: req.user.id } },
+    });
+    if (!member || !['FOUNDER', 'ADMIN'].includes(member.role)) {
+      throw new HttpError(403, 'Not authorized');
+    }
+    const { channelIds } = req.body || {};
+    if (!Array.isArray(channelIds)) throw new HttpError(400, 'channelIds array required');
+    await prisma.$transaction(
+      channelIds.map((id, i) =>
+        prisma.channel.update({
+          where: { id, serverId },
+          data: { position: i },
+        })
+      )
+    );
+    const channels = await prisma.channel.findMany({
+      where: { serverId },
+      orderBy: { position: 'asc' },
+    });
+    res.json({ channels });
   } catch (e) { next(e); }
 });

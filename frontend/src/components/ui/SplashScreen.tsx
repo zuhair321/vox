@@ -2,12 +2,19 @@ import React, { useEffect, useState } from 'react';
 
 interface Props {
   onComplete?: () => void;
+  /** Pass the stored token — if already logged in, skip the delay. */
+  token?: string | null;
 }
 
-const SplashScreen: React.FC<Props> = ({ onComplete }) => {
+const SplashScreen: React.FC<Props> = ({ onComplete, token }) => {
   const [fading, setFading] = useState(false);
 
   useEffect(() => {
+    // If already logged in, skip the splash delay — go straight to the app.
+    if (token) {
+      if (onComplete) onComplete();
+      return;
+    }
     // The splash screen finishes its intro after 2 seconds
     const timer = setTimeout(() => {
       setFading(true);
@@ -17,7 +24,7 @@ const SplashScreen: React.FC<Props> = ({ onComplete }) => {
     }, 2000);
 
     return () => clearTimeout(timer);
-  }, [onComplete]);
+  }, [onComplete, token]);
 
   return (
     <div

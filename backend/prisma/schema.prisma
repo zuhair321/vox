@@ -1,3 +1,5 @@
+// Prisma Schema for VOX Backend — matches actual MySQL tables exactly
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,195 +9,540 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ─── User ────────────────────────────────────────────────────────
+
 model User {
-  id              String   @id @default(cuid())
-  email           String   @unique
-  username        String   @unique
-  displayName     String
-  passwordHash    String
-  role            Role     @default(MEMBER)
-  color           String   @default("#5865f2")
-  status          Status   @default(OFFLINE)
-  activity        String?
-  bio             String?
-  avatarUrl       String?
-  bannerUrl       String?
+  id               String    @id @default(uuid())
+  email            String    @unique
+  username         String    @unique
+  displayName      String
+  passwordHash     String
+  role             String    @default("MEMBER")
+  color            String    @default("#5865f2")
+  status           String    @default("OFFLINE")
+  activity         String?
+  twoFactorSecret  String?
+  twoFactorEnabled Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  avatarUrl        String?
+  bannerUrl        String?
+  bio              String?
+  emailVerified    Boolean   @default(false)
+  loginAttempts    Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  hasTurbo         Boolean   @default(true)
+  turboSince       DateTime? @default(now())
 
-  twoFactorSecret      String?
-  twoFactorEnabled     Boolean @default(false)
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  messages        Message[]
-  reactions       Reaction[]
-  refreshTokens   RefreshToken[]
-
-  ownedServers    Server[]       @relation("ServerOwner")
+  ownedServers    Server[]
   serverMembers   ServerMember[]
-  sentDMs         DMMessage[]    @relation("DMSender")
-  receivedDMs     DMMessage[]    @relation("DMRecipient")
-  friends         Friend[]       @relation("FriendUser")
-  friendOf        Friend[]       @relation("FriendFriend")
-  createdInvites  Invite[]
-
-  @@index([username])
-  @@index([email])
+  channelMessages Message[]       @relation("MessageAuthor")
+  dmsSent         DmMessage[]     @relation("dmMessagesSent")
+  dmsReceived     DmMessage[]     @relation("dmMessagesReceived")
+  friends         Friend[]        @relation("friend_requests_sent")
+  friendsOf       Friend[]        @relation("friend_requests_received")
+  invitesCreated  Invite[]
+  serverBans      ServerBan[]
+  auditLogs       AuditLog[]
+  refreshTokens   RefreshToken[]
+  passwordResets  PasswordReset[]
+  reactions       Reaction[]
+  blocks          Block[]         @relation("BlockUser")
+  blockedBy       Block[]         @relation("BlockedUser")
+  reports         Report[]        @relation("ReportReporter")
+  reportedBy      Report[]        @relation("ReportedUser")
+  userNotes       UserNote[]      @relation("UserNoteAuthor")
+  notesAbout      UserNote[]      @relation("UserNoteTarget")
+  scheduledMsgs   ScheduledMessage[]
+  templates       ServerTemplate[]
+  apiKeys         ApiKey[]
+  pinnerPins      PinNotification[] @relation("PinPinner")
+  pinTargets      PinNotification[] @relation("PinTarget")
 }
+
+// ─── Server ──────────────────────────────────────────────────────
 
 model Server {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  icon        String?
-  banner      String?
-  category    String   @default("COMMUNITY")
-  isPublic    Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id               String   @id @default(uuid())
+  name             String
+  description      String?
+  icon             String?
+  banner           String?
+  category         String   @default("COMMUNITY")
+  isPublic         Boolean  @default(false)
+  verificationLevel String  @default("NONE")
+  vanityUrl        String?
+  defaultChannelId String?
+  createdAt        DateTime @default(now())
+  ownerId          String
+  updatedAt        DateTime @default(now())
 
-  ownerId     String
-  owner       User     @relation("ServerOwner", fields: [ownerId], references: [id])
-
-  channels    Channel[]
-  members     ServerMember[]
-  invites     Invite[]
+  owner      User           @relation(fields: [ownerId], references: [id])
+  channels   Channel[]
+  members    ServerMember[]
+  invites    Invite[]
+  serverBans ServerBan[]
+  auditLogs  AuditLog[]
+  categories Category[]
+  webhooks   Webhook[]
+  emojis     CustomEmoji[]
+  templates  ServerTemplate[]
+  stats      ServerStats[]
 }
 
-model ServerMember {
-  id        String   @id @default(cuid())
-  serverId  String
-  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role     @default(MEMBER)
-  joinedAt  DateTime @default(now())
-  
-  @@unique([serverId, userId])
-}
+// ─── Channel ─────────────────────────────────────────────────────
 
 model Channel {
-  id        String    @id
-  name      String
-  topic     String    @default("")
-  type      ChannelType @default(TEXT)
-  position  Int       @default(0)
-  createdAt DateTime  @default(now())
+  id         String   @id @default(uuid())
+  name       String
+  topic      String   @default("")
+  type       String   @default("TEXT")
+  position   Int      @default(0)
+  nsfw       Boolean  @default(false)
+  slowmode   Int      @default(0)
+  createdAt  DateTime @default(now())
+  categoryId String?
+  serverId   String?
+  updatedAt  DateTime @default(now())
 
-  serverId  String?
-  server    Server?   @relation(fields: [serverId], references: [id], onDelete: Cascade)
-
-  messages  Message[]
+  server      Server?      @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  category    Category?    @relation(fields: [categoryId], references: [id])
+  messages    Message[]
+  permissions Permission[]
+  webhooks    Webhook[]
+  archiveConfig ChannelArchiveConfig?
+  pinNotifications PinNotification[]
+  scheduledMsgs ScheduledMessage[]
 }
+
+// ─── Message ─────────────────────────────────────────────────────
 
 model Message {
-  id        String   @id @default(cuid())
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  channelId String
-  author    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  userId    String?
+  id             String   @id @default(uuid())
+  channelId      String
+  userId         String?
   authorOverride String?
-  body      String
-  attachments Json?
-  createdAt DateTime @default(now())
+  body           String
+  createdAt      DateTime @default(now())
+  attachments    Json?
+  deleted        Boolean  @default(false)
+  edited         Boolean  @default(false)
+  parentId       String?
+  pinned         Boolean  @default(false)
+  fuseTime       DateTime?
 
-  edited      Boolean  @default(false)
-  deleted     Boolean  @default(false)
-  pinned      Boolean  @default(false)
-  parentId    String?
-  parent      Message? @relation("MessageReplies", fields: [parentId], references: [id], onDelete: SetNull)
-  replies     Message[] @relation("MessageReplies")
+  channel        Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author         User?      @relation("MessageAuthor", fields: [userId], references: [id])
+  parentMessage  Message?   @relation("MessageThread", fields: [parentId], references: [id])
+  threadMessages Message[]  @relation("MessageThread")
+  reactions      Reaction[]
+  pinNotifications PinNotification[]
 
-  reactions Reaction[]
-
+  @@fulltext([body])
   @@index([channelId, createdAt])
   @@index([userId])
-  @@index([pinned])
+  @@index([parentId])
 }
 
-model Invite {
-  id        String    @id @default(cuid())
-  code      String    @unique
-  serverId  String
-  server    Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  creatorId String
-  creator   User      @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  maxUses   Int       @default(0)
-  uses      Int       @default(0)
-  expiresAt DateTime?
-  createdAt DateTime  @default(now())
+// ─── DmMessage ───────────────────────────────────────────────────
 
-  @@index([serverId])
-}
-
-model DMMessage {
+model DmMessage {
   id          String   @id @default(uuid())
   content     String
   attachments Json?
   dmId        String
   senderId    String
   recipientId String
+  read        Boolean  @default(false)
   createdAt   DateTime @default(now())
   edited      Boolean  @default(false)
   deleted     Boolean  @default(false)
-  
-  sender    User @relation("DMSender", fields:[senderId], references:[id])
-  recipient User @relation("DMRecipient", fields:[recipientId], references:[id])
+
+  sender    User @relation("dmMessagesSent", fields: [senderId], references: [id])
+  recipient User @relation("dmMessagesReceived", fields: [recipientId], references: [id])
 
   @@index([dmId, createdAt])
+  @@index([recipientId, read])
+  @@index([senderId, createdAt])
 }
 
+// ─── Friend ──────────────────────────────────────────────────────
+
 model Friend {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   userId    String
-  user      User     @relation("FriendUser", fields: [userId], references: [id], onDelete: Cascade)
   friendId  String
-  friend    User     @relation("FriendFriend", fields: [friendId], references: [id], onDelete: Cascade)
   status    String   @default("pending")
   createdAt DateTime @default(now())
 
+  user   User @relation("friend_requests_sent", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("friend_requests_received", fields: [friendId], references: [id], onDelete: Cascade)
+
   @@unique([userId, friendId])
+  @@index([userId, status])
+  @@index([friendId, status])
 }
 
+// ─── ServerMember ────────────────────────────────────────────────
+
+model ServerMember {
+  id       String   @id @default(uuid())
+  serverId String
+  userId   String
+  role     String   @default("MEMBER")
+  nick     String?
+  joinedAt DateTime @default(now())
+  mutedUntil DateTime?
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, userId])
+  @@index([userId])
+}
+
+// ─── Invite ──────────────────────────────────────────────────────
+
+model Invite {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  serverId  String
+  creatorId String
+  maxUses   Int       @default(0)
+  uses      Int       @default(0)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  server  Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  creator User   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+}
+
+// ─── ServerBan ───────────────────────────────────────────────────
+
+model ServerBan {
+  id        String    @id @default(uuid())
+  serverId  String
+  userId    String
+  reason    String?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([serverId, userId])
+}
+
+// ─── AuditLog ────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  serverId  String
+  userId    String
+  action    String
+  targetId  String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([serverId, createdAt])
+}
+
+// ─── Category ────────────────────────────────────────────────────
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  position  Int      @default(0)
+  serverId  String
+  createdAt DateTime @default(now())
+
+  server   Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  channels Channel[]
+}
+
+// ─── Permission ──────────────────────────────────────────────────
+
+model Permission {
+  id        String  @id @default(uuid())
+  channelId String
+  role      String
+  canRead   Boolean @default(true)
+  canWrite  Boolean @default(true)
+  canManage Boolean @default(false)
+  canAdmin  Boolean @default(false)
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, role])
+}
+
+// ─── Reaction ────────────────────────────────────────────────────
+
 model Reaction {
-  id        String   @id @default(cuid())
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  id        String   @id @default(uuid())
   messageId String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   emoji     String
   createdAt DateTime @default(now())
 
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([messageId, userId, emoji])
   @@index([messageId])
+  @@index([userId])
 }
 
+// ─── RefreshToken ────────────────────────────────────────────────
+
 model RefreshToken {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String   @unique
+  revoked    Boolean  @default(false)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  deviceInfo String?
+  ipAddress  String?
+  userAgent  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── PasswordReset ───────────────────────────────────────────────
+
+model PasswordReset {
+  id        String   @id @default(uuid())
   userId    String
   tokenHash String   @unique
-  revoked   Boolean  @default(false)
-  expiresAt DateTime
   createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Block ───────────────────────────────────────────────────────
+
+model Block {
+  id        String   @id @default(uuid())
+  userId    String
+  blockedId String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user    User @relation("BlockUser", fields: [userId], references: [id], onDelete: Cascade)
+  blocked User @relation("BlockedUser", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, blockedId])
+}
+
+// ─── Webhook ─────────────────────────────────────────────────────
+
+model Webhook {
+  id        String   @id @default(uuid())
+  serverId  String
+  channelId String
+  name      String
+  avatarUrl String?
+  url       String?
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  server  Server  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+// ─── CustomEmoji ─────────────────────────────────────────────────
+
+model CustomEmoji {
+  id        String   @id @default(uuid())
+  serverId  String
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, name])
+}
+
+// ─── Report ──────────────────────────────────────────────────────
+
+model Report {
+  id             String   @id @default(uuid())
+  reporterId     String
+  reportedUserId String?
+  messageId      String?
+  serverId       String?
+  type           String
+  reason         String
+  details        String?  @db.Text
+  status         String   @default("pending")
+  createdAt      DateTime @default(now())
+
+  reporter     User? @relation("ReportReporter", fields: [reporterId], references: [id])
+  reportedUser User? @relation("ReportedUser", fields: [reportedUserId], references: [id])
+}
+
+// ─── ServerRole (raw table managed manually) ─────────────────────
+
+model ServerRole {
+  id          String   @id @db.VarChar(36)
+  serverId    String   @db.VarChar(36)
+  name        String   @db.VarChar(100)
+  color       String   @default("#5865f2") @db.VarChar(7)
+  hoist       Boolean  @default(false)
+  mentionable Boolean  @default(false)
+  position    Int      @default(0)
+  permissions BigInt   @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([serverId, name])
+}
+
+// ─── ServerMemberRole (raw table managed manually) ──────────────
+
+model ServerMemberRole {
+  id             String   @id @db.VarChar(36)
+  serverMemberId String   @db.VarChar(36)
+  roleId         String   @db.VarChar(36)
+  createdAt      DateTime @default(now())
+}
+
+// ─── MessageRead (raw table managed manually) ────────────────────
+
+model MessageRead {
+  id        String   @id @db.VarChar(36)
+  messageId String   @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  readAt    DateTime @default(now())
+
+  @@index([messageId])
+  @@index([userId])
+  @@unique([messageId, userId])
+}
+
+// ─── UserNote (private notes about other users) ────────────────
+
+model UserNote {
+  id        String   @id @default(uuid())
+  userId    String
+  targetId  String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User @relation("UserNoteAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  target User @relation("UserNoteTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetId])
+}
+
+// ─── ScheduledMessage ──────────────────────────────────────────
+
+model ScheduledMessage {
+  id          String   @id @default(uuid())
+  channelId   String
+  userId      String
+  body        String
+  attachments Json?
+  scheduledAt DateTime
+  sent        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledAt, sent])
+}
+
+// ─── ServerTemplate ────────────────────────────────────────────
+
+model ServerTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  serverId    String
+  data        Json
+  uses        Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  server  Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  creator User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+// ─── ApiKey (personal API tokens for integrations) ─────────────
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  keyHash   String   @unique
+  keyPrefix String
+  scopes    String   @default("*")
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
-enum Role {
-  FOUNDER
-  ADMIN
-  MODERATOR
-  MEMBER
+// ─── PinNotification ───────────────────────────────────────────
+
+model PinNotification {
+  id        String   @id @default(uuid())
+  channelId String
+  messageId String
+  pinnedBy  String
+  userId    String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pinner  User    @relation("PinPinner", fields: [pinnedBy], references: [id], onDelete: Cascade)
+  user    User    @relation("PinTarget", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
 }
 
-enum Status {
-  ONLINE
-  IDLE
-  DND
-  OFFLINE
+// ─── ChannelArchiveConfig ──────────────────────────────────────
+
+model ChannelArchiveConfig {
+  id             String   @id @default(uuid())
+  channelId      String   @unique
+  enabled        Boolean  @default(false)
+  daysToKeep     Int      @default(90)
+  lastArchivedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 }
 
-enum ChannelType {
-  TEXT
-  VOICE
+// ─── ServerStats (real-time analytics) ─────────────────────────
+
+model ServerStats {
+  id             String   @id @default(uuid())
+  serverId       String
+  date           DateTime @default(now())
+  messageCount   Int      @default(0)
+  activeUsers    Int      @default(0)
+  voiceMinutes   Int      @default(0)
+  peakConcurrent Int      @default(0)
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, date])
+  @@index([serverId, date])
 }

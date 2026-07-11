@@ -5,6 +5,10 @@ export interface User {
   id: string;
   username: string;
   status: string;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  displayName?: string;
+  color?: string;
 }
 
 export interface FriendRelationship {
@@ -31,6 +35,7 @@ interface FriendStore {
   removeFriend: (id: string) => Promise<void>;
   blockUser: (userId: string) => Promise<void>;
   unblockUser: (userId: string) => Promise<void>;
+  markAllAsRead: () => void;
   reset: () => void;
 }
 
@@ -97,4 +102,10 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
 
   // Tear down the prior session so the next user starts clean.
   reset: () => set({ friends: [], incoming: [], outgoing: [], blocked: [], loading: false }),
+
+  // Optimistically mark all pending requests as "seen". Since the backend has no
+  // per-request read flag, this is a purely local UX improvement.
+  markAllAsRead: () => {
+    // No-op for now — can be wired to a backend endpoint if one gets added.
+  },
 }));

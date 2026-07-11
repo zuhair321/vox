@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VOX — Offline</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #060709;
+      color: #e0e6ed;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      flex-direction: column;
+      gap: 16px;
+    }
+    h1 { font-size: 48px; color: #b1121b; }
+    p { color: #8a93a3; font-size: 16px; }
+    button {
+      background: #b1121b;
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover { background: #8a0f15; }
+  </style>
+</head>
+<body>
+  <h1>VOX</h1>
+  <p>You're offline. Reconnect to continue.</p>
+  <button onclick="location.reload()">Retry</button>
+</body>
+</html>

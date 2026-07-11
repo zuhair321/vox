@@ -7,6 +7,7 @@ interface Props {
   y: number;
   items: MenuItem[];
   onClose: () => void;
+  anchorRect?: DOMRect | null; // For positioning the dropdown arrow
 }
 
 function MenuItemRow({ item, onClose }: { item: MenuItem; onClose: () => void }) {
@@ -46,7 +47,7 @@ function MenuItemRow({ item, onClose }: { item: MenuItem; onClose: () => void })
 
   return (
     <div ref={rowRef}>
-      <div
+      <motion.div
         className="vox-context-menu-item"
         onClick={(e) => {
           e.stopPropagation();
@@ -56,6 +57,8 @@ function MenuItemRow({ item, onClose }: { item: MenuItem; onClose: () => void })
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setHovered(false)}
+        whileHover={{ x: 3 }}
+        transition={{ duration: 0.1, ease: 'easeOut' }}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -75,15 +78,18 @@ function MenuItemRow({ item, onClose }: { item: MenuItem; onClose: () => void })
         {item.icon && (
           <span
             style={{
-              fontSize: '14px',
               width: '16px',
-              textAlign: 'center',
+              height: '16px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               color: hovered && !item.disabled
                 ? item.danger
-                  ? 'var(--crimson)'
+                  ? 'var(--blood)'
                   : 'var(--chaos)'
                 : 'var(--shadow)',
               flexShrink: 0,
+              transition: 'color 0.12s ease',
             }}
           >
             {item.icon}
@@ -93,14 +99,14 @@ function MenuItemRow({ item, onClose }: { item: MenuItem; onClose: () => void })
           {item.label}
         </span>
         {item.shortcut && (
-          <span style={{ fontSize: '11px', color: 'var(--shadow)', marginLeft: 'auto' }}>
+          <span style={{ fontSize: '11px', color: 'var(--shadow)', marginLeft: 'auto', flexShrink: 0 }}>
             {item.shortcut}
           </span>
         )}
         {item.submenu && item.submenu.length > 0 && (
-          <span style={{ fontSize: '10px', color: 'var(--shadow)', marginLeft: 'auto' }}>▶</span>
+          <span style={{ fontSize: '10px', color: 'var(--shadow)', marginLeft: item.shortcut ? '8px' : 'auto', flexShrink: 0 }}>▶</span>
         )}
-      </div>
+      </motion.div>
 
       {/* Submenu */}
       <AnimatePresence>
@@ -136,12 +142,12 @@ function MenuItemRow({ item, onClose }: { item: MenuItem; onClose: () => void })
   );
 }
 
-const ContextMenu: React.FC<Props> = ({ x, y, items, onClose }) => {
+const ContextMenu: React.FC<Props> = ({ x, y, items, onClose, anchorRect }) => {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const position = useMemo(() => {
     const menuW = 200;
-    const menuH = items.length * 40;
+    const menuH = items.length * 40 + 12; // Extra space for arrow
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     return {
@@ -150,15 +156,31 @@ const ContextMenu: React.FC<Props> = ({ x, y, items, onClose }) => {
     };
   }, [x, y, items.length]);
 
+  // Calculate arrow position to point at the trigger element
+  const arrowStyle = useMemo(() => {
+    if (!anchorRect || !menuRef.current) return null;
+    const menuEl = menuRef.current;
+    const menuRect = menuEl.getBoundingClientRect();
+    
+    // Center the arrow under the chevron
+    const chevronCenter = anchorRect.left + anchorRect.width / 2;
+    const arrowLeft = Math.max(8, Math.min(chevronCenter - position.left - 6, menuRect.width - 20));
+    
+    return {
+      left: arrowLeft,
+      opacity: 1,
+    };
+  }, [anchorRect, position.left]);
+
   return (
     <AnimatePresence>
       <motion.div
         ref={menuRef}
         data-vox-context-menu
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.92 }}
-        transition={{ duration: 0.12, ease: 'easeOut' }}
+        initial={{ opacity: 0, scale: 0.95, y: -8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: -8 }}
+        transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
         style={{
           position: 'fixed',
           left: position.left,
@@ -168,14 +190,46 @@ const ContextMenu: React.FC<Props> = ({ x, y, items, onClose }) => {
           border: '1px solid var(--rim)',
           minWidth: '200px',
           maxWidth: '280px',
-          clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(216,74,90,0.1)',
+          clipPath: 'polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px))',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(216,74,90,0.15), inset 0 1px 0 rgba(255,255,255,0.03)',
           padding: '4px 0',
-          overflow: 'hidden',
-          transformOrigin: 'top left',
+          overflow: 'visible',
+          transformOrigin: 'top center',
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Dropdown arrow pointing to trigger */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.05, duration: 0.12 }}
+          style={{
+            position: 'absolute',
+            top: -7,
+            left: arrowStyle?.left ?? 12,
+            width: 0,
+            height: 0,
+            borderLeft: '8px solid transparent',
+            borderRight: '8px solid transparent',
+            borderBottom: '8px solid var(--rim)',
+            filter: 'drop-shadow(0 -2px 2px rgba(0,0,0,0.3))',
+            zIndex: 1,
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: 2,
+              left: -7,
+              width: 0,
+              height: 0,
+              borderLeft: '7px solid transparent',
+              borderRight: '7px solid transparent',
+              borderBottom: '7px solid var(--dark-matter)',
+            }}
+          />
+        </motion.div>
+        
         {items.map((item) => (
           <MenuItemRow key={item.id} item={item} onClose={onClose} />
         ))}

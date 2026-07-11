@@ -6,11 +6,22 @@
 // Filters compose safely with the spread-on-truthy pattern so unspecified
 // params never constrain the query.
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
+import { sanitize } from '../middleware/sanitize.js';
 
 export const searchRouter = Router();
+
+// Rate limit search to prevent abuse.
+const searchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many searches. Please slow down.' },
+});
 
 const MESSAGE_INCLUDE = {
   author: true,
@@ -18,50 +29,110 @@ const MESSAGE_INCLUDE = {
   channel: { include: { server: true } },
 };
 
-searchRouter.get('/search', requireAuth, async (req, res, next) => {
+searchRouter.get('/search', requireAuth, searchLimiter, async (req, res, next) => {
   try {
-    const q = String(req.query.q || '').trim();
+    const q = sanitize(String(req.query.q || ''));
     const limit = Math.min(Number(req.query.limit) || 25, 100);
 
-    // Base where: deleted messages never surface, and (if a query term was
-    // supplied) body must contain it.
-    const where = { deleted: false };
-    if (q) where.body = { contains: q };
+    if (!q) throw new HttpError(400, 'Search query is required.');
 
-    // Scope to a single channel if requested.
+    // SECURITY: Scope results to channels the user can actually read.
+    // Resolve the user's server memberships first, then restrict to channels
+    // in those servers (or an explicitly requested channel they can access).
     const channelId = req.query.channelId ? String(req.query.channelId) : '';
-    if (channelId) where.channelId = channelId;
-
-    // Scope to a single server: resolve its channel ids first.
     const serverId = req.query.serverId ? String(req.query.serverId) : '';
-    if (serverId && !channelId) {
+
+    let accessibleChannelIds = null;
+
+    if (channelId) {
+      // Explicit channel: verify the user is a member of its server.
+      const channel = await prisma.channel.findUnique({
+        where: { id: channelId },
+        include: { server: { include: { members: { where: { userId: req.user.id } } } } },
+      });
+      if (!channel || channel.server.members.length === 0) {
+        return res.json({ results: [], count: 0 });
+      }
+      accessibleChannelIds = [channelId];
+    } else if (serverId) {
+      // Explicit server: verify membership.
+      const member = await prisma.serverMember.findUnique({
+        where: { serverId_userId: { serverId, userId: req.user.id } },
+      });
+      if (!member) return res.json({ results: [], count: 0 });
       const serverChannels = await prisma.channel.findMany({
         where: { serverId },
         select: { id: true },
       });
-      where.channelId = { in: serverChannels.map((c) => c.id) };
+      accessibleChannelIds = serverChannels.map((c) => c.id);
+    } else {
+      // No scope: restrict to all servers the user is a member of.
+      const memberships = await prisma.serverMember.findMany({
+        where: { userId: req.user.id },
+        select: { serverId: true },
+      });
+      const memberServerIds = memberships.map((m) => m.serverId);
+      if (memberServerIds.length === 0) return res.json({ results: [], count: 0 });
+      const channels = await prisma.channel.findMany({
+        where: { serverId: { in: memberServerIds } },
+        select: { id: true },
+      });
+      accessibleChannelIds = channels.map((c) => c.id);
     }
 
-    // Scope to one author.
-    const userId = req.query.userId ? String(req.query.userId) : '';
-    if (userId) where.userId = userId;
+    if (!accessibleChannelIds || accessibleChannelIds.length === 0) {
+      return res.json({ results: [], count: 0 });
+    }
 
-    // Date bounds (ISO strings → Date).
-    if (req.query.before) where.createdAt = { ...where.createdAt, lt: new Date(String(req.query.before)) };
-    if (req.query.after) where.createdAt = { ...where.createdAt, gt: new Date(String(req.query.after)) };
+    // Use MySQL FULLTEXT search via $queryRaw with MATCH...AGAINST in BOOLEAN MODE.
+    const chPlaceholders = accessibleChannelIds.map(() => '?').join(',');
+    let sql = `SELECT m.id FROM message m WHERE m.deleted = 0 AND m.channelId IN (${chPlaceholders}) AND MATCH(m.body) AGAINST(? IN BOOLEAN MODE)`;
+    const params = [...accessibleChannelIds, q];
+
+    // Scope to one author.
+    const userParam = req.query.userId ? String(req.query.userId).trim() : '';
+    if (userParam) {
+      const stripped = userParam.replace(/^@/, '');
+      const user = await prisma.user.findUnique({
+        where: { username: stripped },
+        select: { id: true },
+      });
+      if (user) {
+        sql += ` AND m.userId = ?`;
+        params.push(user.id);
+      } else {
+        sql += ` AND m.userId = ?`;
+        params.push(userParam);
+      }
+    }
+
+    // Date bounds.
+    if (req.query.before) {
+      sql += ` AND m.createdAt < ?`;
+      params.push(new Date(String(req.query.before)));
+    }
+    if (req.query.after) {
+      sql += ` AND m.createdAt > ?`;
+      params.push(new Date(String(req.query.after)));
+    }
 
     // "has link" filter: body must contain an http(s) URL.
     if (req.query.hasLink === 'true' || req.query.hasLink === '1') {
-      // Prisma has no native regex; emulate with a URL pattern via contains on
-      // the common 'http' substring (covers http and https).
-      where.body = { ...where.body, contains: 'http' };
+      sql += ` AND m.body LIKE '%http%'`;
+    }
+
+    sql += ` ORDER BY m.createdAt DESC LIMIT ${limit}`;
+
+    const matchedRows = await prisma.$queryRawUnsafe(sql, ...params);
+    const matchedIds = matchedRows.map((r) => r.id);
+    if (matchedIds.length === 0) {
+      return res.json({ results: [], count: 0 });
     }
 
     const results = await prisma.message.findMany({
-      where,
+      where: { id: { in: matchedIds } },
       include: MESSAGE_INCLUDE,
       orderBy: { createdAt: 'desc' },
-      take: limit,
     });
 
     res.json({ results, count: results.length });

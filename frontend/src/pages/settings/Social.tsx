@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Ban, Eye, Shield, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import BackHeader from '../../components/settings/BackHeader';
@@ -8,12 +8,25 @@ import SettingsRow from '../../components/settings/SettingsRow';
 import ToggleRow from '../../components/settings/ToggleRow';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUiStore } from '../../stores/uiStore';
+import { API_BASE } from '../../api/client';
 
 const Social: React.FC = () => {
   const navigate = useNavigate();
   const settings = useSettingsStore();
   const { addToast } = useUiStore();
   const [tab, setTab] = useState<'VOX' | 'CONNECTED GAMES'>('VOX');
+  const [blockedCount, setBlockedCount] = useState(0);
+
+  useEffect(() => {
+    const token = localStorage.getItem('vox_token');
+    if (!token) return;
+    fetch(`${API_BASE}/api/blocks`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data?.blocks)) setBlockedCount(data.blocks.length);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <main className="settings-page">
@@ -47,7 +60,7 @@ const Social: React.FC = () => {
           <section>
             <SectionHeader title="ACCOUNTS YOU'VE BLOCKED OR IGNORED" />
             <div className="settings-row-list">
-              <SettingsRow icon={Ban} label="Blocked Accounts" value="26 accounts" onClick={() => addToast('Blocked accounts opened', 'info')} />
+              <SettingsRow icon={Ban} label="Blocked Accounts" value={`${blockedCount} account${blockedCount !== 1 ? 's' : ''}`} onClick={() => navigate('/settings/social')} />
               <SettingsRow icon={Eye} label="Ignored Accounts" value="0 accounts" onClick={() => addToast('Ignored accounts opened', 'info')} />
             </div>
             <p className="settings-muted">Blocked and ignored users cannot interrupt your command channel. <button type="button" className="settings-link inline" onClick={() => addToast('Feature guide opened', 'info')}>Explore our feature guide</button></p>

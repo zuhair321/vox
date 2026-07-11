@@ -1,10 +1,12 @@
-import React, { useEffect, useState, lazy, Suspense } from 'react';
+import React, { useEffect, useState, lazy, Suspense, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import { useSocketStore } from './stores/socketStore';
 import { useServerStore } from './stores/serverStore';
 import { useFriendStore } from './stores/friendStore';
 import { useProfileStore } from './stores/profileStore';
 import { useUiStore } from './stores/uiStore';
+import { useThemeStore } from './stores/themeStore';
 
 // We will implement these components next
 import ServerRail from './components/server/ServerRail';
@@ -15,6 +17,7 @@ import ToastContainer from './components/ui/ToastContainer';
 import TitleBar from './components/layout/TitleBar';
 import OfflineBanner from './components/ui/OfflineBanner';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import PanelErrorBoundary from './components/ui/PanelErrorBoundary';
 import ProfilePopup from './components/ui/ProfilePopup';
 import CreateServerModal from './components/server/CreateServerModal';
 import CreateChannelModal from './components/server/CreateChannelModal';
@@ -28,38 +31,75 @@ import Profile from './pages/Profile';
 import RegisterPage from './pages/Register';
 import SplashScreen from './components/ui/SplashScreen';
 import InviteModal from './components/server/InviteModal';
+import InviteAccept from './pages/InviteAccept';
 import CustomStatusModal from './components/ui/CustomStatusModal';
 import NotificationCenter from './components/ui/NotificationCenter';
+import ServerSettings from './components/server/ServerSettings';
+import VoiceChannelPanel from './components/voice/VoiceChannelPanel';
+import ScreenShareOverlay from './components/voice/ScreenShareOverlay';
+import ScreenSourcePicker from './components/voice/ScreenSourcePicker';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
+import { TurboModal } from './components/turbo/TurboModal';
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { useRipple } from './hooks/useRipple';
+import { useNotificationStore } from './stores/notificationStore';
 
 const Discover = lazy(() => import('./pages/Discover'));
 const ServerInsights = lazy(() => import('./pages/ServerInsights'));
+const ServerProfile = lazy(() => import('./pages/ServerProfile'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Account = lazy(() => import('./pages/settings/Account'));
 const Privacy = lazy(() => import('./pages/settings/Privacy'));
 const Social = lazy(() => import('./pages/settings/Social'));
 const Devices = lazy(() => import('./pages/settings/Devices'));
+const Sessions = lazy(() => import('./pages/settings/Sessions'));
 const AuthorizedApps = lazy(() => import('./pages/settings/AuthorizedApps'));
 const FamilyCenter = lazy(() => import('./pages/settings/FamilyCenter'));
 const Appearance = lazy(() => import('./pages/settings/Appearance'));
 const Voice = lazy(() => import('./pages/settings/Voice'));
 const Notifications = lazy(() => import('./pages/settings/Notifications'));
 const Chat = lazy(() => import('./pages/settings/Chat'));
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
-import { useRipple } from './hooks/useRipple';
-import { useNotificationStore } from './stores/notificationStore';
 
 const AppLayout = () => {
   const { connect, disconnect } = useSocketStore();
-  const { fetchServers } = useServerStore();
+  const { fetchServers, selectedServer } = useServerStore();
   const { fetchFriends } = useFriendStore();
+  const { applyServerTheme } = useThemeStore();
+  const location = useLocation();
   const { hydrateFromUser } = useProfileStore();
   const ui = useUiStore();
   const navigate = useNavigate();
-  const location = useLocation();
+  const deferredPrompt = useRef<any>(null);
+  const [canInstall, setCanInstall] = useState(false);
 
   // Activate ripple effects globally
   useRipple();
+
+  // PWA install prompt — fired by browser when criteria are met
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      deferredPrompt.current = e;
+      setCanInstall(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt.current) return;
+    deferredPrompt.current.prompt();
+    const { outcome } = await deferredPrompt.current.userChoice;
+    if (outcome === 'accepted') setCanInstall(false);
+    deferredPrompt.current = null;
+  };
+
+  // Switch theme to server vibe override when navigating between servers.
+  // Falls back to the user's global theme for DMs, friends, and settings.
+  useEffect(() => {
+    const serverId = selectedServer?.id ?? null;
+    applyServerTheme(serverId);
+  }, [location.pathname, selectedServer?.id, applyServerTheme]);
 
   // Global overlay state: theme switcher, quick switcher (Ctrl+K), and the
   // keyboard-shortcuts help (Ctrl+/). Lives at the layout root so they render
@@ -74,6 +114,20 @@ const AppLayout = () => {
   useEffect(() => {
     (ui as any).setShortcutsOpen = setShortcutsOpen;
   }, [ui]);
+
+  // Post-registration redirect: SplashScreen delays AppLayout mount, so we use a
+  // session flag instead of direct navigation from RegisterPage.
+  useEffect(() => {
+    if (sessionStorage.getItem('vox_just_registered') === '1') {
+      sessionStorage.removeItem('vox_just_registered');
+      navigate('/friends');
+      return;
+    }
+    // If at root "/" and already logged in, go to friends (new users have no servers).
+    if (location.pathname === '/') {
+      navigate('/friends');
+    }
+  }, [navigate, location.pathname]);
 
   // Close everything (Escape) and open quick switcher (Ctrl+K) via the hook.
   useKeyboardShortcuts({
@@ -94,7 +148,7 @@ const AppLayout = () => {
       navigate('/login');
       return;
     }
-    
+
     if (token) {
       const cachedUser = localStorage.getItem('vox_user');
       if (cachedUser) {
@@ -122,41 +176,93 @@ const AppLayout = () => {
     <div className="app-container">
       <TitleBar />
       <OfflineBanner />
-      
+      {/* PWA install banner — only shown when browser fires beforeinstallprompt */}
+      {canInstall && (
+        <div style={{
+          background: 'var(--discord-blurple)',
+          color: '#fff',
+          textAlign: 'center',
+          padding: '8px 16px',
+          fontSize: '13px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '12px',
+        }}>
+          <span>Install VOX for a better experience.</span>
+          <button
+            onClick={handleInstallPWA}
+            style={{ background: '#fff', color: 'var(--discord-blurple)', border: 'none', borderRadius: '4px', padding: '4px 12px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+          >
+            Install
+          </button>
+          <button
+            onClick={() => setCanInstall(false)}
+            aria-label="Dismiss install prompt"
+            style={{ background: 'transparent', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <ServerRail />
-        
+        <PanelErrorBoundary panelName="ServerRail">
+          <ServerRail />
+        </PanelErrorBoundary>
+
         <Suspense fallback={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}><div className="spinner" /></div>}>
-          <Routes>
-        <Route path="/friends" element={<FriendsPage />} />
-        <Route path="/dm/:dmId" element={<DMConversation />} />
-        <Route path="/profile" element={<Profile />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/settings/account" element={<Account />} />
-            <Route path="/settings/privacy" element={<Privacy />} />
-            <Route path="/settings/social" element={<Social />} />
-            <Route path="/settings/devices" element={<Devices />} />
-            <Route path="/settings/apps" element={<AuthorizedApps />} />
-            <Route path="/settings/family" element={<FamilyCenter />} />
-            <Route path="/settings/appearance" element={<Appearance />} />
-            <Route path="/settings/voice" element={<Voice />} />
-            <Route path="/settings/notifications" element={<Notifications />} />
-            <Route path="/settings/chat" element={<Chat />} />
+          <AnimatePresence mode="wait" initial={false}>
+          <Routes location={location} key={location.pathname}>
+            <Route path="/invite/:code" element={<PanelErrorBoundary panelName="Invite"><InviteAccept /></PanelErrorBoundary>} />
+            <Route path="/friends" element={<PanelErrorBoundary panelName="Friends"><FriendsPage /></PanelErrorBoundary>} />
+            <Route path="/dm/:dmId" element={<PanelErrorBoundary panelName="DM"><DMConversation /></PanelErrorBoundary>} />
+            <Route path="/profile" element={<PanelErrorBoundary panelName="Profile"><Profile /></PanelErrorBoundary>} />
+            <Route path="/settings" element={<PanelErrorBoundary panelName="Settings"><Settings /></PanelErrorBoundary>} />
+            <Route path="/settings/account" element={<PanelErrorBoundary panelName="Account"><Account /></PanelErrorBoundary>} />
+            <Route path="/settings/privacy" element={<PanelErrorBoundary panelName="Privacy"><Privacy /></PanelErrorBoundary>} />
+            <Route path="/settings/social" element={<PanelErrorBoundary panelName="Social"><Social /></PanelErrorBoundary>} />
+            <Route path="/settings/devices" element={<PanelErrorBoundary panelName="Devices"><Devices /></PanelErrorBoundary>} />
+            <Route path="/settings/sessions" element={<PanelErrorBoundary panelName="Sessions"><Sessions /></PanelErrorBoundary>} />
+            <Route path="/settings/apps" element={<PanelErrorBoundary panelName="AuthorizedApps"><AuthorizedApps /></PanelErrorBoundary>} />
+            <Route path="/settings/family" element={<PanelErrorBoundary panelName="FamilyCenter"><FamilyCenter /></PanelErrorBoundary>} />
+            <Route path="/settings/appearance" element={<PanelErrorBoundary panelName="Appearance"><Appearance /></PanelErrorBoundary>} />
+            <Route path="/settings/voice" element={<PanelErrorBoundary panelName="Voice"><Voice /></PanelErrorBoundary>} />
+            <Route path="/settings/notifications" element={<PanelErrorBoundary panelName="Notifications"><Notifications /></PanelErrorBoundary>} />
+            <Route path="/settings/chat" element={<PanelErrorBoundary panelName="Chat"><Chat /></PanelErrorBoundary>} />
+            <Route path="/server-settings/:serverId" element={<PanelErrorBoundary panelName="ServerSettings"><ServerSettings /></PanelErrorBoundary>} />
+            <Route path="/server-profile/:serverId" element={
+              <PanelErrorBoundary panelName="ServerProfile">
+                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <ServerProfile />
+                <MemberPanel />
+              </PanelErrorBoundary>
+            } />
             <Route path="/channels/:serverId/:channelId" element={
-          <>
-            <Sidebar onOpenThemes={() => setThemeOpen(true)} />
-            <MainContent />
-            <MemberPanel />
-          </>
-        } />
-            {/* Default route */}
+              <PanelErrorBoundary panelName="ChannelView">
+                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                  <MainContent />
+                  <VoiceChannelPanel />
+                </div>
+                <MemberPanel />
+              </PanelErrorBoundary>
+            } />
             <Route path="/" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Select a server or friends.</div>} />
           </Routes>
+          </AnimatePresence>
         </Suspense>
       </div>
 
       <ToastContainer />
       <ProfilePopup />
+      {/* Source picker — the Electron main process stashes getDisplayMedia
+          callbacks and asks us to pick a screen/window. The picker fetches
+          sources via IPC and calls back with the chosen id. */}
+      <ScreenSourcePicker />
+      {/* Floating screen-share viewer — only renders when a local or remote
+          screen stream is active, so it stays out of the way during normal use. */}
+      <ScreenShareOverlay />
       <CreateServerModal />
       <CreateChannelModal />
       <ThemeSwitcher open={themeOpen} onClose={() => setThemeOpen(false)} />
@@ -165,12 +271,15 @@ const AppLayout = () => {
 
       {/* Day 10-11 advanced overlays */}
       <Suspense fallback={null}>
-        <Discover />
+        <PanelErrorBoundary panelName="Discover">
+          <Discover />
+        </PanelErrorBoundary>
       </Suspense>
       <InviteModal />
       <CustomStatusModal />
       <NotificationCenter />
-      
+      <TurboModal />
+
       {/* Onboarding */}
       {showOnboarding && <OnboardingFlow username={JSON.parse(localStorage.getItem('vox_user') || '{}').username || 'Operative'} onComplete={() => setShowOnboarding(false)} />}
     </div>
@@ -179,10 +288,18 @@ const AppLayout = () => {
 
 function App() {
   const [isBooting, setIsBooting] = useState(true);
+  
+  // Always require fresh login (clear cached token on app start)
+  // Remove this line if you want to restore auto-login in the future
+  localStorage.removeItem('vox_token');
+  localStorage.removeItem('vox_user');
+  
+  const storedToken = localStorage.getItem('vox_token');
 
   // The splash screen drives boot completion via its onComplete callback below.
+  // Since token is cleared, SplashScreen will always show the full 2s delay.
   if (isBooting) {
-    return <SplashScreen onComplete={() => setIsBooting(false)} />;
+    return <SplashScreen onComplete={() => setIsBooting(false)} token={storedToken} />;
   }
 
   return (

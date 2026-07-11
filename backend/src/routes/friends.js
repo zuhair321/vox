@@ -1,9 +1,20 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
+import { sanitize } from '../middleware/sanitize.js';
 
 export const friendRouter = Router();
+
+// Rate limit friend operations to prevent spam/abuse.
+const friendLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many friend requests. Please wait a moment.' },
+});
 
 // Get friends, pending requests, and blocked users
 friendRouter.get('/friends', requireAuth, async (req, res, next) => {
@@ -16,8 +27,32 @@ friendRouter.get('/friends', requireAuth, async (req, res, next) => {
         ]
       },
       include: {
-        user: true,
-        friend: true
+        user: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            bannerUrl: true,
+            status: true,
+            color: true,
+            hasTurbo: true,
+            turboSince: true
+          }
+        },
+        friend: {
+          select: {
+            id: true,
+            username: true,
+            displayName: true,
+            avatarUrl: true,
+            bannerUrl: true,
+            status: true,
+            color: true,
+            hasTurbo: true,
+            turboSince: true
+          }
+        }
       }
     });
     res.json(relationships);
@@ -25,9 +60,9 @@ friendRouter.get('/friends', requireAuth, async (req, res, next) => {
 });
 
 // Send a friend request
-friendRouter.post('/friends/request', requireAuth, async (req, res, next) => {
+friendRouter.post('/friends/request', requireAuth, friendLimiter, async (req, res, next) => {
   try {
-    const { username } = req.body;
+    const username = sanitize(String(req.body?.username || ''));
     if (!username) throw new HttpError(400, 'Username is required');
     if (username === req.user.username) throw new HttpError(400, 'YOU CANNOT ADD YOURSELF');
 
@@ -96,7 +131,7 @@ friendRouter.delete('/friends/:id', requireAuth, async (req, res, next) => {
 });
 
 // Block a user
-friendRouter.post('/friends/block', requireAuth, async (req, res, next) => {
+friendRouter.post('/friends/block', requireAuth, friendLimiter, async (req, res, next) => {
   try {
     const { userId } = req.body;
     if (!userId) throw new HttpError(400, 'User ID is required');

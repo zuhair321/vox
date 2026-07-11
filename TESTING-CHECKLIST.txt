@@ -1,0 +1,166 @@
+═══════════════════════════════════════════════════════════════════════════════
+  VOX DESKTOP APP - GAPS FIXED - TESTING CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+CRITICAL FIXES TO TEST:
+
+☐ 1. MYSQL STARTUP TIMEOUT
+   Location: Start VOX Desktop
+   Test: MySQL should probe port and wait max 15s (was 2.5s fixed)
+   ✓ Check console logs for "[MySQL] Waiting for MySQL to accept connections..."
+   ✓ Check "[MySQL] Connected to MySQL on port 3306" message
+   
+☐ 2. FRONTEND BUILD FAILURE DETECTION
+   Location: Start VOX Desktop
+   Test: App should detect and abort on build failures
+   ✓ Check logs for "[Frontend] Build failed" if any issues
+   ✓ If build succeeds: "✓ built in XX.XXs" message
+   
+☐ 3. BACKEND HEALTH CHECK
+   Location: Start VOX Desktop
+   Test: Backend should health-check before reusing existing process
+   ✓ Look for "[Backend] Port 4000 already in use — checking if backend is responding..."
+   ✓ Should either "reuse existing" or "attempting to spawn new"
+   
+☐ 4. SCREEN CAPTURE TIMEOUT
+   Location: Voice channel → Screen sharing
+   Test: Request should auto-reject after 60s
+   ✓ Open screen picker, wait 60+ seconds without selecting
+   ✓ Should see "Screen capture request timed out" in console
+   ✓ Callback should not stay in memory
+   
+☐ 5. SESSION EXPIRED NOTIFICATION
+   Location: API client error handling
+   Test: Should show explicit message on 401 token failure
+   ✓ Force logout (clear localStorage)
+   ✓ Make API call that requires auth
+   ✓ Should see "Session Expired" toast notification (not silent redirect)
+   
+☐ 6. VOICE CHANNEL ERROR HANDLING
+   Location: Voice channel → Join channel
+   Test: Should show loading state and handle join failures
+   ✓ Try joining voice channel
+   ✓ Join button should disable during attempt
+   ✓ If fails: Should show error message in UI (not just in console)
+   
+---
+
+HIGH PRIORITY FIXES TO TEST:
+
+☐ 7. SOCKET LISTENER CLEANUP
+   Location: Disconnect from socket
+   Test: No lingering event listeners after disconnect
+   ✓ Check Chrome DevTools memory to see socket listeners cleaned up
+   ✓ Disconnect/reconnect multiple times, memory should stabilize
+   
+☐ 8. API ERROR LOGGING
+   Location: Any API call failure
+   Test: Should see detailed error logs
+   ✓ Make network error (disconnect internet briefly)
+   ✓ Should see "[API] Network error:" with full details
+   ✓ Server errors should include status code and message
+   
+☐ 9. STARTUP ERROR RECOVERY
+   Location: Start VOX Desktop
+   Test: App should handle partial failures gracefully
+   ✓ If MySQL fails: "[Startup] Continuing without database (demo mode only)"
+   ✓ If Backend fails: "[Startup] Continuing without backend"
+   ✓ If Build fails: App quits with error (this IS expected)
+   
+☐ 10. SCREEN CAPTURE CANCEL
+   Location: Voice channel → Screen sharing → Cancel
+   Test: Should clean up properly
+   ✓ Start screen capture, then cancel
+   ✓ Should see "[SC] User cancelled screen capture" in console
+   ✓ No orphaned callbacks in memory
+   
+---
+
+GENERAL STABILITY TESTS:
+
+☐ A. STARTUP SEQUENCE
+   1. Kill all VOX processes
+   2. Delete D:\Vox\frontend\dist (force rebuild)
+   3. Start VOX Desktop
+   4. Check for any critical errors in console
+   
+☐ B. LOGIN & NORMAL USAGE
+   1. Login with credentials
+   2. Send a few messages
+   3. Join a voice channel
+   4. Share screen (test & cancel)
+   5. Logout
+   ✓ No console errors at any step
+   
+☐ C. VOICE CHANNEL STABILITY
+   1. Join voice channel
+   2. Toggle mute
+   3. Toggle deafen
+   4. Toggle video
+   5. Toggle screen share
+   6. Leave channel
+   ✓ All state transitions smooth, no crashes
+   
+☐ D. ERROR HANDLING
+   1. Kill MySQL service while app running → should gracefully degrade
+   2. Kill backend process → should show connection error
+   3. Disconnect internet → network errors should be logged
+   4. Clear auth token → should show "Session Expired"
+   
+☐ E. MEMORY STABILITY
+   1. Open app
+   2. Send 50 messages in a channel
+   3. Join voice channel for 5 minutes
+   4. Leave channel
+   5. Watch memory usage in Task Manager
+   ✓ Memory should return to baseline (no memory leak)
+   ✓ No lingering processes
+   
+---
+
+CONSOLE LOG EXPECTATIONS:
+
+After startup, console should show:
+✓ [MySQL] Connected to MySQL on port 3306
+✓ [Backend] Spawn/Reuse message for port 4000
+✓ [Frontend Build] Success message
+✓ [Frontend] Using existing dist build OR build completed
+✓ No ERROR messages (warnings are ok)
+
+During normal usage:
+✓ [Socket] connected
+✓ [Backend] Messages for normal operations
+✓ [Voice] Messages when joining/leaving
+✓ [API] Messages only on actual errors
+
+NO EXPECT:
+✗ Undefined catch blocks (should see error logged instead)
+✗ "Cannot find module" errors
+✗ Silent failures without logging
+✗ Orphaned processes (check Task Manager)
+
+---
+
+ROLLBACK PROCEDURE IF NEEDED:
+
+If new issues found:
+1. Stop VOX Desktop
+2. Revert electron-main.js from git: git checkout -- electron-main.js
+3. Revert frontend files: git checkout -- frontend/src/
+4. Rebuild frontend: npm run build (in frontend/)
+5. Restart and retest
+
+---
+
+SIGN OFF:
+
+Once all tests pass:
+
+☑ All CRITICAL issues working correctly
+☑ All HIGH priority fixes stable
+☑ No new crashes introduced
+☑ Error messages clear and helpful
+☑ Memory leaks fixed
+☑ Ready for production
+
+═══════════════════════════════════════════════════════════════════════════════

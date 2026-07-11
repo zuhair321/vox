@@ -10,6 +10,7 @@
 // broader set (images + videos + common documents) up to a higher cap.
 import { Router } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -17,6 +18,15 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import * as auth from '../services/auth.service.js';
+
+// Rate limit uploads to prevent abuse.
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many uploads. Please wait a moment.' },
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads');
@@ -58,7 +68,6 @@ const FILE_MIME_TO_EXT = {
   'text/plain': 'txt',
   'text/csv': 'csv',
   'application/json': 'json',
-  'application/octet-stream': 'bin', // browsers fall back to this for many types
 };
 
 // Build a single chat allowlist set for the fileFilter.
@@ -106,10 +115,9 @@ const storage = multer.diskStorage({
     if (kind === 'chat') {
       const info = chatMimeInfo(file.mimetype);
       if (!info) return cb(new HttpError(400, 'Unsupported file type.'));
-      const ext = info.ext !== 'bin' ? info.ext : extFromName(file.originalname);
       // chat-<userId>-<timestamp>.<ext>  — unique, so concurrent uploads
       // (or a re-upload after switching files) never collide.
-      return cb(null, `${kind}-${req.user.id}-${Date.now()}.${ext}`);
+      return cb(null, `${kind}-${req.user.id}-${Date.now()}.${info.ext}`);
     }
 
     // avatar / banner — image only.
@@ -166,6 +174,44 @@ async function handleUpload(req, res, next) {
       });
     }
 
+    if (kind === 'server-icon') {
+      const serverId = String(req.body?.serverId || '').trim();
+      if (!serverId) throw new HttpError(400, 'serverId is required.');
+
+      const member = await prisma.serverMember.findUnique({
+        where: { serverId_userId: { serverId, userId: req.user.id } },
+      });
+      if (!member || !['FOUNDER', 'ADMIN'].includes(member.role)) {
+        throw new HttpError(403, 'Only admins may update the server icon.');
+      }
+
+      const server = await prisma.server.update({
+        where: { id: serverId },
+        data: { icon: publicUrl },
+        include: { channels: true, members: { include: { user: true } } },
+      });
+      return res.json({ server });
+    }
+
+    if (kind === 'server-banner') {
+      const serverId = String(req.body?.serverId || '').trim();
+      if (!serverId) throw new HttpError(400, 'serverId is required.');
+
+      const member = await prisma.serverMember.findUnique({
+        where: { serverId_userId: { serverId, userId: req.user.id } },
+      });
+      if (!member || !['FOUNDER', 'ADMIN'].includes(member.role)) {
+        throw new HttpError(403, 'Only admins may update the server banner.');
+      }
+
+      const server = await prisma.server.update({
+        where: { id: serverId },
+        data: { banner: publicUrl },
+        include: { channels: true, members: { include: { user: true } } },
+      });
+      return res.json({ server });
+    }
+
     const fieldKey = `${kind}Url`; // avatarUrl | bannerUrl
     // Try the DB; if it's unavailable we still return success (demo mode) so
     // the local-only flow keeps working — the upload just isn't persisted.
@@ -187,9 +233,10 @@ async function handleUpload(req, res, next) {
 uploadRouter.post(
   '/upload/:kind',
   requireAuth,
+  uploadLimiter,
   (req, res, next) => {
     const kind = req.params.kind;
-    if (!['avatar', 'banner', 'chat'].includes(kind)) {
+    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner'].includes(kind)) {
       return next(new HttpError(400, 'Invalid upload kind.'));
     }
     // Dispatch to the multer instance whose size cap + MIME filter matches the

@@ -1,17 +1,21 @@
-// Octagon status indicator with per-state polish.
+// Octagon status indicator with per-state polish + animated status variants.
 //   ONLINE  → toxic green + pulsing glow ring
-//   IDLE    → idle gold, dimmed, with a crescent cutout
-//   DND     → danger crimson with a horizontal slash
+//   IDLE    → idle gold, dimmed, with a crescent cutout + slow shimmer
+//   DND     → danger crimson with a horizontal slash + slow pulse
 //   OFFLINE → hollow (border only, no fill)
-//   MOBILE  → small 📱 glyph (passed as status='mobile')
+//   MOBILE  → small phone glyph (passed as status='mobile')
+// Animated variant is driven by the `animated` prop — uses CSS keyframes and
+// respects prefers-reduced-motion.
 type Status = 'online' | 'idle' | 'dnd' | 'offline' | 'mobile';
 
 interface StatusDotProps {
   status: Status | string;
   size?: number;
+  /** Show subtle animation (shimmer for idle, pulse for DND) if true. */
+  animated?: boolean;
 }
 
-export default function StatusDot({ status, size = 10 }: StatusDotProps) {
+export default function StatusDot({ status, size = 10, animated = false }: StatusDotProps) {
   const s = String(status || '').toLowerCase();
 
   // Mobile device indicator: small phone glyph instead of a dot.
@@ -58,6 +62,7 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
 
   if (s === 'idle') {
     // Dimmed gold with a crescent (offset dark overlay).
+    // When animated: add a slow shimmer sweep.
     return (
       <span
         aria-label="Status: idle"
@@ -68,6 +73,7 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
+          animation: animated ? 'statusIdleShimmer 3s ease-in-out infinite' : undefined,
         }}
       >
         <span
@@ -88,6 +94,7 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
 
   if (s === 'dnd') {
     // Danger fill with a horizontal slash.
+    // When animated: add a slow crimson pulse.
     return (
       <span
         aria-label="Status: do not disturb"
@@ -97,6 +104,8 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
+          animation: animated ? 'statusDndPulse 2.5s ease-in-out infinite' : undefined,
+          boxShadow: animated ? '0 0 4px rgba(125,31,43,0.6)' : undefined,
         }}
       >
         <span
@@ -120,7 +129,7 @@ export default function StatusDot({ status, size = 10 }: StatusDotProps) {
       style={{
         ...base,
         background: '#8fcf9b',
-        animation: 'statusDotPulse 2s ease-in-out infinite',
+        animation: animated ? 'statusDotPulse 2s ease-in-out infinite' : undefined,
       }}
     />
   );

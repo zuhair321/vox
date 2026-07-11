@@ -16,7 +16,7 @@ export interface ToastMessage {
 
 interface UiStore {
   toasts: ToastMessage[];
-  addToast: (message: string, type?: 'success' | 'error' | 'info' | 'warning' | 'pin' | 'mention') => void;
+  addToast: (message: string, type?: 'success' | 'error' | 'info' | 'warning' | 'pin' | 'mention', opts?: Partial<Pick<ToastMessage, 'actionLabel' | 'onAction' | 'duration'>>) => void;
   removeToast: (id: string) => void;
 
   isCreateServerOpen: boolean;
@@ -57,6 +57,10 @@ interface UiStore {
   // Emoji picker
   showEmojiPicker: boolean;
   setShowEmojiPicker: (show: boolean) => void;
+
+  // Turbo modal
+  showTurboModal: boolean;
+  setShowTurboModal: (show: boolean) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -110,4 +114,7 @@ export const useUiStore = create<UiStore>((set) => ({
 
   showEmojiPicker: false,
   setShowEmojiPicker: (show) => set({ showEmojiPicker: show }),
+
+  showTurboModal: false,
+  setShowTurboModal: (show) => set({ showTurboModal: show }),
 }));

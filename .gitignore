@@ -2,6 +2,7 @@
 node_modules/
 backend/node_modules/
 frontend/node_modules/
+vox-mobile/node_modules/
 
 # Logs
 *.log
@@ -11,10 +12,12 @@ logs/
 # Environment variables (secrets)
 .env
 backend/.env
+frontend/.env
 
 # Build outputs
 frontend/build/
 dist/
+vox-mobile/dist/
 
 # OS / Editor
 .vscode/
@@ -24,6 +27,8 @@ Thumbs.db
 
 # Temp / Cache
 temp/
+.mimocode/
+vox-mobile/.claude/
 *.tmp
 *.cache
 
@@ -31,7 +36,14 @@ temp/
 electron/
 
 # MySQL data
+mysql-data/
 temp/mysql-data/
+
+# Redis
+redis/
+
+# Uploads
+backend/uploads/
 
 # Prisma generated client (can be regenerated)
 backend/prisma/generated/

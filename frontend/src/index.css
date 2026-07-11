@@ -19,6 +19,8 @@
   --crimson-glow: rgba(216, 74, 90, 0.22);
   --gold-glow: rgba(255, 209, 102, 0.32);
   --toxic-glow: rgba(125, 255, 122, 0.36);
+  --discord-blurple: #5865f2;
+  --accent: #d84a5a;
   --octagon: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
   --cut-corner-tr: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
   --cut-corner-all: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
@@ -278,7 +280,7 @@ h1, h2, h3, h4, h5, h6, .title {
 /* App Layout — Gothic Black */
 .app-container {
   display: flex;
-  height: 100vh;
+  height: calc(100vh - 32px);
   width: 100vw;
   background: #000000;
   overflow: hidden;
@@ -315,10 +317,11 @@ h1, h2, h3, h4, h5, h6, .title {
   min-height: 0;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(216, 74, 90, 0.03), transparent),
+    radial-gradient(ellipse var(--mood-size, 60%) 40% at 50% 0%, var(--mood-glow, rgba(216, 74, 90, 0.03)), transparent),
     var(--dark-matter);
   display: flex;
   flex-direction: column;
+  transition: background 2s ease;
 }
 
 .member-panel {
@@ -346,7 +349,7 @@ h1, h2, h3, h4, h5, h6, .title {
 
 .vox-user-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 30px 30px;
+  grid-template-columns: minmax(0, 1fr) 30px 30px 30px 30px;
   align-items: center;
   gap: 7px;
   padding: 10px;

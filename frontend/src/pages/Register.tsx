@@ -22,8 +22,8 @@ const RegisterPage: React.FC = () => {
       setIsSubmitting(false);
       return;
     }
-    if (password.length < 5) {
-      addToast('Password must be at least 5 characters', 'error');
+    if (password.length < 8) {
+      addToast('Password must be at least 8 characters', 'error');
       setIsSubmitting(false);
       return;
     }
@@ -46,7 +46,10 @@ const RegisterPage: React.FC = () => {
       localStorage.setItem('vox_refresh_token', data.tokens.refresh);
       localStorage.setItem('vox_user', JSON.stringify(data.user));
       addToast('Account created. Welcome to the void.', 'success');
-      navigate('/friends');
+      // Flag that we just registered — AppLayout will pick this up after the
+      // SplashScreen delay and redirect to /friends cleanly.
+      sessionStorage.setItem('vox_just_registered', '1');
+      navigate('/');
     } catch (err: any) {
       addToast(err.message, 'error');
     } finally {
@@ -74,7 +77,7 @@ const RegisterPage: React.FC = () => {
       </div>
 
       <section className="vox-login-stage">
-        <form onSubmit={handleRegister} className="vox-login-card">
+        <form onSubmit={handleRegister} className="vox-login-card" autoComplete="off">
           <span className="vox-login-border-glow" aria-hidden="true" />
 
           <span className="vox-login-corner corner-tl" aria-hidden="true" />
@@ -107,7 +110,7 @@ const RegisterPage: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                autoComplete="email"
+                autoComplete="off"
                 placeholder="operative@vox"
               />
             </div>
@@ -122,7 +125,7 @@ const RegisterPage: React.FC = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                autoComplete="username"
+                autoComplete="off"
                 placeholder="operative_name"
               />
             </div>
@@ -138,7 +141,7 @@ const RegisterPage: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoComplete="new-password"
+                autoComplete="off"
                 placeholder="min 8 characters"
               />
             </div>

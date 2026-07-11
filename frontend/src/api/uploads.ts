@@ -1,7 +1,7 @@
 import { API_BASE, getToken } from './client';
 import type { Attachment, AttachmentKind } from '../types';
 
-export type UploadKind = 'avatar' | 'banner' | 'chat';
+export type UploadKind = 'avatar' | 'banner' | 'chat' | 'server-icon' | 'server-banner';
 
 export interface ChatUploadResponse {
   url: string;
@@ -11,7 +11,7 @@ export interface ChatUploadResponse {
   mime: string;
 }
 
-export async function uploadMedia(kind: UploadKind, file: File) {
+export async function uploadMedia(kind: UploadKind, file: File, extraFields?: Record<string, string>) {
   const token = getToken();
   if (!token) {
     throw new Error('Please log in before uploading media.');
@@ -19,6 +19,7 @@ export async function uploadMedia(kind: UploadKind, file: File) {
 
   const formData = new FormData();
   formData.append('file', file);
+  Object.entries(extraFields || {}).forEach(([key, value]) => formData.append(key, value));
 
   const res = await fetch(`${API_BASE}/api/upload/${kind}`, {
     method: 'POST',
@@ -37,6 +38,12 @@ export async function uploadMedia(kind: UploadKind, file: File) {
 }
 
 export const uploadProfileImage = uploadMedia;
+
+export const uploadServerIcon = (serverId: string, file: File) =>
+  uploadMedia('server-icon', file, { serverId });
+
+export const uploadServerBanner = (serverId: string, file: File) =>
+  uploadMedia('server-banner', file, { serverId });
 
 // Upload a chat attachment (image/video/file). Returns the Attachment shape the
 // stores and renderer expect, ready to attach to an outgoing message.

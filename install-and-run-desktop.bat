@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-cd /d C:\vox
+cd /d D:\Vox
 
 echo.
 echo ======================================
@@ -42,7 +42,7 @@ echo.
 echo Starting VOX Desktop...
 echo.
 
-start "" "C:\vox\node_modules\.bin\electron.cmd" "C:\vox\electron-main.js"
+start "" "D:\Vox\node_modules\.bin\electron.cmd" "D:\Vox\electron-main.js"
 
 echo VOX Desktop is starting...
 echo.

@@ -20,6 +20,7 @@ export const THEMES: ThemeDef[] = [
 ];
 
 const STORAGE_KEY = 'vox_theme';
+const SERVER_THEME_KEY = 'vox_server_themes'; // { [serverId]: themeId }
 const DEFAULT_THEME = 'void';
 
 function applyTheme(id: string) {
@@ -40,19 +41,53 @@ applyTheme(savedTheme);
 interface ThemeStore {
   current: string;
   themes: ThemeDef[];
+  /** Per-server theme overrides: { [serverId]: themeId } */
+  serverThemeOverrides: Record<string, string>;
+  /** Set the user's personal (global) theme. */
   setTheme: (id: string) => void;
+  /** Set a server-specific theme override. Clears override if null. */
+  setServerTheme: (serverId: string, themeId: string | null) => void;
+  /** Resolve the effective theme for a server (server override → global). */
+  resolveTheme: (serverId: string | null) => string;
+  /** Apply the resolved theme for a server to the document. */
+  applyServerTheme: (serverId: string | null) => void;
 }
 
-export const useThemeStore = create<ThemeStore>((set) => ({
+export const useThemeStore = create<ThemeStore>((set, get) => ({
   current: savedTheme,
   themes: THEMES,
+  serverThemeOverrides: JSON.parse(
+    (() => { try { return localStorage.getItem(SERVER_THEME_KEY) || '{}'; } catch { return '{}'; } })()
+  ),
+
   setTheme: (id) => {
     applyTheme(id);
-    try {
-      localStorage.setItem(STORAGE_KEY, id);
-    } catch {
-      /* localStorage may be unavailable (SSR / privacy mode) — ignore */
-    }
+    try { localStorage.setItem(STORAGE_KEY, id); } catch { /* ignore */ }
     set({ current: id });
+  },
+
+  setServerTheme: (serverId, themeId) => {
+    set((state) => {
+      const overrides = { ...state.serverThemeOverrides };
+      if (themeId) {
+        overrides[serverId] = themeId;
+      } else {
+        delete overrides[serverId];
+      }
+      try { localStorage.setItem(SERVER_THEME_KEY, JSON.stringify(overrides)); } catch { /* ignore */ }
+      return { serverThemeOverrides: overrides };
+    });
+  },
+
+  resolveTheme: (serverId) => {
+    const { current, serverThemeOverrides } = get();
+    if (serverId && serverThemeOverrides[serverId]) {
+      return serverThemeOverrides[serverId];
+    }
+    return current;
+  },
+
+  applyServerTheme: (serverId) => {
+    applyTheme(get().resolveTheme(serverId));
   },
 }));

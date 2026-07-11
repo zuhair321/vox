@@ -4,11 +4,14 @@
 // FALLBACK MODE: When MySQL is unavailable, we switch to in-memory demo auth
 // so users can still register/login and reach the app.
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
 import * as otplib from 'otplib';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 import { env } from '../lib/env.js';
+import { sendPasswordResetEmail, sendVerificationEmail } from './email.service.js';
 import {
   mintTokenPair,
   findValidRefreshToken,
@@ -37,13 +40,16 @@ export function publicUser(user) {
     username: user.username,
     displayName: user.displayName,
     email: user.email,
-    role: user.role,
-    color: user.color,
-    status: user.status,
+    role: user.role || 'MEMBER',
+    color: user.color || '#5865f2',
+    status: user.status || 'ONLINE',
     bio: user.bio ?? null,
     avatarUrl: user.avatarUrl ?? null,
     bannerUrl: user.bannerUrl ?? null,
-    twoFactorEnabled: user.twoFactorEnabled,
+    twoFactorEnabled: !!user.twoFactorEnabled,
+    emailVerified: !!user.emailVerified,
+    hasTurbo: user.hasTurbo !== undefined ? user.hasTurbo : true,
+    turboSince: user.turboSince ?? null,
   };
 }
 
@@ -107,6 +113,8 @@ function memoryCreateUser({ email, username, passwordHash, color, role }) {
     twoFactorEnabled: false,
     twoFactorSecret: null,
     createdAt: new Date().toISOString(),
+    hasTurbo: true,
+    turboSince: new Date().toISOString(),
   };
   memoryUsers.set(username.toLowerCase(), user);
   memoryUsers.set(email.toLowerCase(), user);
@@ -122,7 +130,7 @@ async function memoryMintTokenPair(user) {
   const crypto = await import('node:crypto');
 
   const access = jwt.sign(
-    { username: user.username, role: user.role },
+    { username: user.username, role: user.role || 'MEMBER', userId: user.id },
     env.jwt.accessSecret,
     { subject: user.id, expiresIn: env.jwt.accessTtl },
   );
@@ -160,7 +168,7 @@ async function memoryRevokeRefreshToken(token) {
 }
 
 // ── Register ─────────────────────────────────────────────────
-export async function register({ email, username, password }) {
+export async function register({ email, username, password }, deviceContext = {}) {
   email = String(email || '').trim().toLowerCase();
   username = String(username || '').trim();
   password = String(password || '');
@@ -171,8 +179,8 @@ export async function register({ email, username, password }) {
   if (!/^[a-zA-Z0-9_]{3,32}$/.test(username)) {
     throw new HttpError(400, 'Username must be 3–32 chars: letters, numbers, underscore.');
   }
-  if (password.length < 5) {
-    throw new HttpError(400, 'Password must be at least 5 characters.');
+  if (password.length < 8) {
+    throw new HttpError(400, 'Password must be at least 8 characters.');
   }
 
   // Re-probe so a DB that was down at boot (or went down mid-session) is
@@ -196,13 +204,21 @@ export async function register({ email, username, password }) {
           displayName: username,
           passwordHash: await bcrypt.hash(password, 10),
           color: pickColor(username),
+          role: 'MEMBER',
         },
       });
 
-      const tokens = await mintTokenPair(user);
+      const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
       return { user: publicUser(user), tokens };
     } catch (error) {
       if (error instanceof HttpError) throw error;
+      // Prisma unique constraint violation (P2002) means email/username already exists
+      // Treat this as a user error, not a DB error
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        const rawTarget = error.meta?.target;
+        const target = Array.isArray(rawTarget) ? rawTarget.join(', ') : rawTarget || 'field';
+        throw new HttpError(409, `That ${target} is already taken.`);
+      }
       console.warn('[vox/auth] DB error during register, switching to memory fallback:', error.message);
       databaseAvailable = false;
     }
@@ -222,7 +238,7 @@ export async function register({ email, username, password }) {
 }
 
 // ── Login (branches on 2FA) ──────────────────────────────────
-export async function login({ emailOrUsername, password }) {
+export async function login({ emailOrUsername, password }, deviceContext = {}) {
   const identifier = String(emailOrUsername || '').trim().toLowerCase();
   if (!identifier || !password) {
     throw new HttpError(400, 'Email/username and password are required.');
@@ -236,15 +252,42 @@ export async function login({ emailOrUsername, password }) {
       const user = await prisma.user.findFirst({
         where: { OR: [{ email: identifier }, { username: identifier }] },
       });
-      if (user && await bcrypt.compare(String(password), user.passwordHash)) {
-        if (user.twoFactorEnabled) {
-          const tempToken = jwtTemp(user, '5m');
-          return { twoFactorRequired: true, tempToken };
-        }
-        const tokens = await mintTokenPair(user);
-        return { user: publicUser(user), tokens };
-      }
+
       if (user) {
+        // Account lockout check
+        if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+          const mins = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60000);
+          throw new HttpError(423, `Account locked. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
+        }
+
+        if (await bcrypt.compare(String(password), user.passwordHash)) {
+          // Successful login — reset lockout
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { loginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
+          });
+
+          if (user.twoFactorEnabled) {
+            const tempToken = jwtTemp(user, '5m');
+            return { twoFactorRequired: true, tempToken };
+          }
+          const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
+          return { user: publicUser(user), tokens };
+        }
+
+        // Wrong password — increment attempts
+        const attempts = (user.loginAttempts || 0) + 1;
+        const lockUntil = attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null; // lock 30min after 5 fails
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            loginAttempts: attempts,
+            ...(lockUntil ? { lockedUntil: lockUntil } : {}),
+          },
+        });
+        if (lockUntil) {
+          throw new HttpError(423, 'Account locked due to too many failed attempts. Try again in 30 minutes.');
+        }
         throw new HttpError(401, 'Invalid credentials.');
       }
       // User not found in DB — check memory fallback
@@ -368,6 +411,119 @@ export async function logout(refreshToken) {
     try { await memoryRevokeRefreshToken(refreshToken); } catch { /* ignore */ }
   }
   return { ok: true };
+}
+
+// ── Password Reset ────────────────────────────────────────────
+export async function requestPasswordReset(email) {
+  email = String(email || '').trim().toLowerCase();
+  if (!email) throw new HttpError(400, 'Email is required.');
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  // Always return success to prevent email enumeration.
+  if (!user) return { ok: true };
+
+  // Invalidate any previous reset tokens for this user.
+  await prisma.passwordReset.deleteMany({ where: { userId: user.id } });
+
+  // Generate a random token, hash it for storage.
+  const token = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  await prisma.passwordReset.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      // Expires in 15 minutes (createdAt is set by @createdAt)
+      // We compare createdAt + 15min at verification time.
+    },
+  });
+
+  // Send the raw (unhashed) token to the user's email.
+  await sendPasswordResetEmail(user.email, token);
+
+  return { ok: true };
+}
+
+export async function resetPassword(token, newPassword) {
+  if (!token || !newPassword) {
+    throw new HttpError(400, 'Token and new password are required.');
+  }
+  if (newPassword.length < 8) {
+    throw new HttpError(400, 'Password must be at least 8 characters.');
+  }
+
+  // Hash the incoming token to compare with stored hash.
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const reset = await prisma.passwordReset.findUnique({ where: { tokenHash } });
+  if (!reset) throw new HttpError(400, 'Invalid or expired reset token.');
+
+  // Check expiration (15 minutes).
+  const elapsed = Date.now() - new Date(reset.expiresAt).getTime();
+  if (elapsed > 15 * 60 * 1000) {
+    await prisma.passwordReset.delete({ where: { id: reset.id } });
+    throw new HttpError(400, 'Reset token has expired. Please request a new one.');
+  }
+
+  // Update the user's password.
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({
+    where: { id: reset.userId },
+    data: { passwordHash: hashedPassword },
+  });
+
+  // Invalidate the token and all existing refresh tokens.
+  await prisma.passwordReset.delete({ where: { id: reset.id } });
+  await prisma.refreshToken.deleteMany({ where: { userId: reset.userId } });
+
+  return { ok: true };
+}
+
+// ── Email Verification ────────────────────────────────────────
+export async function requestEmailVerification(userId) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new HttpError(404, 'User not found.');
+  if (user.emailVerified) throw new HttpError(400, 'Email is already verified.');
+
+  // Invalidate any previous verification tokens for this user.
+  await prisma.passwordReset.deleteMany({ where: { userId: user.id } });
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  // Reuse PasswordReset model — the flow is identical (token + hash + expiry).
+  // Distinguish by checking emailVerified at verification time.
+  await prisma.passwordReset.create({
+    data: { userId: user.id, tokenHash },
+  });
+
+  await sendVerificationEmail(user.email, token);
+
+  return { ok: true };
+}
+
+export async function verifyEmail(token) {
+  if (!token) throw new HttpError(400, 'Token is required.');
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const reset = await prisma.passwordReset.findUnique({ where: { tokenHash } });
+  if (!reset) throw new HttpError(400, 'Invalid or expired verification token.');
+
+  // Check expiration (24 hours).
+  const elapsed = Date.now() - new Date(reset.expiresAt).getTime();
+  if (elapsed > 24 * 60 * 60 * 1000) {
+    await prisma.passwordReset.delete({ where: { id: reset.id } });
+    throw new HttpError(400, 'Verification token has expired. Please request a new one.');
+  }
+
+  await prisma.user.update({
+    where: { id: reset.userId },
+    data: { emailVerified: true },
+  });
+
+  await prisma.passwordReset.delete({ where: { id: reset.id } });
+
+  return { verified: true };
 }
 
 // ── small helper: sign short-lived temp tokens for 2FA flow ──

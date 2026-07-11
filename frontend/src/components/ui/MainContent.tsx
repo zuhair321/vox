@@ -34,9 +34,16 @@ const MainContent: React.FC = () => {
       <div className="top-bar" style={{ justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '20px', color: 'var(--shadow)' }}>#</span>
-          <h2 style={{ fontSize: '18px', color: 'var(--ghost-white)', fontFamily: "'Share Tech Mono', monospace" }}>
-            {selectedChannel.name}
-          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <h2 style={{ fontSize: '18px', color: 'var(--ghost-white)', fontFamily: "'Share Tech Mono', monospace", margin: 0, lineHeight: 1.2 }}>
+              {selectedChannel.name}
+            </h2>
+            {selectedChannel.topic && (
+              <span style={{ fontSize: '11px', color: 'var(--ash)', lineHeight: 1.2, marginTop: '2px' }}>
+                {selectedChannel.topic}
+              </span>
+            )}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           {threadMessageId && (

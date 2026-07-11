@@ -4,8 +4,8 @@ import { useServerStore } from '../../stores/serverStore';
 import { useMessageStore } from '../../stores/messageStore';
 import { sendMessageHTTP } from '../../api/messages';
 import { uploadChatAttachment } from '../../api/uploads';
+import { sendDMHTTP } from '../../api/dm';
 import { useUiStore } from '../../stores/uiStore';
-import GifPicker, { GifItem } from './GifPicker';
 import EmojiPicker from '../ui/EmojiPicker';
 import type { Attachment } from '../../types';
 import { playMessageSend, playError } from '../../utils/sounds';
@@ -28,10 +28,11 @@ function formatSize(bytes: number) {
 const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo(({ channelId, dmId }) => {
   const [content, setContent] = useState('');
   const [pending, setPending] = useState<PendingAttachment[]>([]);
+  const [fuseTime, setFuseTime] = useState<string>(''); // ISO string for future reveal
+  const [showFuseMenu, setShowFuseMenu] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [gifOpen, setGifOpen] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const { sendDM, startTyping, stopTyping } = useSocketStore();
+  const { sendDM, startTyping, stopTyping, startDmTyping, stopDmTyping } = useSocketStore();
   const { addToast } = useUiStore();
   const { selectedServer } = useServerStore();
   const { replyingTo, setReplyingTo } = useMessageStore();
@@ -90,15 +91,21 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         return '';
       }
     })();
-    return dmId.split('_').find((part) => part && part !== myId) || dmId;
+    // User IDs may contain underscores, so we can't split on '_'.
+    // Remove our own ID from the dmId string and strip leading/trailing separators.
+    return dmId.replace(myId, '').replace(/^_+|_+$/g, '') || dmId;
   };
 
   useEffect(() => {
     const timer = setTimeout(() => {
       if (channelId && content.length > 0) stopTyping(channelId);
+      if (dmId && content.length > 0) {
+        const rid = resolveRecipientId();
+        if (rid) stopDmTyping(rid);
+      }
     }, 1000);
     return () => clearTimeout(timer);
-  }, [content, channelId, stopTyping]);
+  }, [content, channelId, dmId, stopTyping, stopDmTyping]);
 
   const readyAttachments = pending
     .filter((p) => p.status === 'done' && p.attachment)
@@ -148,6 +155,18 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
 
   const clearDone = () => setPending((prev) => prev.filter((p) => p.status !== 'done'));
 
+  // Listen for drag-drop file upload events from MessageArea
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.files && detail?.channelId === channelId) {
+        addFiles(detail.files);
+      }
+    };
+    window.addEventListener('vox:upload-files', handler);
+    return () => window.removeEventListener('vox:upload-files', handler);
+  }, [channelId]);
+
   const send = () => {
     if (!canSend) return;
     const text = content.trim();
@@ -155,26 +174,45 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
 
     const onError = (err: any) => {
       playError();
-      addToast(err?.message || 'Message failed to send.', 'error');
+      if (err?.rateLimited) {
+        addToast(err.message || "You're doing that too fast. Slow down!", 'warning', { duration: 5000 });
+      } else {
+        addToast(err?.message || 'Message failed to send.', 'error');
+      }
     };
 
     if (channelId) {
-      sendMessageHTTP(channelId, text, replyingTo?.id, attachments)
+      sendMessageHTTP(channelId, text, replyingTo?.id, attachments, fuseTime || undefined)
         .then(() => playMessageSend())
         .catch(onError);
       stopTyping(channelId);
     } else if (dmId) {
-      const recipientId = resolveRecipientId();
-      if (!recipientId) {
+      const rid = resolveRecipientId();
+      if (rid) stopDmTyping(rid);
+
+      const onDmError = (err: any) => {
         playError();
-        addToast('No recipient for this conversation.', 'error');
-        return;
+        addToast(err?.message || 'Failed to send message.', 'error');
+      };
+
+      // Prefer socket; fall back to HTTP if the socket is not connected.
+      const { connected } = useSocketStore.getState();
+      if (connected) {
+        const myId = (() => {
+          try { return JSON.parse(localStorage.getItem('vox_user') || '{}')?.id || ''; } catch { return ''; }
+        })();
+        const recipientId = dmId.replace(myId, '').replace(/^_+|_+$/g, '') || dmId;
+        sendDM(recipientId, text, attachments.length ? attachments : undefined);
+        playMessageSend();
+      } else {
+        sendDMHTTP(dmId, text, attachments.length ? attachments : undefined)
+          .then(() => playMessageSend())
+          .catch(onDmError);
       }
-      sendDM(recipientId, text, attachments.length ? attachments : undefined);
-      playMessageSend();
     }
 
     setContent('');
+    setFuseTime('');
     clearDone();
     if (replyingTo) setReplyingTo(null);
   };
@@ -193,18 +231,9 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
       send();
     } else if (channelId) {
       startTyping(channelId);
-    }
-  };
-
-  const handleGifPick = (gif: GifItem) => {
-    const body = `[GIF] ${gif.url}`;
-    if (channelId) {
-      sendMessageHTTP(channelId, body, undefined, []).catch((err: any) =>
-        addToast(err?.message || 'GIF failed to send.', 'error'),
-      );
     } else if (dmId) {
-      const recipientId = resolveRecipientId();
-      if (recipientId) sendDM(recipientId, body, undefined);
+      const rid = resolveRecipientId();
+      if (rid) startDmTyping(rid);
     }
   };
 
@@ -230,7 +259,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
             color: 'var(--ash)',
           }}
         >
-          <span style={{ color: 'var(--chaos)' }}>↩️</span>
+          <span style={{ color: 'var(--chaos)', lineHeight: 1 }}>↩️</span>
           <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Replying to{' '}
             <strong style={{ color: 'var(--ghost-white)' }}>
@@ -273,7 +302,6 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         </div>
       )}
 
-      <GifPicker open={gifOpen} gifs={[]} onClose={() => setGifOpen(false)} onPick={handleGifPick} />
       <EmojiPicker open={emojiOpen} onClose={() => setEmojiOpen(false)} onSelect={insertEmoji} />
 
       {pending.length > 0 && (
@@ -344,7 +372,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
         aria-label={channelId ? `Message #${selectedServer?.name || 'channel'}` : 'Send a direct message'}
-        style={{ paddingRight: '144px' }}
+        style={{ paddingRight: '140px' }}
       />
 
       <button
@@ -356,7 +384,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         aria-expanded={emojiOpen}
         style={{
           position: 'absolute',
-          right: '100px',
+          right: '104px',
           top: '50%',
           transform: 'translateY(-50%)',
           background: 'none',
@@ -372,29 +400,6 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
 
       <button
         type="button"
-        onClick={() => setGifOpen((v) => !v)}
-        className="input-action-btn"
-        title="Pick a GIF"
-        aria-label="Pick a GIF"
-        aria-expanded={gifOpen}
-        style={{
-          position: 'absolute',
-          right: '64px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: gifOpen ? 'var(--accent, #b1121b)' : 'var(--ash, #8a93a3)',
-          fontSize: '18px',
-          padding: 0,
-        }}
-      >
-        🎞
-      </button>
-
-      <button
-        type="button"
         onClick={() => fileInputRef.current?.click()}
         className="input-action-btn"
         disabled={busy}
@@ -402,7 +407,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         aria-label="Attach a file"
         style={{
           position: 'absolute',
-          right: '36px',
+          right: '40px',
           top: '50%',
           transform: 'translateY(-50%)',
           background: 'none',
@@ -470,6 +475,78 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
       >
         ➤
       </button>
+
+      {/* Fuse timer button */}
+      <div style={{ position: 'absolute', right: '40px', top: '50%', transform: 'translateY(-50%)' }}>
+        <button
+          type="button"
+          onClick={() => setShowFuseMenu(v => !v)}
+          title={fuseTime ? `Reveals at ${new Date(fuseTime).toLocaleString()}` : 'Set fuse timer'}
+          style={{
+            width: '24px',
+            height: '24px',
+            border: 'none',
+            background: fuseTime ? 'rgba(255,209,102,0.15)' : 'transparent',
+            color: fuseTime ? '#d9c98d' : 'var(--shadow)',
+            cursor: 'pointer',
+            borderRadius: '4px',
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all 0.15s',
+          }}
+        >
+          💣
+        </button>
+        {showFuseMenu && (
+          <div style={{
+            position: 'absolute',
+            bottom: '100%',
+            right: 0,
+            marginBottom: '6px',
+            background: 'var(--dark-matter)',
+            border: '1px solid var(--rim)',
+            borderRadius: '8px',
+            padding: '8px',
+            minWidth: '160px',
+            zIndex: 50,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px' }}>
+              TIME CAPSULE
+            </div>
+            {[
+              { label: 'No fuse', value: '' },
+              { label: '⏱ 1 minute', value: new Date(Date.now() + 60000).toISOString() },
+              { label: '⏱ 5 minutes', value: new Date(Date.now() + 300000).toISOString() },
+              { label: '⏱ 1 hour', value: new Date(Date.now() + 3600000).toISOString() },
+              { label: '🌙 Tomorrow', value: new Date(Date.now() + 86400000).toISOString() },
+              { label: '📅 Next week', value: new Date(Date.now() + 604800000).toISOString() },
+            ].map(opt => (
+              <button
+                key={opt.label}
+                type="button"
+                onClick={() => { setFuseTime(opt.value); setShowFuseMenu(false); }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '4px 8px',
+                  background: fuseTime === opt.value ? 'rgba(255,209,102,0.1)' : 'transparent',
+                  border: 'none',
+                  borderRadius: '4px',
+                  color: fuseTime === opt.value ? '#d9c98d' : 'var(--ghost-white)',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  textAlign: 'left',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 });

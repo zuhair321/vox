@@ -19,26 +19,26 @@ const Chat: React.FC = () => {
           <ToggleRow
             label="Render Embeds"
             description="Show rich link previews for URLs pasted in chat."
-            value={true}
-            onChange={() => {}}
+            value={settings.renderEmbeds}
+            onChange={() => settings.toggle('renderEmbeds')}
           />
           <ToggleRow
             label="Show Emoji Reactions"
             description="Display emoji reactions beneath messages."
-            value={true}
-            onChange={() => {}}
+            value={settings.showEmojiReactions}
+            onChange={() => settings.toggle('showEmojiReactions')}
           />
           <ToggleRow
             label="Animate Emoji"
             description="Animate custom and standard emoji in messages."
-            value={true}
-            onChange={() => {}}
+            value={settings.animateEmoji}
+            onChange={() => settings.toggle('animateEmoji')}
           />
           <ToggleRow
             label="Convert Emoticons"
             description="Automatically convert text emoticons like :) to emoji."
-            value={true}
-            onChange={() => {}}
+            value={settings.convertEmoticons}
+            onChange={() => settings.toggle('convertEmoticons')}
           />
         </section>
 
@@ -47,20 +47,20 @@ const Chat: React.FC = () => {
           <ToggleRow
             label="Auto-Play GIFs"
             description="Automatically play GIF images when they appear in chat."
-            value={true}
-            onChange={() => {}}
+            value={settings.autoPlayGifs}
+            onChange={() => settings.toggle('autoPlayGifs')}
           />
           <ToggleRow
             label="Show Attachment Previews"
             description="Preview image and video attachments inline."
-            value={true}
-            onChange={() => {}}
+            value={settings.attachmentPreviews}
+            onChange={() => settings.toggle('attachmentPreviews')}
           />
           <ToggleRow
             label="Inline Link Previews"
             description="Fetch and display previews for linked content."
-            value={true}
-            onChange={() => {}}
+            value={settings.inlineLinkPreviews}
+            onChange={() => settings.toggle('inlineLinkPreviews')}
           />
         </section>
 
@@ -86,14 +86,20 @@ const Chat: React.FC = () => {
           <ToggleRow
             label="Send on Enter"
             description="Press Enter to send messages. Use Shift+Enter for new lines."
-            value={true}
-            onChange={() => {}}
+            value={settings.sendOnEnter}
+            onChange={() => settings.toggle('sendOnEnter')}
           />
           <ToggleRow
             label="Show Typing Indicators"
             description="Display when other users are typing in a channel."
-            value={true}
-            onChange={() => {}}
+            value={settings.showTypingIndicators}
+            onChange={() => settings.toggle('showTypingIndicators')}
+          />
+          <ToggleRow
+            label="Show Timestamps"
+            description="Show message timestamps in chat."
+            value={settings.showTimestamps}
+            onChange={() => settings.toggle('showTimestamps')}
           />
           <ToggleRow
             label="Compact Mode"

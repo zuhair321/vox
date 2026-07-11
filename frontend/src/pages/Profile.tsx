@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Bell, Camera, Check, ExternalLink, Image, Settings, Users, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ProfileAvatar from '../components/settings/ProfileAvatar';
+import ProfileAura from '../components/settings/ProfileAura';
 import SectionHeader from '../components/settings/SectionHeader';
 import VoxCard from '../components/settings/VoxCard';
 import { uploadProfileImage, type UploadKind } from '../api/uploads';
@@ -207,7 +208,6 @@ const Profile: React.FC = () => {
       <header className="profile-top">
         <button type="button" className="profile-close-button" onClick={() => navigate('/friends')} aria-label="Close profile">
           <X size={22} />
-          <span>6K</span>
         </button>
         <div className="profile-icon-row">
           <button type="button" aria-label="Quests"><Bell size={22} /></button>
@@ -240,7 +240,9 @@ const Profile: React.FC = () => {
 
         <div className="profile-avatar-row">
           <div className="profile-avatar-edit">
-            <ProfileAvatar username={profile.username} size={72} status={profile.userStatus} src={avatarUrl} />
+            <ProfileAura auraType={profile.auraType} size={72}>
+              <ProfileAvatar username={profile.username} size={72} status={profile.userStatus} src={avatarUrl} />
+            </ProfileAura>
             <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={uploading === 'avatar'} aria-label="Change avatar">
               <Camera size={15} />
             </button>
@@ -300,6 +302,50 @@ const Profile: React.FC = () => {
                   {s}
                 </button>
               ))}
+            </div>
+            {/* Aura picker */}
+            <div style={{ marginTop: '12px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--shadow)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '6px' }}>
+                Profile Aura
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {([
+                  { id: 'none',     label: '—',    color: 'transparent', border: '1px solid var(--rim)' },
+                  { id: 'void',     label: 'VOID', color: 'rgba(138,43,226,0.8)',  border: 'none' },
+                  { id: 'crimson',  label: 'CR',   color: 'rgba(220,20,60,0.8)',   border: 'none' },
+                  { id: 'ocean',    label: 'OC',   color: 'rgba(0,105,148,0.8)',   border: 'none' },
+                  { id: 'toxic',    label: 'TX',   color: 'rgba(0,255,100,0.7)',   border: 'none' },
+                  { id: 'gold',     label: 'GLD',  color: 'rgba(255,200,0,0.8)',   border: 'none' },
+                  { id: 'solar',    label: 'SOL',  color: 'rgba(255,80,0,0.8)',    border: 'none' },
+                  { id: 'aurora',   label: 'AUR',  color: 'linear-gradient(135deg, rgba(0,255,160,0.8),rgba(180,0,255,0.6))', border: 'none' },
+                ] as const).map(({ id, label, color, border }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    title={id === 'none' ? 'No aura' : `Aura: ${id}`}
+                    onClick={() => profile.setAuraType(id)}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: color,
+                      border,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      color: id === 'none' ? 'var(--shadow)' : id === 'gold' || id === 'solar' ? '#000' : '#fff',
+                      boxShadow: profile.auraType === id ? `0 0 0 2px var(--ghost-white), 0 0 8px ${id === 'none' ? 'transparent' : color}` : 'none',
+                      transition: 'box-shadow 0.15s, transform 0.1s',
+                      transform: profile.auraType === id ? 'scale(1.1)' : 'scale(1)',
+                    }}
+                    aria-label={id === 'none' ? 'No aura' : `${id} aura`}
+                    aria-pressed={profile.auraType === id}
+                  />
+                ))}
+              </div>
             </div>
           </div>
         </div>

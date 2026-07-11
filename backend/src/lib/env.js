@@ -29,17 +29,28 @@ const clientOrigin = process.env.CLIENT_ORIGIN || 'http://127.0.0.1:3000';
 // supplied via the comma-separated EXTRA_CORS_ORIGINS env var instead of being
 // hardcoded in source — the old code baked in a personal ngrok URL that broke
 // for everyone else and leaked a private tunnel.
+//
+// `null` is included so the React Native (VOX mobile) app — which sends
+// `Origin: null` for native fetches — is allowed. The public API origin is
+// also allowed for the production domain.
+const apiBaseOrigin = (process.env.API_BASE || '').replace(/\/+$/, '');
 const corsOrigins = Array.from(
   new Set(
     [
       'http://localhost:3000',
       'http://127.0.0.1:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3001',
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
       clientOrigin,
+      apiBaseOrigin,
+      null,
       ...String(process.env.EXTRA_CORS_ORIGINS || '')
         .split(',')
         .map((o) => o.trim())
         .filter(Boolean),
-    ],
+    ].filter(Boolean),
   ),
 );
 
@@ -48,6 +59,7 @@ export const env = {
   clientOrigin,
   corsOrigins,
   databaseUrl: process.env.DATABASE_URL,
+  apiBase: process.env.API_BASE || `http://127.0.0.1:${parseInt(process.env.PORT || '4000', 10)}`,
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
@@ -59,6 +71,10 @@ export const env = {
     // 64 hex chars for AES-256. Falls back to a zero key (dev only) with a warning.
     encryptionKey: process.env.TWO_FACTOR_ENCRYPTION_KEY
       || '0000000000000000000000000000000000000000000000000000000000000000',
+  },
+  resend: {
+    apiKey: process.env.RESEND_API_KEY || 'dev',
+    fromAddress: process.env.RESEND_FROM_ADDRESS || 'VOX <noreply@vox.app>',
   },
 };
 

@@ -1,16 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useServerStore } from '../../stores/serverStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useNavigate } from 'react-router-dom';
 import { useContextMenu, MenuItem } from '../../hooks/useContextMenu';
 import ContextMenu from '../ui/ContextMenu';
 import { leaveServer } from '../../api/discover';
+import { API_BASE } from '../../api/client';
 
 const ServerRail: React.FC = () => {
   const { servers, selectedServer, setSelectedServer, removeServer } = useServerStore();
   const { setCreateServerOpen, setShowDiscover, setInviteModalOpen, addToast } = useUiStore();
   const navigate = useNavigate();
   const serverMenu = useContextMenu();
+  const [hoveredServerId, setHoveredServerId] = useState<string | null>(null);
 
   const selectServer = (server: any) => {
     setSelectedServer(server);
@@ -28,9 +31,13 @@ const ServerRail: React.FC = () => {
       } catch { return ''; }
     })();
     const canManage = ['FOUNDER', 'ADMIN'].includes(myRole);
+    const isOwner = server.ownerId === (() => {
+      try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id; } catch { return ''; }
+    })();
 
     return [
-      { id: 'settings', label: 'Server Settings', icon: '⚙️', onClick: () => navigate('/settings') },
+      { id: 'profile', label: 'View Profile', icon: '🖼️', onClick: () => navigate(`/server-profile/${server.id}`) },
+      { id: 'settings', label: 'Server Settings', icon: '⚙️', onClick: () => navigate(`/server-settings/${server.id}`) },
       { id: 'copyid', label: 'Copy Server ID', icon: '📋', onClick: async () => {
         try { await navigator.clipboard.writeText(server.id); addToast('📋 Copied Server ID.', 'success'); } catch {}
       }},
@@ -49,7 +56,8 @@ const ServerRail: React.FC = () => {
       ...(canManage
         ? [
             { id: 'channel', label: 'Create Channel', icon: '🏠', onClick: () => addToast('Use the + by a channel.', 'info') },
-            { id: 'role', label: 'Create Role', icon: '🎭', onClick: () => addToast('Roles — coming soon.', 'info') },
+            { id: 'role', label: 'Roles & Permissions', icon: '🎭', onClick: () => navigate(`/server-settings/${server.id}`) },
+            { id: 'insights', label: 'Server Insights', icon: '📊', onClick: () => navigate(`/server-insights/${server.id}`) },
           ]
         : []),
       { id: 'd2', label: '', divider: true },
@@ -70,7 +78,36 @@ const ServerRail: React.FC = () => {
           }
         },
       },
+      ...(isOwner
+        ? [
+            { id: 'd3', label: '', divider: true },
+            {
+              id: 'delete',
+              label: 'Delete Server',
+              icon: '💀',
+              danger: true,
+              onClick: async () => {
+                if (!window.confirm(`💀 Permanently delete "${server.name}"? This cannot be undone.`)) return;
+                try {
+                  await (await import('../../api/discover')).deleteServer(server.id);
+                  removeServer(server.id);
+                  addToast(`Deleted ${server.name}.`, 'info');
+                  navigate('/friends');
+                } catch (e: any) {
+                  addToast(e?.message || 'Failed to delete server.', 'error');
+                }
+              },
+            },
+          ]
+        : []),
     ];
+  };
+
+  const getServerIconUrl = (server: any) => {
+    if (server.icon) {
+      return server.icon.startsWith('http') ? server.icon : `${API_BASE}${server.icon}`;
+    }
+    return null;
   };
 
   return (
@@ -105,31 +142,148 @@ const ServerRail: React.FC = () => {
         </div>
       )}
 
-      {servers.map(server => (
-        <button
-          key={server.id}
-          className={`server-icon octagon ripple-container ${selectedServer?.id === server.id ? 'active' : ''}`}
-          onClick={() => selectServer(server)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            serverMenu.show(e.clientX, e.clientY, buildServerMenu(server));
-          }}
-          style={{
-            width: '48px', height: '48px',
-            backgroundColor: selectedServer?.id === server.id ? 'var(--obsidian)' : 'var(--dark-matter)',
-            border: '1px solid var(--rim)',
-            color: 'var(--ghost-white)',
-            cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'all 0.2s',
-            fontSize: '18px',
-            backgroundImage: server.icon ? `url(${server.icon})` : 'none',
-            backgroundSize: 'cover'
-          }}
-        >
-          {!server.icon && server.name.substring(0, 2).toUpperCase()}
-        </button>
-      ))}
+      {servers.map(server => {
+        const iconUrl = getServerIconUrl(server);
+        const isHovered = hoveredServerId === server.id;
+        const isSelected = selectedServer?.id === server.id;
+        const boostLevel = (server as any).boostLevel || 0;
+
+        return (
+          <motion.button
+            key={server.id}
+            layoutId={`server-icon-${server.id}`}
+            className={`server-icon octagon ripple-container ${isSelected ? 'active' : ''}`}
+            onClick={() => selectServer(server)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              serverMenu.show(e.clientX, e.clientY, buildServerMenu(server));
+            }}
+            onHoverStart={() => setHoveredServerId(server.id)}
+            onHoverEnd={() => setHoveredServerId(null)}
+            animate={{
+              scale: isSelected ? 1.05 : isHovered ? 1.08 : 1,
+            }}
+            whileTap={{ scale: 0.95 }}
+            transition={{
+              type: 'spring',
+              stiffness: 400,
+              damping: 25,
+              layout: { type: 'spring', stiffness: 350, damping: 30 },
+            }}
+            style={{
+              width: '48px',
+              height: '48px',
+              backgroundColor: isSelected ? 'var(--obsidian)' : 'var(--dark-matter)',
+              border: isHovered ? '1px solid var(--chaos)' : '1px solid var(--rim)',
+              boxShadow: isHovered
+                ? '0 0 16px var(--chaos-glow), 0 4px 12px rgba(0,0,0,0.4)'
+                : isSelected
+                  ? '0 0 12px var(--chaos-glow)'
+                  : boostLevel > 0
+                    ? `0 0 8px rgba(217,201,141,${0.1 + boostLevel * 0.05})`
+                    : 'none',
+              color: 'var(--ghost-white)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '18px',
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Server icon image (supports GIFs) */}
+            {iconUrl && (
+              <img
+                src={iconUrl}
+                alt={server.name}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  position: 'absolute',
+                  inset: 0,
+                }}
+              />
+            )}
+            
+            {/* Fallback initials */}
+            {!iconUrl && server.name.substring(0, 2).toUpperCase()}
+
+            {/* Boost badge */}
+            {boostLevel > 0 && (
+              <div style={{
+                position: 'absolute',
+                bottom: '-2px',
+                right: '-2px',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #ff73fa, #ffd37a)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '8px',
+                zIndex: 3,
+                boxShadow: '0 0 6px rgba(255,115,250,0.5)',
+              }}>
+                ⚡
+              </div>
+            )}
+
+            {/* Hover indicator ring */}
+            {isHovered && !iconUrl && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                style={{
+                  position: 'absolute',
+                  inset: '-2px',
+                  border: '2px solid var(--chaos)',
+                  borderRadius: '50%',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+            
+            {/* Tooltip on hover */}
+            <AnimatePresence>
+              {isHovered && (
+                <motion.div
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.15 }}
+                  style={{
+                    position: 'absolute',
+                    left: '100%',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    marginLeft: '8px',
+                    background: 'var(--dark-matter)',
+                    border: '1px solid var(--rim)',
+                    padding: '4px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    color: 'var(--ghost-white)',
+                    whiteSpace: 'nowrap',
+                    zIndex: 1000,
+                    pointerEvents: 'none',
+                    fontFamily: "'Share Tech Mono', monospace",
+                  }}
+                >
+                  {server.name}
+                  {boostLevel > 0 && (
+                    <span style={{ color: '#ff73fa', marginLeft: '6px', fontSize: '10px' }}>
+                      ⚡ Lv.{boostLevel}
+                    </span>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.button>
+        );
+      })}
 
       <button
         className="server-icon angular-cut ripple-container"
@@ -161,7 +315,7 @@ const ServerRail: React.FC = () => {
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.2s',
-          fontSize: '22px'
+          fontSize: '24px'
         }}
         onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--chaos)'; }}
         onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--rim)'; }}

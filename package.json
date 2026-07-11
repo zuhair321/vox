@@ -4,7 +4,16 @@
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
-    "desktop": "electron ."
+    "desktop": "electron .",
+    "web": "npm run dev --prefix frontend",
+    "dev:web": "npm run dev --prefix frontend",
+    "dev:desktop": "electron .",
+    "dev:all": "concurrently \"npm run dev --prefix frontend\" \"electron .\"",
+    "backend": "node backend/server.js",
+    "prod:backend": "pm2 start ecosystem.config.cjs",
+    "prod:stop": "pm2 stop all && pm2 delete all",
+    "prod:logs": "pm2 logs vox-backend",
+    "prod:status": "pm2 status"
   },
   "dependencies": {
     "lucide-react": "^1.18.0"

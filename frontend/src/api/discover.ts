@@ -23,3 +23,6 @@ export const joinServerById = (serverId: string) =>
 
 export const leaveServer = (serverId: string) =>
   api(`/api/servers/${serverId}/leave`, { method: 'POST' });
+
+export const deleteServer = (serverId: string) =>
+  api(`/api/servers/${serverId}`, { method: 'DELETE' });
