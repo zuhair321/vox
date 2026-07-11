@@ -9,6 +9,87 @@ import { normalizeAttachments } from '../lib/attachments.js';
 
 export const dmRouter = Router();
 
+// GET /api/dms — list all DMs for the current user
+dmRouter.get('/dms', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Find all DMs where user is either sender or recipient
+    const sentDMs = await prisma.dmMessage.findMany({
+      where: { senderId: userId },
+      select: { dmId: true },
+      distinct: ['dmId'],
+    });
+
+    const receivedDMs = await prisma.dmMessage.findMany({
+      where: { recipientId: userId },
+      select: { dmId: true },
+      distinct: ['dmId'],
+    });
+
+    // Combine and deduplicate dmIds
+    const allDmIds = [...new Set([
+      ...sentDMs.map(d => d.dmId),
+      ...receivedDMs.map(d => d.dmId),
+    ])];
+
+    // For each DM, get the other participant and the last message
+    const dms = await Promise.all(allDmIds.map(async (dmId) => {
+      // Extract the other user's ID from the dmId
+      const otherId = dmId.replace(userId, '').replace(/^_+|_+$/g, '');
+
+      const otherUser = await prisma.user.findUnique({
+        where: { id: otherId },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          avatarUrl: true,
+          status: true,
+          color: true,
+        },
+      });
+
+      // Get last message in this DM
+      const lastMessage = await prisma.dmMessage.findFirst({
+        where: { dmId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          content: true,
+          createdAt: true,
+          senderId: true,
+          read: true,
+        },
+      });
+
+      // Count unread messages
+      const unreadCount = await prisma.dmMessage.count({
+        where: { dmId, recipientId: userId, read: false },
+      });
+
+      return {
+        dmId,
+        otherUser,
+        lastMessage: lastMessage ? {
+          content: lastMessage.content,
+          createdAt: lastMessage.createdAt,
+          senderId: lastMessage.senderId,
+        } : null,
+        unreadCount,
+      };
+    }));
+
+    // Sort by last message date
+    dms.sort((a, b) => {
+      const aDate = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt) : new Date(0);
+      const bDate = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt) : new Date(0);
+      return bDate - aDate;
+    });
+
+    res.json({ dms });
+  } catch (e) { next(e); }
+});
+
 // Rate limit DM sends to prevent spam.
 const dmLimiter = rateLimit({
   windowMs: 60 * 1000,

@@ -18,6 +18,7 @@ import {
   revokeRefreshToken,
   verifyRefresh,
 } from './tokens.js';
+import jwt from 'jsonwebtoken';
 
 const { authenticator } = otplib;
 
@@ -57,6 +58,8 @@ export function publicUser(user) {
 let databaseAvailable = true;
 const memoryUsers = new Map();
 const memoryRefreshTokens = new Set();
+const memoryLoginAttempts = new Map();
+const memoryLockedUntil = new Map();
 
 // Probe the database with a query that exercises the schema (not just the
 // connection) and avoids the BigInt serialization quirk of `$queryRaw SELECT 1`.
@@ -126,9 +129,6 @@ function memoryFindUser(identifier) {
 }
 
 async function memoryMintTokenPair(user) {
-  const jwt = (await import('jsonwebtoken')).default;
-  const crypto = await import('node:crypto');
-
   const access = jwt.sign(
     { username: user.username, role: user.role || 'MEMBER', userId: user.id },
     env.jwt.accessSecret,
@@ -146,12 +146,10 @@ async function memoryMintTokenPair(user) {
 }
 
 async function memoryVerifyRefresh(token) {
-  const jwt = (await import('jsonwebtoken')).default;
   return jwt.verify(token, env.jwt.refreshSecret);
 }
 
 async function memoryFindValidRefreshToken(token) {
-  const jwt = (await import('jsonwebtoken')).default;
   if (!memoryRefreshTokens.has(token)) return null;
   try {
     const payload = jwt.verify(token, env.jwt.refreshSecret);
@@ -166,6 +164,26 @@ async function memoryFindValidRefreshToken(token) {
 async function memoryRevokeRefreshToken(token) {
   memoryRefreshTokens.delete(token);
 }
+
+function setAuthCookies(res, access, refresh) {
+  const isProd = process.env.NODE_ENV === 'production';
+  const maxAgeAccess = env.jwt.accessTtl === '15m' ? 900 : Math.floor(parseInt(env.jwt.accessTtl) * 60) || 900;
+  const maxAgeRefresh = env.jwt.refreshTtl === '7d' ? 604800 : Math.floor(parseInt(env.jwt.refreshTtl) * 86400) || 604800;
+  res.setHeader('Set-Cookie', [
+    `vox_access=${access}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeAccess}${isProd ? '; Secure' : ''}`,
+    `vox_refresh=${refresh}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeRefresh}${isProd ? '; Secure' : ''}`,
+  ]);
+}
+
+function clearAuthCookies(res) {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.setHeader('Set-Cookie', [
+    `vox_access=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProd ? '; Secure' : ''}`,
+    `vox_refresh=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProd ? '; Secure' : ''}`,
+  ]);
+}
+
+export { setAuthCookies, clearAuthCookies };
 
 // ── Register ─────────────────────────────────────────────────
 export async function register({ email, username, password }, deviceContext = {}) {
@@ -300,9 +318,29 @@ export async function login({ emailOrUsername, password }, deviceContext = {}) {
 
   // Fallback: in-memory
   const memUser = memoryFindUser(identifier);
-  if (!memUser || !(await bcrypt.compare(String(password), memUser.passwordHash))) {
+  if (!memUser) {
+    memoryLoginAttempts.set(identifier, (memoryLoginAttempts.get(identifier) || 0) + 1);
     throw new HttpError(401, 'Invalid credentials.');
   }
+
+  const lockedUntil = memoryLockedUntil.get(identifier);
+  if (lockedUntil && new Date() < lockedUntil) {
+    const mins = Math.ceil((lockedUntil - new Date()) / 60000);
+    throw new HttpError(423, `Account locked. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
+  }
+
+  if (!(await bcrypt.compare(String(password), memUser.passwordHash))) {
+    const attempts = (memoryLoginAttempts.get(identifier) || 0) + 1;
+    memoryLoginAttempts.set(identifier, attempts);
+    if (attempts >= 5) {
+      memoryLockedUntil.set(identifier, new Date(Date.now() + 30 * 60 * 1000));
+      throw new HttpError(423, 'Account locked due to too many failed attempts. Try again in 30 minutes.');
+    }
+    throw new HttpError(401, 'Invalid credentials.');
+  }
+
+  memoryLoginAttempts.set(identifier, 0);
+  memoryLockedUntil.delete(identifier);
   const tokens = await memoryMintTokenPair(memUser);
   return { user: publicUser(memUser), tokens };
 }
@@ -398,7 +436,13 @@ export async function refreshTokens(refreshToken) {
   }
 
   const row = await findValidRefreshToken(refreshToken);
-  if (!row) throw new HttpError(401, 'Refresh token is no longer valid.');
+  if (!row) {
+    const memRow = await memoryFindValidRefreshToken(refreshToken);
+    if (!memRow) throw new HttpError(401, 'Refresh token is no longer valid.');
+    await memoryRevokeRefreshToken(refreshToken);
+    const tokens = await memoryMintTokenPair(memRow.user);
+    return { user: publicUser(memRow.user), tokens };
+  }
 
   await revokeRefreshToken(refreshToken);
   const tokens = await mintTokenPair(row.user);
@@ -422,8 +466,8 @@ export async function requestPasswordReset(email) {
   // Always return success to prevent email enumeration.
   if (!user) return { ok: true };
 
-  // Invalidate any previous reset tokens for this user.
-  await prisma.passwordReset.deleteMany({ where: { userId: user.id } });
+  // Invalidate any previous reset tokens for this user (RESET type only).
+  await prisma.passwordReset.deleteMany({ where: { userId: user.id, type: 'RESET' } });
 
   // Generate a random token, hash it for storage.
   const token = crypto.randomBytes(32).toString('hex');
@@ -433,8 +477,7 @@ export async function requestPasswordReset(email) {
     data: {
       userId: user.id,
       tokenHash,
-      // Expires in 15 minutes (createdAt is set by @createdAt)
-      // We compare createdAt + 15min at verification time.
+      type: 'RESET',
     },
   });
 
@@ -456,10 +499,10 @@ export async function resetPassword(token, newPassword) {
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
   const reset = await prisma.passwordReset.findUnique({ where: { tokenHash } });
-  if (!reset) throw new HttpError(400, 'Invalid or expired reset token.');
+  if (!reset || reset.type !== 'RESET') throw new HttpError(400, 'Invalid or expired reset token.');
 
   // Check expiration (15 minutes).
-  const elapsed = Date.now() - new Date(reset.expiresAt).getTime();
+  const elapsed = Date.now() - new Date(reset.createdAt).getTime();
   if (elapsed > 15 * 60 * 1000) {
     await prisma.passwordReset.delete({ where: { id: reset.id } });
     throw new HttpError(400, 'Reset token has expired. Please request a new one.');
@@ -485,16 +528,14 @@ export async function requestEmailVerification(userId) {
   if (!user) throw new HttpError(404, 'User not found.');
   if (user.emailVerified) throw new HttpError(400, 'Email is already verified.');
 
-  // Invalidate any previous verification tokens for this user.
-  await prisma.passwordReset.deleteMany({ where: { userId: user.id } });
+  // Invalidate any previous verification tokens for this user (VERIFY type only).
+  await prisma.passwordReset.deleteMany({ where: { userId: user.id, type: 'VERIFY' } });
 
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-  // Reuse PasswordReset model — the flow is identical (token + hash + expiry).
-  // Distinguish by checking emailVerified at verification time.
   await prisma.passwordReset.create({
-    data: { userId: user.id, tokenHash },
+    data: { userId: user.id, tokenHash, type: 'VERIFY' },
   });
 
   await sendVerificationEmail(user.email, token);
@@ -507,10 +548,10 @@ export async function verifyEmail(token) {
 
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
   const reset = await prisma.passwordReset.findUnique({ where: { tokenHash } });
-  if (!reset) throw new HttpError(400, 'Invalid or expired verification token.');
+  if (!reset || reset.type !== 'VERIFY') throw new HttpError(400, 'Invalid or expired verification token.');
 
   // Check expiration (24 hours).
-  const elapsed = Date.now() - new Date(reset.expiresAt).getTime();
+  const elapsed = Date.now() - new Date(reset.createdAt).getTime();
   if (elapsed > 24 * 60 * 60 * 1000) {
     await prisma.passwordReset.delete({ where: { id: reset.id } });
     throw new HttpError(400, 'Verification token has expired. Please request a new one.');
@@ -527,7 +568,6 @@ export async function verifyEmail(token) {
 }
 
 // ── small helper: sign short-lived temp tokens for 2FA flow ──
-import jwt from 'jsonwebtoken';
 function jwtTemp(user, ttl) {
   return jwt.sign(
     { twoFactorChallenge: true, username: user.username },

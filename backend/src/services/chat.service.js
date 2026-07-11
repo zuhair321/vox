@@ -206,11 +206,11 @@ export async function getState(userId) {
         ]);
         members = onlineMembers;
       } else {
-        // User has no server memberships — fallback to defaults
-        channels = fallbackChannels;
-        recentMessages = fallbackMessages.slice(-50);
-        messagesCount = fallbackMessages.length;
-        members = fallbackMembers;
+        // User has no server memberships — return empty state instead of fallback demo messages
+        channels = [];
+        recentMessages = [];
+        messagesCount = 0;
+        members = [];
       }
     } else {
       // Unauthenticated: public channels + total count

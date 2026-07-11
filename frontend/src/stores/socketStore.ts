@@ -10,6 +10,7 @@ import type { Attachment } from '../types';
 import { useProfileStore } from './profileStore';
 import { useUiStore } from './uiStore';
 import { playSound } from '../utils/soundManager';
+import { useAuthStore } from './authStore';
 
 // Module-level map to track previous presence status for join/leave detection.
 const presenceMap = new Map<string, string>();
@@ -18,19 +19,19 @@ interface SocketStore {
   socket: Socket | null;
   connected: boolean;
 
-  connect: (token: string) => void;
+  connect: () => void;
   disconnect: () => void;
   joinChannel: (channelId: string) => void;
   leaveChannel: (channelId: string) => void;
   sendMessage: (channelId: string, content: string, parentId?: string, attachments?: Attachment[]) => void;
-  editMessage: (messageId: string, content: string) => void;
-  deleteMessage: (messageId: string) => void;
-  reactToMessage: (messageId: string, emoji: string) => void;
+  editMessage: (channelId: string, messageId: string) => void;
+  deleteMessage: (channelId: string, messageId: string) => void;
+  reactToMessage: (channelId: string, messageId: string, emoji: string) => void;
   startTyping: (channelId: string) => void;
   stopTyping: (channelId: string) => void;
   sendDM: (recipientId: string, content: string, attachments?: Attachment[]) => void;
-  startDmTyping: (recipientId: string) => void;
-  stopDmTyping: (recipientId: string) => void;
+  startDmTyping: (userId: string, dmId: string) => void;
+  stopDmTyping: (userId: string, dmId: string) => void;
   sendDmRead: (dmId: string) => void;
   updateStatus: (status: string) => void;
 }
@@ -38,20 +39,28 @@ interface SocketStore {
 export const useSocketStore = create<SocketStore>((set, get) => {
   let reconnectAttempts = 0;
   const MAX_RECONNECT_ATTEMPTS = 10;
-  const reconnectDelay = () => Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff up to 30s
+  const reconnectDelay = () => Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
 
   return {
   socket: null,
   connected: false,
 
-  connect: (token) => {
-    if (get().socket) return;
+  connect: () => {
+    const token = useAuthStore.getState().accessToken;
+    if (!token || get().socket) return;
     const socket = io(API_BASE, {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 30000,
+    });
+
+    socket.on('connect_error', () => {
+      const freshToken = useAuthStore.getState().accessToken;
+      if (freshToken) {
+        (socket as any).auth = { token: freshToken };
+      }
     });
 
     // Before reconnecting, update the auth token in case it was refreshed
@@ -133,17 +142,7 @@ export const useSocketStore = create<SocketStore>((set, get) => {
       useMessageStore.getState().removeMessage(channelId, messageId);
     });
 
-    socket.on('typing:start', ({ username, channelId, kind = 'text' }) => {
-      useMessageStore.getState().setTyping(channelId, username, true, kind);
-    });
-
-    socket.on('typing:stop', ({ username, channelId }) => {
-      useMessageStore.getState().setTyping(channelId, username, false);
-    });
-
     socket.on('presence:update', ({ userId, status }) => {
-      // Play ambient join/leave sounds.
-      // We track previous status in a module-level Map to detect transitions.
       const prev = presenceMap.get(userId);
       presenceMap.set(userId, status);
       if (prev !== undefined && prev !== status) {
@@ -155,15 +154,63 @@ export const useSocketStore = create<SocketStore>((set, get) => {
     });
 
     socket.on('dm:new', ({ message }) => {
-      // Push incoming + echoed DMs into the DM store so they render in the
-      // conversation view. The store keys messages by `message.dmId`.
       useDMStore.getState().addMessage(message);
 
-      // Notify on DMs from other users (skip our own echoed sends).
       try {
-        const me = JSON.parse(localStorage.getItem('vox_user') || '{}');
+        const me = useAuthStore.getState().user;
         const senderId = message.senderId || message.userId;
-        if (senderId && senderId !== me.id) {
+        if (senderId && senderId !== me?.id) {
+          playSound('message');
+          useNotificationStore.getState().addNotification({
+            type: 'dm',
+            title: `New message from ${message.sender?.username || 'Unknown'}`,
+            preview: (message.content || '').slice(0, 120),
+            messageId: message.id,
+            userId: senderId,
+          });
+          if (document.hidden) {
+            (window as any).electronAPI?.flashFrame?.();
+          }
+        }
+      } catch {
+        // skip
+      }
+    });
+
+    socket.on('message:updated', ({ message }) => {
+      useMessageStore.getState().updateMessage(message.channelId, message);
+    });
+
+    socket.on('message:deleted', ({ messageId, channelId }) => {
+      useMessageStore.getState().removeMessage(channelId, messageId);
+    });
+
+    socket.on('typing:start', ({ username, channelId, kind = 'text' }) => {
+      useMessageStore.getState().setTyping(channelId, username, true, kind);
+    });
+
+    socket.on('typing:stop', ({ username, channelId }) => {
+      useMessageStore.getState().setTyping(channelId, username, false);
+    });
+
+    socket.on('presence:update', ({ userId, status }) => {
+      const prev = presenceMap.get(userId);
+      presenceMap.set(userId, status);
+      if (prev !== undefined && prev !== status) {
+        const isJoin = status === 'online';
+        const isLeave = status === 'offline';
+        if (isJoin || isLeave) playSound(isJoin ? 'join' : 'leave');
+      }
+      useServerStore.getState().updateMemberStatus(userId, status);
+    });
+
+    socket.on('dm:new', ({ message }) => {
+      useDMStore.getState().addMessage(message);
+
+      try {
+        const me = useAuthStore.getState().user;
+        const senderId = message.senderId || message.userId;
+        if (senderId && senderId !== me?.id) {
           playSound('message');
           useNotificationStore.getState().addNotification({
             type: 'dm',
@@ -271,17 +318,15 @@ export const useSocketStore = create<SocketStore>((set, get) => {
   },
 
   updateStatus: (status) => {
+    playSound('send');
     get().socket?.emit('status:update', { status });
-    // Also update our own member entry in the server store locally, so the
-    // member panel reflects our status change instantly instead of waiting
-    // for the server to echo a presence:update back to us.
     try {
-      const me = JSON.parse(localStorage.getItem('vox_user') || '{}');
-      if (me.id) {
+      const me = useAuthStore.getState().user;
+      if (me?.id) {
         useServerStore.getState().updateMemberStatus(me.id, status.toLowerCase());
       }
     } catch {
-      // localStorage parse failure — non-critical.
+      // skip
     }
   },
 };

@@ -34,24 +34,35 @@ const clientOrigin = process.env.CLIENT_ORIGIN || 'http://127.0.0.1:3000';
 // `Origin: null` for native fetches — is allowed. The public API origin is
 // also allowed for the production domain.
 const apiBaseOrigin = (process.env.API_BASE || '').replace(/\/+$/, '');
+
+// Support all platforms: localhost dev, LAN IP, production domains, mobile
+const extraOrigins = String(process.env.EXTRA_CORS_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+// Include all localhost variants and null origin for native apps
+const localOrigins = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  null, // Native apps send Origin: null
+];
+
 const corsOrigins = Array.from(
-  new Set(
-    [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://localhost:3001',
-      'http://127.0.0.1:3001',
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      clientOrigin,
-      apiBaseOrigin,
-      null,
-      ...String(process.env.EXTRA_CORS_ORIGINS || '')
-        .split(',')
-        .map((o) => o.trim())
-        .filter(Boolean),
-    ].filter(Boolean),
-  ),
+  new Set([
+    ...localOrigins,
+    clientOrigin,
+    apiBaseOrigin,
+    // Add mobile app schemes
+    'app://localhost',
+    'app://vox',
+    // Add common production origins if specified
+    ...extraOrigins,
+  ].filter(Boolean)),
 );
 
 export const env = {

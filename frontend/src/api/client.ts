@@ -5,7 +5,11 @@ export const API_BASE =
   (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:4000';
 
 export function getToken() {
-  return localStorage.getItem('vox_token');
+  try {
+    return sessionStorage.getItem('vox_access') || null;
+  } catch {
+    return null;
+  }
 }
 
 // ── Automatic token refresh ───────────────────────────────────────
@@ -18,15 +22,10 @@ async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
     try {
-      const refreshToken = localStorage.getItem('vox_refresh_token');
-      if (!refreshToken) {
-        console.log('[Auth] No refresh token available');
-        return false;
-      }
       const res = await fetch(`${API_BASE}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
       });
       if (!res.ok) {
         console.warn(`[Auth] Token refresh failed with status ${res.status}:`, await res.text().catch(() => ''));
@@ -34,9 +33,6 @@ async function tryRefresh(): Promise<boolean> {
       }
       const data = await res.json();
       if (data?.tokens?.access) {
-        localStorage.setItem('vox_token', data.tokens.access);
-        if (data.tokens.refresh) localStorage.setItem('vox_refresh_token', data.tokens.refresh);
-        if (data.user) localStorage.setItem('vox_user', JSON.stringify(data.user));
         console.log('[Auth] Token refreshed successfully');
         return true;
       }
@@ -66,15 +62,17 @@ async function getLogout(): Promise<() => void> {
 }
 
 export async function api(path: string, options: RequestInit = {}, _retry = false) {
+  const { skipAuth = false, headers: customHeaders, ...rest } = options as any;
   let res: Response;
   try {
     res = await fetch(API_BASE + path, {
-      ...options,
+      ...rest,
       headers: {
         'Content-Type': 'application/json',
-        ...(getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {}),
-        ...options.headers
-      }
+        ...(customHeaders || {}),
+        ...(!skipAuth && getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {}),
+      },
+      credentials: 'include',
     });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -87,12 +85,44 @@ export async function api(path: string, options: RequestInit = {}, _retry = fals
     const refreshed = await tryRefresh();
     if (refreshed) {
       console.log('[API] Token refreshed, retrying request');
-      return api(path, options, true);
+      const newToken = getToken();
+      const retryHeaders = {
+        'Content-Type': 'application/json',
+        ...(customHeaders || {}),
+        ...(newToken ? { 'Authorization': 'Bearer ' + newToken } : {}),
+      };
+      const retryRes = await fetch(API_BASE + path, {
+        ...rest,
+        headers: retryHeaders,
+        credentials: 'include',
+      });
+      if (retryRes.status === 401) {
+        console.warn('[API] Token refresh failed, logging out');
+        const logoutFn = await getLogout();
+        logoutFn();
+        (await import('../stores/notificationStore')).useNotificationStore.getState().addNotification({
+          type: 'error',
+          title: 'Session Expired',
+          message: 'Your session has expired. Please log in again.',
+          duration: 5000,
+        });
+        throw new Error('Session expired. Please log in again.');
+      }
+      let data: any;
+      try {
+        data = await retryRes.json();
+      } catch {
+        data = null;
+      }
+      if (!retryRes.ok) {
+        const errorMsg = data?.error || data?.message || retryRes.statusText || `HTTP ${retryRes.status}`;
+        throw new Error(errorMsg);
+      }
+      return data;
     }
     console.warn('[API] Token refresh failed, logging out');
     const logoutFn = await getLogout();
     logoutFn();
-    // Show explicit message to user
     (await import('../stores/notificationStore')).useNotificationStore.getState().addNotification({
       type: 'error',
       title: 'Session Expired',

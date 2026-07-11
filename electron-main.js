@@ -58,7 +58,7 @@ app.commandLine.appendSwitch('disable-crash-reporter');
 app.commandLine.appendSwitch('disk-cache-dir', VOX_CACHE);
 app.commandLine.appendSwitch('gpu-disk-cache-dir', VOX_GPU_CACHE);
 app.commandLine.appendSwitch('disable-site-isolation-trials');
-app.commandLine.appendSwitch('disable-web-security'); // local dev only
+// Note: webSecurity is controlled via webPreferences, not command line
 
 // ── Global console noise filter ────────────────────────────────────
 // Catches noise from Electron's own renderer/GPU/crashpad processes
@@ -76,17 +76,6 @@ const NOISE_PATTERNS = [
   /Unable to create cache/,
   /Failed to delete the database/,
   /Failed to open the database/,
-  /injected env \(\d+\) from \.env/,
-  /suppress logs/,
-  /TWO_FACTOR_ENCRYPTION_KEY is the dev default/,
-  /\[System\] \[MY-\d+\] \[Server\]/,
-  /mysqld\.exe .*starting as process/,
-  /InnoDB initialization/,
-  /XA crash recovery/,
-  /CA certificate ca\.pem is self signed/,
-  /Channel mysql_main configured to support TLS/,
-  /X Plugin ready for connections/,
-  /ready for connections\. Version:/,
 ];
 function isNoise(line) {
   return NOISE_PATTERNS.some((re) => re.test(line));
@@ -120,8 +109,6 @@ console.error = (...args) => {
 // ═══════════════════════════════════════════════════════════════════
 
 const STATE_FILE = path.join(VOX_USER_DATA, 'vox-window-state.json');
-const MYSQLD_PATH = 'C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin\\mysqld.exe';
-const MYSQL_DATA_DIR = path.join(PROJECT_ROOT, 'temp', 'mysql-data');
 
 let backendProc = null;
 let frontendProc = null;
@@ -185,40 +172,12 @@ async function ensureViteBuild() {
   });
 }
 
-async function startMySQL() {
-  if (!fs.existsSync(MYSQLD_PATH)) {
-    console.warn('[MySQL] mysqld.exe not found; backend will report DB errors until MySQL is started.');
+async function ensurePostgres() {
+  if (!await isPortInUse(5432)) {
+    console.warn('[PostgreSQL] No database detected on port 5432; backend will report DB errors until PostgreSQL is started.');
     return;
   }
-  if (!fs.existsSync(MYSQL_DATA_DIR)) {
-    fs.mkdirSync(MYSQL_DATA_DIR, { recursive: true });
-    await new Promise((resolve) => {
-      const initProc = spawn(MYSQLD_PATH, ['--initialize-insecure', `--datadir=${MYSQL_DATA_DIR}`, '--console'], {
-        windowsHide: true,
-      });
-      initProc.on('exit', () => resolve());
-      initProc.on('error', (err) => { console.error('[MySQL Init Error]', err); resolve(); });
-    });
-  }
-  const mysqlProc = spawn(MYSQLD_PATH, [`--datadir=${MYSQL_DATA_DIR}`, '--port=3306', '--bind-address=127.0.0.1', '--console'], {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
-  mysqlProc.unref();
-  
-  // Wait for MySQL to be ready by probing the port
-  console.log('[MySQL] Waiting for MySQL to accept connections...');
-  const startTime = Date.now();
-  const timeout = 15000; // 15 second total timeout
-  while (Date.now() - startTime < timeout) {
-    if (await isPortInUse(3306)) {
-      console.log('[MySQL] Connected to MySQL on port 3306');
-      return;
-    }
-    await wait(500);
-  }
-  console.warn('[MySQL] Timeout waiting for MySQL; backend may not have database yet');
+  console.log('[PostgreSQL] Database detected on port 5432');
 }
 
 function loadWindowState() {
@@ -437,8 +396,8 @@ function createWindow() {
       contextIsolation: true,
       backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.js'),
-      webSecurity: false,                    // Disable web security for cross-origin
-      allowRunningInsecureContent: true,     // Allow HTTP content
+      webSecurity: true,                     // Enable web security for production
+      allowRunningInsecureContent: false,    // Disallow HTTP content in production
       disableBlinkFeatures: 'Auxclick',
     },
     frame: false,
@@ -468,9 +427,9 @@ async function start() {
   console.log('Starting VOX Desktop...');
   
   try {
-    await startMySQL();
+    await ensurePostgres();
   } catch (err) {
-    console.error('[Startup] MySQL startup failed:', err.message);
+    console.error('[Startup] PostgreSQL startup failed:', err.message);
     console.warn('[Startup] Continuing without database (demo mode only)');
   }
   
