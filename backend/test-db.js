@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 async function test() {
   try {
-    const dbs = await prisma.$queryRaw('SHOW DATABASES');
+    const dbs = await prisma.$queryRaw('SELECT datname FROM pg_database WHERE datistemplate = false');
     console.log('Databases:', dbs);
     
     const users = await prisma.user.findMany();

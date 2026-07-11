@@ -44,6 +44,7 @@ const app = express();
 const server = http.createServer(app);
 
 // ── Core middleware ─────────────────────────────────────────
+app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false })); // CSP off for local API dev
 app.use(
   cors({

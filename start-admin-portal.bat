@@ -20,19 +20,19 @@ if %errorlevel% neq 0 (
     echo Redis already running on port 6379
 )
 
-:: ── MySQL ──────────────────────────────────────────────────
-netstat -ano | findstr :3306 | findstr LISTENING >nul 2>&1
+:: ── PostgreSQL ──────────────────────────────────────────────
+netstat -ano | findstr :5432 | findstr LISTENING >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Starting MySQL...
-    if exist "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe" (
-        start /B "MySQL" "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe" --no-defaults --basedir="C:\Program Files\MySQL\MySQL Server 8.0" --datadir="D:\Vox\temp\mysql-data" --port=3306 --bind-address=127.0.0.1 --console
+    echo Starting PostgreSQL...
+    if exist "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" (
+        start /B "PostgreSQL" "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" start -D "C:\Program Files\PostgreSQL\18\data" -l "D:\Vox\temp\pg.log"
         timeout /t 6 /nobreak >nul
-        echo   MySQL started on port 3306
+        echo   PostgreSQL started on port 5432
     ) else (
-        echo   MySQL not found, skipping...
+        echo   PostgreSQL not found, skipping...
     )
 ) else (
-    echo MySQL already running on port 3306
+    echo PostgreSQL already running on port 5432
 )
 
 :: ── Backend ─────────────────────────────────────────────────

@@ -18,7 +18,7 @@
 5. [Backend Deep Dive](#5-backend-deep-dive)
    - 5.1 [Entry point & middleware pipeline](#51-entry-point--middleware-pipeline)
    - 5.2 [Environment & configuration](#52-environment--configuration)
-   - 5.3 [Database (Prisma / MySQL)](#53-database-prisma--mysql)
+   - 5.3 [Database (Prisma / PostgreSQL)](#53-database-prisma--PostgreSQL)
    - 5.4 [Authentication & security](#54-authentication--security)
    - 5.5 [REST API — full endpoint reference](#55-rest-api--full-endpoint-reference)
    - 5.6 [Socket.io — real-time layer](#56-socketio--real-time-layer)
@@ -45,11 +45,11 @@
 dark, "void / cyberpunk" aesthetic. It is a full-stack application composed of:
 
 - A **Node.js / Express 5** backend (`backend/`) exposing a REST API and a Socket.io
-  gateway, persisted in **MySQL via Prisma**, with optional **Redis** for caching and
+  gateway, persisted in **PostgreSQL via Prisma**, with optional **Redis** for caching and
   horizontal socket scaling.
 - A **React 18 + TypeScript** frontend (`frontend/`) built with **Vite**, state managed
   by **Zustand**, animated by **Framer Motion**, real-time over **Socket.io-client**.
-- An **Electron** desktop shell (`electron-main.js` + `preload.js`) that bundles MySQL,
+- An **Electron** desktop shell (`electron-main.js` + `preload.js`) that bundles PostgreSQL,
   the backend, and the frontend into a single double-clickable Windows desktop app.
 
 The product surface includes:
@@ -76,7 +76,7 @@ The product surface includes:
 | Runtime | Node.js | ≥ 18 (ESM) |
 | Framework | **Express** | 5.2 |
 | ORM | **Prisma** | 6.19 |
-| Database | **MySQL** | 8.0 (via `mysql2`) |
+| Database | **PostgreSQL** | 8.0 (via `PostgreSQL2`) |
 | Real-time | **Socket.io** | 4.8 |
 | Cache / pub-sub | **Redis** (`ioredis` + `redis`) | optional |
 | Auth | **jsonwebtoken**, **bcryptjs**, **otplib** | JWT + bcrypt + TOTP |
@@ -108,7 +108,7 @@ The product surface includes:
 | Shell | **Electron** (frameless, custom title bar) |
 | IPC bridge | `contextBridge` + `ipcRenderer` (`preload.js`) |
 | Native features | tray icon, native notifications, frame flashing, screen capture (`desktopCapturer`), global hotkey (Ctrl+Shift+V) |
-| Bundled services | spawns `mysqld.exe`, `node backend/server.js`, `node frontend/static-server.js` |
+| Bundled services | spawns `PostgreSQLd.exe`, `node backend/server.js`, `node frontend/static-server.js` |
 
 ---
 
@@ -193,7 +193,7 @@ vox/
                  │            Electron Main Process            │
                  │  electron-main.js                           │
                  │  ┌────────────────────────────────────────┐ │
-                 │  │ 1. startMySQL()  → mysqld.exe :3306     │ │
+                 │  │ 1. startPostgreSQL()  → PostgreSQLd.exe :3306     │ │
                  │  │ 2. startBackend() → node server.js :4000│ │
                  │  │ 3. ensureViteBuild() + static-server    │ │
                  │  │                       → :3000           │ │
@@ -211,14 +211,14 @@ vox/
    │   │            │ ◄──────────────►│  /api/auth, /api/servers, /api/dm…  │   │
    │   │ socketStore│   Socket.io     │  Socket.io server (same HTTP srv)   │   │
    │   └────────────┘                 │   Redis adapter (optional)          │   │
-   │                                  │   Prisma → MySQL (:3306)            │   │
+   │                                  │   Prisma → PostgreSQL (:3306)            │   │
    │                                  │   Redis cache (:6379)               │   │
    │                                  │   /uploads → disk                   │   │
    │                                  └─────────────────────────────────────┘   │
    └───────────────────────────────────────────────────────────────────────────┘
 ```
 
-In **dev**: Vite dev server on port 3001, backend on 4000, MySQL on 3306.
+In **dev**: Vite dev server on port 3001, backend on 4000, PostgreSQL on 3306.
 In **Electron desktop**: a Node static server hosts the built `dist/` on port 3000; the
 window loads `http://127.0.0.1:3000`. The backend port stays at 4000.
 In **production / cluster**: PM2 spawns N backend workers (`instances: 'max'`) behind a
@@ -275,9 +275,9 @@ The exported `env` object normalizes:
 **Security note**: a previous version hardcoded a personal ngrok URL in CORS; this was
 replaced with `EXTRA_CORS_ORIGINS` so tunnel URLs are config-only and don't leak.
 
-### 5.3 Database (Prisma / MySQL)
+### 5.3 Database (Prisma / PostgreSQL)
 
-- Datasource: `mysql`, URL from `DATABASE_URL`.
+- Datasource: `PostgreSQL`, URL from `DATABASE_URL`.
 - Generator: `prisma-client-js`.
 - A single shared `PrismaClient` is exported from `src/lib/prisma.js`, cached on
   `globalThis.voxPrisma` in dev to survive HMR/supervisor reloads without exhausting
@@ -370,7 +370,7 @@ Role hierarchy used everywhere: `FOUNDER (4) > ADMIN (3) > MODERATOR (2) > MEMBE
   loopback, `.local`, raw IPv4; 2 MB body cap, 8 s timeout, 1 h in-memory cache.
 
 #### Resilience: in-memory fallback
-If MySQL is unreachable, `auth.service.js` and `chat.service.js` transparently fall back
+If PostgreSQL is unreachable, `auth.service.js` and `chat.service.js` transparently fall back
 to in-memory demo data so the app keeps working. The auth module **re-probes** the DB
 before every operation (`checkDatabase()`) — fixing a prior bug where a one-shot boot
 probe latched `databaseAvailable=false` forever, causing synthetic `demo-<ts>` user ids
@@ -613,12 +613,12 @@ flipped to `OFFLINE` and `presence:update` is broadcast.
 
 - **`auth.service.js`** — register/login (2FA-aware), 2FA setup/verify, refresh, logout,
   password reset, email verification. Contains the **in-memory fallback** user store and
-  the **self-healing DB probe** that re-checks MySQL availability on every auth op.
+  the **self-healing DB probe** that re-checks PostgreSQL availability on every auth op.
   `publicUser()` strips secrets and returns the safe shape consumed by the client.
 - **`chat.service.js`** — `getState()` (channels + online members + counts),
   `getRecentMessages(limit)`, `getMessagesBefore(cursorId, limit)` (cursor pagination),
   `createMessage()` (with fallback), `claimNitro()`. Caches channels + members in Redis
-  (30 s TTL); messages always hit MySQL.
+  (30 s TTL); messages always hit PostgreSQL.
 - **`tokens.js`** — refresh-token mint/verify/revoke against the DB (hashed storage,
   rotation).
 - **`email.service.js`** — Resend client; console-logs in dev mode; themed HTML
@@ -763,9 +763,9 @@ Top-level layout: `ServerRail | Sidebar | MainContent | MemberPanel`, with a cus
 
 `electron-main.js` is the main process. On `app.whenReady()` it runs `start()`:
 
-1. **`startMySQL()`** — if `C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe` exists,
-   initializes a data dir under `<repo>/temp/mysql-data` (using `--initialize-insecure` on
-   first run), then spawns mysqld bound to `127.0.0.1:3306` detached.
+1. **`startPostgreSQL()`** — if `C:\Program Files\PostgreSQL\PostgreSQL Server 8.0\bin\PostgreSQLd.exe` exists,
+   initializes a data dir under `<repo>/temp/PostgreSQL-data` (using `--initialize-insecure` on
+   first run), then spawns PostgreSQLd bound to `127.0.0.1:3306` detached.
 2. **`startBackend()`** — spawns `node backend/server.js`; resolves when stdout contains
    the literal `'listening'` (or 4 s fallback).
 3. **`ensureViteBuild()`** — runs `npm run build` in `frontend/` if `dist/index.html`
@@ -782,7 +782,7 @@ Top-level layout: `ServerRail | Sidebar | MainContent | MemberPanel`, with a cus
 
 **Cache hygiene**: forces all Electron/Chromium data into `%APPDATA%/VOX-Desktop/`
 (`userData`, `Cache`, `GPUCache`, `Crashpad`), removes stale `.lock` files at boot, and
-suppresses a large blocklist of noisy Chromium/MySQL log lines via wrapped
+suppresses a large blocklist of noisy Chromium/PostgreSQL log lines via wrapped
 `process.stdout/stderr.write` and `console.log/error`. This keeps the dev console
 readable.
 
@@ -843,8 +843,8 @@ thumbnails and let the user pick one.
 
 - **`/health`** endpoint returns `{ ok, service, uptime }` — used by Electron to detect
   boot readiness.
-- **Self-healing DB**: `auth.service.checkDatabase()` re-probes MySQL on every auth op;
-  logs `[vox/auth] MySQL recovered` / `unavailable` transitions.
+- **Self-healing DB**: `auth.service.checkDatabase()` re-probes PostgreSQL on every auth op;
+  logs `[vox/auth] PostgreSQL recovered` / `unavailable` transitions.
 - **Never-throw message sends**: channel + DM send paths catch FK violations and retry as
   anonymous so a message is never silently dropped.
 - **Socket reconnection**: client exponential backoff (1 s → 30 s, max 10 attempts).
@@ -852,7 +852,7 @@ thumbnails and let the user pick one.
   letting Prisma disconnect cleanly.
 - **PM2**: cluster mode with `max_memory_restart: 500M`, `max_restarts: 10`,
   `min_uptime: 10s`, `kill_timeout: 5000`, stdout/stderr to `./logs/`.
-- **Electron log filtering**: noisy Chromium/MySQL lines suppressed so the console stays
+- **Electron log filtering**: noisy Chromium/PostgreSQL lines suppressed so the console stays
   readable; child-process stderr passes through a denylist regex.
 
 ---
@@ -863,12 +863,12 @@ thumbnails and let the user pick one.
 ```bash
 # from repo root — launches everything
 npx electron electron-main.js
-# → starts mysqld, backend, builds+serves frontend, opens window
+# → starts PostgreSQLd, backend, builds+serves frontend, opens window
 ```
 
 ### Development (3 terminals)
 ```bash
-# 1. MySQL (or use the bundled one)
+# 1. PostgreSQL (or use the bundled one)
 # 2. Backend
 cd backend
 cp .env.example .env          # fill DATABASE_URL, JWT secrets, 2FA key
@@ -919,7 +919,7 @@ npm run serve                 # node static-server.js → :3000
 - **dmId** — sorted `<uidA>_<uidB>` string identifying a 1:1 DM channel.
 - **Nitro** — a demo perks flag preserved for compatibility with the original UI button.
 - **Founder / Admin / Moderator / Member** — the four-role hierarchy; powers 4/3/2/1.
-- **Fallback mode** — in-memory demo data used when MySQL is unreachable, so the app
+- **Fallback mode** — in-memory demo data used when PostgreSQL is unreachable, so the app
   never hard-fails on a user.
 - **authorOverride** — display name stored on a `Message` when `userId` is null (anonymous
   guest or webhook), so the row always renders an attribution.

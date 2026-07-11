@@ -3,35 +3,16 @@ import { api } from './client';
 // Auth
 export const authApi = {
   login: (emailOrUsername: string, password: string) =>
-    api.post<{ user: any; tokens: { accessToken: string; refreshToken: string } }>(
+    api.post<{ user: any; tokens: { access: string; refresh: string } }>(
       '/auth/login',
       { emailOrUsername, password }
     ),
   me: () => api.get<{ user: any }>('/auth/me'),
   refresh: (refreshToken: string) =>
-    api.post<{ tokens: { accessToken: string; refreshToken: string } }>(
+    api.post<{ tokens: { access: string; refresh: string } }>(
       '/auth/refresh',
       { refreshToken }
     ),
-};
-
-// Dashboard
-export const dashboardApi = {
-  getStats: () => api.get<DashboardStats>('/admin/stats'),
-  getActivity: () => api.get<ActivityEntry[]>('/admin/activity'),
-  getHealth: () => api.get<SystemHealth>('/admin/health'),
-};
-
-// Users
-export const usersApi = {
-  list: (params?: { search?: string; page?: number; limit?: number; status?: string; role?: string }) => {
-    const q = new URLSearchParams();
-    if (params?.search) q.set('search', params.search);
-    if (params?.page) q.set('page', String(params.page));
-    if (params?.limit) q.set('limit', String(params.limit));
-    if (params?.status) q.set('status', params.status);
-    if (params?.role) q.set('role', params.role);
-    return api.get<{ users: User[]; total: number; page: number; pages: number }>(`/admin/users?${q}`);
   },
   get: (id: string) => api.get<{ user: UserDetail }>(`/admin/users/${id}`),
   update: (id: string, data: Partial<User>) =>

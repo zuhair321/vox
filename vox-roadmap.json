@@ -1,0 +1,97 @@
+{
+  "Title": "VOX Development Roadmap",
+  "Subtitle": "Discord-Level Platform - Full Step-by-Step Guide",
+  "Author": "Zuhair Ahmed",
+  "Sections": [
+    {
+      "Heading": "CURRENT STATE",
+      "Subheading": "What's Working",
+      "Content": "Backend: User auth, JWT, 2FA, Servers, Channels, Messages, DMs, Friends, Voice Chat, File Uploads, Rate Limiting, Redis, Admin API\n\nFrontend: Login/Register UI, Server sidebar, Channels, Messages, Voice UI, DMs, Friends, User profiles, Admin dashboard\n\nDesktop: Electron app, Frameless window, System tray, Global shortcut\n\nMobile: React Native, Auth screens, Server list, Messaging, Voice chat"
+    },
+    {
+      "Heading": "PHASE 1: POLISH & BUG FIXES",
+      "Subheading": "Week 1",
+      "Content": "User Experience:\n- Empty states (no servers/channels/messages)\n- Loading states (skeleton loaders)\n- Error handling (toast notifications)\n- Offline mode (cache data locally)\n- Connection recovery (auto-reconnect WebSocket)\n\nMessage Features:\n- Message editing (show edited tag)\n- Message reactions (emoji picker)\n- Reply threads (thread sidebar)\n- Message search (full-text search)\n- Pinned messages (per-channel pin list)\n- Slow mode (channel-level rate limiting)\n- Slash commands (/giphy, /poll, /nickname)"
+    },
+    {
+      "Heading": "PHASE 2: SERVER & ROLE SYSTEM",
+      "Subheading": "Week 2",
+      "Content": "Roles & Permissions:\n- Role hierarchy (priority order)\n- View channels permission\n- Send messages permission\n- Manage messages permission\n- Kick members permission\n- Ban members permission\n- Manage roles permission\n- Manage channels permission\n- Manage server permission\n- Administrator (full access)\n- Role colors (custom color per role)\n\nServer Management:\n- Server settings (name, icon, banner)\n- Server insights (member count)\n- Server audit log (track admin actions)\n- Server templates (save/load configs)\n\nChannel Management:\n- Channel categories (collapsible groups)\n- Channel permissions (per-channel overrides)\n- Channel lock (prevent new members)"
+    },
+    {
+      "Heading": "PHASE 3: COMMUNICATION FEATURES",
+      "Subheading": "Week 3",
+      "Content": "Rich Messaging:\n- Markdown support (bold, italic, code)\n- Embeds (rich link previews)\n- Polls (multiple options)\n- Scheduled messages\n- Message threads\n- Forum channels\n\nVideo Chat:\n- Video calls (1-on-1, group)\n- Screen sharing\n- Video quality settings\n- Picture-in-picture\n\nStage Channels:\n- Stage channels (like Discord)\n- Speaker/audience roles\n- Stage events"
+    },
+    {
+      "Heading": "PHASE 4: SOCIAL & DISCOVERY",
+      "Subheading": "Week 4",
+      "Content": "Friends & Social:\n- Friend requests (accept/decline)\n- Block system\n- Activity status (Playing X)\n- Custom status message\n- User notes\n- Read receipts\n- Typing indicators\n\nServer Discovery:\n- Public servers (anyone can join)\n- Server categories (Gaming, Tech, Art)\n- Server search\n- Featured servers\n- Invite system (generate links)\n\nProfiles:\n- Profile customization (banner, bio, avatar)\n- Profile badges (Nitro, Developer)\n- Profile themes"
+    },
+    {
+      "Heading": "PHASE 5: MODERATION & SAFETY",
+      "Subheading": "Week 5",
+      "Content": "Moderation Tools:\n- Auto-moderation (filter bad words)\n- Anti-spam detection\n- Mod logs (detailed logging)\n- Quick moderation (kick/ban with reason)\n- Strike system (track violations)\n- Timeout (temporary mute)\n\nReporting System:\n- Report messages\n- Report users\n- Admin review queue\n- Auto-escalation\n\nSecurity:\n- CAPTCHA (bot prevention)\n- 2FA enforcement\n- Login alerts\n- Session management\n- IP ban"
+    },
+    {
+      "Heading": "PHASE 6: NITRO/PREMIUM",
+      "Subheading": "Week 6",
+      "Content": "Nitro Subscription:\n- Nitro tiers ($5 and $3)\n- Payment integration (Stripe)\n- Subscription management\n- Server boost system\n\nNitro Features:\n- HD video streaming\n- Custom avatar frames\n- Profile themes\n- Custom emoji everywhere\n- Higher upload limit (100MB)\n- Server boosts (up to 30 levels)\n\nNitro Display:\n- Badge on profile\n- Boosted server indicator"
+    },
+    {
+      "Heading": "PHASE 7: AUTOMATION & BOTS",
+      "Subheading": "Week 7",
+      "Content": "Bot System:\n- Bot API (public API)\n- Bot verification (verified badges)\n- Bot commands (slash commands)\n- Webhook support\n\nBuilt-in Bots:\n- Moderation bot\n- Music bot\n- Reminder bot\n- Poll bot\n- Welcome bot\n\nIntegrations:\n- Webhook system\n- IRC bridge\n- Matrix bridge\n- Slack bridge"
+    },
+    {
+      "Heading": "PHASE 8: MOBILE POLISH",
+      "Subheading": "Week 8",
+      "Content": "Mobile Features:\n- Push notifications (FCM, APNs)\n- Background sync\n- Offline support\n- Video calls\n- Voice effects\n\nMobile UI/UX:\n- Gesture navigation\n- Haptic feedback\n- Dark mode\n- Accessibility (VoiceOver/TalkBack)"
+    },
+    {
+      "Heading": "PHASE 9: DEVOPS & SCALING",
+      "Subheading": "Week 9",
+      "Content": "Deployment:\n- CI/CD pipeline (GitHub Actions)\n- Staging environment\n- Database migrations\n- Redis cluster\n- CDN setup (CloudFlare)\n- Load balancing\n\nMonitoring:\n- Error tracking (Sentry)\n- Performance monitoring (APM)\n- Uptime monitoring\n- Log aggregation\n- Metrics dashboard (Grafana)\n\nSecurity:\n- SSL everywhere\n- Rate limiting\n- Security headers (Helmet)"
+    },
+    {
+      "Heading": "PHASE 10: DOCUMENTATION & LAUNCH",
+      "Subheading": "Week 10",
+      "Content": "Documentation:\n- API docs (Swagger/OpenAPI)\n- Developer docs (Bot API)\n- User guide\n- Admin guide\n- Video tutorials\n\nLaunch:\n- Landing page\n- Social media (Twitter, Discord)\n- App Store (iOS)\n- Google Play (Android)\n- Product Hunt campaign"
+    },
+    {
+      "Heading": "QUICK WINS (Do First)",
+      "Subheading": "1-4 Hours Each",
+      "Content": "1. Message reactions - 2 hours\n2. Typing indicators - 1 hour\n3. Empty states - 3 hours\n4. Loading skeletons - 2 hours\n5. Error toasts - 1 hour\n6. Message search - 4 hours\n7. Custom status - 2 hours\n8. Role colors - 1 hour"
+    },
+    {
+      "Heading": "MUST HAVE (MVP)",
+      "Subheading": "Core Features",
+      "Content": "[x] User auth (register, login, logout)\n[x] JWT tokens & refresh\n[x] Servers (create, join, leave)\n[x] Channels (text, voice)\n[x] Messages (send, receive, real-time)\n[x] DMs (private messages)\n[x] Friends (add, remove)\n[x] Voice chat (WebRTC)\n[x] File uploads (images)\n[x] WebSocket real-time\n\n[ ] Loading states\n[ ] Error handling\n[ ] Empty states\n[ ] Message search\n[ ] Role permissions\n[ ] Server settings\n[ ] Basic moderation (kick, ban)\n[ ] Mobile push notifications"
+    },
+    {
+      "Heading": "SHOULD HAVE (Beta)",
+      "Subheading": "Extended Features",
+      "Content": "[ ] Role hierarchy & permissions\n[ ] Channel categories\n[ ] Message reactions\n[ ] Message threads\n[ ] Typing indicators\n[ ] Read receipts\n[ ] Custom status\n[ ] Server insights\n[ ] Audit log\n[ ] Slowmode\n[ ] 2FA enforcement"
+    },
+    {
+      "Heading": "TECH STACK",
+      "Subheading": "Technologies Used",
+      "Content": "Backend:\n- Runtime: Node.js 20+\n- Framework: Express.js\n- Database: PostgreSQL (Prisma)\n- Cache/PubSub: Redis (Upstash)\n- Real-time: Socket.io\n- Voice: WebRTC (simple-peer)\n- Auth: JWT + bcrypt + TOTP\n\nFrontend Web:\n- Framework: React 18+\n- Build Tool: Vite\n- State: Zustand\n- Styling: Tailwind CSS\n\nMobile:\n- Framework: React Native (Expo)\n- State: Zustand\n- Voice: React Native WebRTC\n\nDesktop:\n- Framework: Electron\n- Build: electron-builder"
+    },
+    {
+      "Heading": "WEEKLY MILESTONES",
+      "Subheading": "10-Week Plan",
+      "Content": "Week 1: Polish (loading, errors, empty states, search)\nWeek 2: Roles & Permissions (role system, server settings)\nWeek 3: Communication (reactions, threads, typing)\nWeek 4: Social (friend activity, custom status, discovery)\nWeek 5: Moderation (auto-mod, reporting, audit log)\nWeek 6: Video & Nitro (video calls, screen sharing, nitro)\nWeek 7: Bots & API (bot system, webhooks)\nWeek 8: Mobile (push notifications, offline)\nWeek 9: DevOps (CI/CD, monitoring)\nWeek 10: Launch (landing page, App Store)"
+    },
+    {
+      "Heading": "COMMON PITFALLS",
+      "Subheading": "Things to Avoid",
+      "Content": "1. Don't over-engineer - Start simple\n2. Don't skip error handling - Users hate silent failures\n3. Don't forget mobile - Test on real devices\n4. Don't ignore performance - Lazy load, paginate, cache\n5. Don't skip tests - At least basic API tests\n6. Don't forget security - Validate all inputs"
+    },
+    {
+      "Heading": "FINAL CHECKLIST BEFORE LAUNCH",
+      "Subheading": "Pre-Launch Requirements",
+      "Content": "[ ] All core features working\n[ ] No console errors\n[ ] Mobile responsive\n[ ] Realistic test data\n[ ] Performance acceptable (< 3s load)\n[ ] SSL certificates valid\n[ ] Terms of service\n[ ] Privacy policy\n[ ] Cookie consent\n[ ] Contact/support info\n[ ] Status page\n[ ] Backup strategy\n[ ] Monitoring active\n[ ] Error alerts working"
+    }
+  ]
+}

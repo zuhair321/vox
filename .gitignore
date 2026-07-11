@@ -35,10 +35,7 @@ vox-mobile/.claude/
 # Electron (large binaries — installed via npm)
 electron/
 
-# MySQL data
-mysql-data/
-temp/mysql-data/
-
+# PostgreSQL data (local dev, if any)
 # Redis
 redis/
 

@@ -2,38 +2,28 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, Shield, Zap } from 'lucide-react';
 import { useUiStore } from '../../stores/uiStore';
-import { API_BASE } from '../../api/client';
+import { useAuthStore } from '../../stores/authStore';
 
 const LoginDummy: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { addToast } = useUiStore();
+  const { login, isLoading } = useAuthStore();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emailOrUsername: email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login failed');
-
-      localStorage.setItem('vox_token', data.tokens.access);
-      localStorage.setItem('vox_refresh_token', data.tokens.refresh);
-      localStorage.setItem('vox_user', JSON.stringify(data.user));
-      // Navigate to / — SplashScreen will detect the token and skip its delay,
-      // then AppLayout's root-redirect will take over cleanly.
+      const result = await login(email.trim(), password);
+      if (result.twoFactorRequired) {
+        navigate('/2fa');
+        return;
+      }
+      addToast('Welcome back.', 'success');
       navigate('/');
     } catch (err: any) {
-      addToast(err.message, 'error');
-    } finally {
-      setIsSubmitting(false);
+      addToast(err.message || 'Login failed', 'error');
     }
   };
 
@@ -120,9 +110,9 @@ const LoginDummy: React.FC = () => {
             </div>
           </div>
 
-          <button type="submit" className="vox-login-submit" disabled={isSubmitting}>
+          <button type="submit" className="vox-login-submit" disabled={isLoading}>
             <LogIn size={16} aria-hidden="true" />
-            <span>{isSubmitting ? 'AUTHENTICATING…' : 'ENTER THE VOID'}</span>
+            <span>{isLoading ? 'AUTHENTICATING…' : 'ENTER THE VOID'}</span>
           </button>
 
           <footer className="vox-login-footer">

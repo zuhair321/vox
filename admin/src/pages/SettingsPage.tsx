@@ -74,7 +74,7 @@ export function SettingsPage() {
           {[
             { label: 'Version', value: '0.2.0' },
             { label: 'Runtime', value: 'Node.js 18+' },
-            { label: 'Database', value: 'MySQL 8.0' },
+            { label: 'Database', value: 'PostgreSQL' },
             { label: 'ORM', value: 'Prisma 6.19' },
           ].map(item => (
             <div key={item.label} className="text-center p-3 rounded-lg bg-surface-3/50">

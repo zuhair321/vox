@@ -24,7 +24,7 @@ D:\Vox\
 ├── node_modules/
 ├── admin/
 ├── redis/
-├── mysql-data/
+├── PostgreSQL-data/
 ├── start-vox.bat
 ├── start-admin-portal.bat
 ├── stop-vox.bat
@@ -84,7 +84,7 @@ All key startup scripts are present and functional:
 - The application uses relative paths in startup scripts, so it will work correctly from D:\Vox
 - All config files have been updated to reference D:\Vox
 - Node.js process is running from D drive location
-- Database files (mysql-data) are in D:\Vox\mysql-data\
+- Database files (PostgreSQL-data) are in D:\Vox\PostgreSQL-data\
 - Redis data files are in D:\Vox\redis\
 
 ## C Drive Cleanup

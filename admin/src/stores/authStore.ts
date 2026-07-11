@@ -26,8 +26,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (user.role !== 'ADMIN' && user.role !== 'FOUNDER') {
         throw new Error('Access denied. Admin privileges required.');
       }
-      const accessToken = tokens.accessToken || tokens.access;
-      const refreshToken = tokens.refreshToken || tokens.refresh;
+      const accessToken = tokens.access;
+      const refreshToken = tokens.refresh;
       localStorage.setItem('vox_admin_token', accessToken);
       localStorage.setItem('vox_admin_refresh', refreshToken);
       api.setToken(accessToken);
@@ -63,8 +63,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (refresh) {
         try {
           const { tokens } = await authApi.refresh(refresh);
-          const accessToken = tokens.accessToken || tokens.access;
-          const refreshToken = tokens.refreshToken || tokens.refresh;
+          const accessToken = tokens.access;
+          const refreshToken = tokens.refresh;
           localStorage.setItem('vox_admin_token', accessToken);
           localStorage.setItem('vox_admin_refresh', refreshToken);
           api.setToken(accessToken);

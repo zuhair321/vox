@@ -1,6 +1,6 @@
 @echo off
 REM VOX All-in-One Startup Script
-REM Run this as Administrator to start MySQL, Redis, backend, and frontend.
+REM Run this as Administrator to start PostgreSQL, Redis, backend, and frontend.
 
 REM ── Redis ──────────────────────────────────────────────────
 netstat -ano | findstr :6379 | findstr LISTENING >nul
@@ -12,14 +12,14 @@ if %errorlevel% neq 0 (
     echo Redis already running.
 )
 
-REM ── MySQL ──────────────────────────────────────────────────
-netstat -ano | findstr :3306 | findstr LISTENING >nul
+REM ── PostgreSQL ──────────────────────────────────────────────
+netstat -ano | findstr :5432 | findstr LISTENING >nul
 if %errorlevel% neq 0 (
-    echo Starting MySQL...
-    start /B "MySQL" "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqld.exe" "--datadir=D:\Vox\mysql-data" "--console"
+    echo Starting PostgreSQL...
+    start /B "PostgreSQL" "C:\Program Files\PostgreSQL\18\bin\pg_ctl.exe" start -D "C:\Program Files\PostgreSQL\18\data" -l "D:\Vox\temp\pg.log"
     timeout /t 6 /nobreak >nul
 ) else (
-    echo MySQL already running.
+    echo PostgreSQL already running.
 )
 
 REM ── Backend ─────────────────────────────────────────────────

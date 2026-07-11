@@ -7,6 +7,7 @@ import { useFriendStore } from './stores/friendStore';
 import { useProfileStore } from './stores/profileStore';
 import { useUiStore } from './stores/uiStore';
 import { useThemeStore } from './stores/themeStore';
+import { useAuthStore } from './stores/authStore';
 
 // We will implement these components next
 import ServerRail from './components/server/ServerRail';
@@ -39,6 +40,7 @@ import VoiceChannelPanel from './components/voice/VoiceChannelPanel';
 import ScreenShareOverlay from './components/voice/ScreenShareOverlay';
 import ScreenSourcePicker from './components/voice/ScreenSourcePicker';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
+import TwoFactorPage from './pages/TwoFactor';
 import { TurboModal } from './components/turbo/TurboModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useRipple } from './hooks/useRipple';
@@ -142,14 +144,15 @@ const AppLayout = () => {
     },
   });
 
+  const { user, accessToken } = useAuthStore();
+
   useEffect(() => {
-    const token = localStorage.getItem('vox_token');
-    if (!token && location.pathname !== '/login') {
+    if (!user && location.pathname !== '/login') {
       navigate('/login');
       return;
     }
 
-    if (token) {
+    if (user && accessToken) {
       const cachedUser = localStorage.getItem('vox_user');
       if (cachedUser) {
         try {
@@ -158,7 +161,7 @@ const AppLayout = () => {
           localStorage.removeItem('vox_user');
         }
       }
-      connect(token);
+      connect();
       fetchServers().then(() => {
         const servers = useServerStore.getState().servers;
         if (servers && servers.length === 0 && !localStorage.getItem('vox_onboarding_done')) {
@@ -170,7 +173,7 @@ const AppLayout = () => {
     }
 
     return () => disconnect();
-  }, [connect, disconnect, fetchServers, fetchFriends, hydrateFromUser, navigate, location.pathname]);
+  }, [connect, disconnect, fetchServers, fetchFriends, hydrateFromUser, navigate, location.pathname, user, accessToken]);
 
   return (
     <div className="app-container">
@@ -231,6 +234,12 @@ const AppLayout = () => {
             <Route path="/settings/notifications" element={<PanelErrorBoundary panelName="Notifications"><Notifications /></PanelErrorBoundary>} />
             <Route path="/settings/chat" element={<PanelErrorBoundary panelName="Chat"><Chat /></PanelErrorBoundary>} />
             <Route path="/server-settings/:serverId" element={<PanelErrorBoundary panelName="ServerSettings"><ServerSettings /></PanelErrorBoundary>} />
+            <Route path="/server-insights/:serverId" element={
+              <PanelErrorBoundary panelName="ServerInsights">
+                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <ServerInsights />
+              </PanelErrorBoundary>
+            } />
             <Route path="/server-profile/:serverId" element={
               <PanelErrorBoundary panelName="ServerProfile">
                 <Sidebar onOpenThemes={() => setThemeOpen(true)} />
@@ -281,25 +290,21 @@ const AppLayout = () => {
       <TurboModal />
 
       {/* Onboarding */}
-      {showOnboarding && <OnboardingFlow username={JSON.parse(localStorage.getItem('vox_user') || '{}').username || 'Operative'} onComplete={() => setShowOnboarding(false)} />}
+      {showOnboarding && <OnboardingFlow username={useAuthStore.getState().user?.username || 'Operative'} onComplete={() => setShowOnboarding(false)} />}
     </div>
   );
 };
 
 function App() {
   const [isBooting, setIsBooting] = useState(true);
-  
-  // Always require fresh login (clear cached token on app start)
-  // Remove this line if you want to restore auto-login in the future
-  localStorage.removeItem('vox_token');
-  localStorage.removeItem('vox_user');
-  
-  const storedToken = localStorage.getItem('vox_token');
+  const { initialize, accessToken } = useAuthStore();
 
-  // The splash screen drives boot completion via its onComplete callback below.
-  // Since token is cleared, SplashScreen will always show the full 2s delay.
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
   if (isBooting) {
-    return <SplashScreen onComplete={() => setIsBooting(false)} token={storedToken} />;
+    return <SplashScreen onComplete={() => setIsBooting(false)} token={accessToken} />;
   }
 
   return (
@@ -307,6 +312,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginDummy />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/2fa" element={<TwoFactorPage />} />
         <Route path="/*" element={<AppLayout />} />
       </Routes>
     </ErrorBoundary>

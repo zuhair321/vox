@@ -9,6 +9,7 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 import * as auth from '../services/auth.service.js';
+import { setAuthCookies, clearAuthCookies } from '../services/auth.service.js';
 
 export const authRouter = Router();
 
@@ -58,6 +59,7 @@ authRouter.post('/register', authLimiter, async (req, res, next) => {
     const ipAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || '').split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || null;
     const result = await auth.register(data, { deviceInfo, ipAddress, userAgent });
+    setAuthCookies(res, result.tokens.access, result.tokens.refresh);
     res.status(201).json(result);
   } catch (e) { next(e); }
 });
@@ -65,11 +67,14 @@ authRouter.post('/register', authLimiter, async (req, res, next) => {
 authRouter.post('/login', authLimiter, async (req, res, next) => {
   try {
     const data = parse(loginSchema, req.body);
-    // Extract device context from the request
     const deviceInfo = req.headers['user-agent'] || null;
     const ipAddress = (req.headers['x-forwarded-for'] || req.ip || req.socket?.remoteAddress || '').split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || null;
     const result = await auth.login(data, { deviceInfo, ipAddress, userAgent });
+    if (result.twoFactorRequired) {
+      return res.json(result);
+    }
+    setAuthCookies(res, result.tokens.access, result.tokens.refresh);
     res.json(result);
   } catch (e) { next(e); }
 });
@@ -79,22 +84,25 @@ authRouter.post('/2fa/login', authLimiter, async (req, res, next) => {
     const { tempToken, code } = req.body;
     if (!tempToken || !code) throw new HttpError(400, 'tempToken and code are required.');
     const result = await auth.completeTwoFactorLogin(tempToken, code);
+    setAuthCookies(res, result.tokens.access, result.tokens.refresh);
     res.json(result);
   } catch (e) { next(e); }
 });
 
 authRouter.post('/refresh', sensitiveLimiter, async (req, res, next) => {
   try {
-    const refreshToken = req.body?.refreshToken;
+    const refreshToken = req.body?.refreshToken || req.cookies?.vox_refresh;
     if (!refreshToken) throw new HttpError(400, 'refreshToken is required.');
     const result = await auth.refreshTokens(refreshToken);
+    setAuthCookies(res, result.tokens.access, result.tokens.refresh);
     res.json(result);
   } catch (e) { next(e); }
 });
 
 authRouter.post('/logout', async (req, res, next) => {
   try {
-    await auth.logout(req.body?.refreshToken);
+    await auth.logout(req.body?.refreshToken || req.cookies?.vox_refresh);
+    clearAuthCookies(res);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
@@ -201,7 +209,7 @@ authRouter.post('/reset-password', sensitiveLimiter, async (req, res, next) => {
 // ── Change password (logged in) ──────────────────────────────
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(5).max(72),
+  newPassword: z.string().min(8).max(72),
 });
 
 authRouter.post('/change-password', requireAuth, async (req, res, next) => {

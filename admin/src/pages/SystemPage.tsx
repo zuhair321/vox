@@ -41,7 +41,7 @@ export function SystemPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">Database</h3>
-              <p className="text-xs text-gray-500">MySQL</p>
+              <p className="text-xs text-gray-500">PostgreSQL</p>
             </div>
             <div className="ml-auto">
               {health.database.connected ? (

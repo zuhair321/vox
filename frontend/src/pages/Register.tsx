@@ -2,58 +2,43 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, Shield, Zap, User, Mail } from 'lucide-react';
 import { useUiStore } from '../stores/uiStore';
-import { API_BASE } from '../api/client';
+import { useAuthStore } from '../stores/authStore';
 
 const RegisterPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const { addToast } = useUiStore();
+  const { register, isLoading } = useAuthStore();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
-    // Frontend validation
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      addToast('Please enter a valid email address', 'error');
+      return;
+    }
     if (username.length < 3) {
       addToast('Username must be at least 3 characters', 'error');
-      setIsSubmitting(false);
       return;
     }
     if (password.length < 8) {
       addToast('Password must be at least 8 characters', 'error');
-      setIsSubmitting(false);
       return;
     }
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       addToast('Username: letters, numbers, underscores only', 'error');
-      setIsSubmitting(false);
       return;
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Registration failed');
-
-      localStorage.setItem('vox_token', data.tokens.access);
-      localStorage.setItem('vox_refresh_token', data.tokens.refresh);
-      localStorage.setItem('vox_user', JSON.stringify(data.user));
+      await register(email.trim(), username.trim(), password);
       addToast('Account created. Welcome to the void.', 'success');
-      // Flag that we just registered — AppLayout will pick this up after the
-      // SplashScreen delay and redirect to /friends cleanly.
       sessionStorage.setItem('vox_just_registered', '1');
       navigate('/');
     } catch (err: any) {
-      addToast(err.message, 'error');
-    } finally {
-      setIsSubmitting(false);
+      addToast(err.message || 'Registration failed', 'error');
     }
   };
 
@@ -147,9 +132,9 @@ const RegisterPage: React.FC = () => {
             </div>
           </div>
 
-          <button type="submit" className="vox-login-submit" disabled={isSubmitting}>
+          <button type="submit" className="vox-login-submit" disabled={isLoading}>
             <LogIn size={16} aria-hidden="true" />
-            <span>{isSubmitting ? 'CREATING...' : 'JOIN THE VOID'}</span>
+            <span>{isLoading ? 'CREATING...' : 'JOIN THE VOID'}</span>
           </button>
 
           <footer className="vox-login-footer">

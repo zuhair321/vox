@@ -1,22 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useParams } from 'react-router-dom';
 import { useServerStore } from '../stores/serverStore';
 import { fetchInsights } from '../api/insights';
 import type { ServerInsight } from '../api/insights';
 
 const PERIODS = ['7d', '30d', '90d'] as const;
 
-const ServerInsights: React.FC<{ serverId: string }> = ({ serverId }) => {
+const ServerInsights: React.FC = () => {
+  const { serverId } = useParams<{ serverId: string }>();
   const { selectedServer } = useServerStore();
   const [insights, setInsights] = useState<ServerInsight | null>(null);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!serverId || !selectedServer) return;
+    const id = serverId || selectedServer?.id;
+    if (!id) return;
     let alive = true;
     setLoading(true);
-    fetchInsights(selectedServer.id, period)
+    fetchInsights(id, period)
       .then((data: ServerInsight) => {
         if (alive) setInsights(data);
       })
@@ -29,7 +32,9 @@ const ServerInsights: React.FC<{ serverId: string }> = ({ serverId }) => {
     return () => { alive = false; };
   }, [serverId, selectedServer, period]);
 
-  if (!selectedServer) return null;
+  const displayServer = selectedServer || { name: 'Server' };
+
+  if (!selectedServer && !serverId) return null;
 
   const stats = insights
     ? [
@@ -58,7 +63,7 @@ const ServerInsights: React.FC<{ serverId: string }> = ({ serverId }) => {
           SERVER INSIGHTS
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ color: 'var(--shadow)', fontSize: '14px' }}>{selectedServer.name}</span>
+          <span style={{ color: 'var(--shadow)', fontSize: '14px' }}>{displayServer.name}</span>
           <select
             className="angular-input"
             value={period}

@@ -8,10 +8,10 @@
 
 ## ✅ CRITICAL ISSUES FIXED (6)
 
-### 1. MySQL Startup Hanging Indefinitely
+### 1. PostgreSQL Startup Hanging Indefinitely
 **Severity:** CRITICAL  
-**File:** `electron-main.js` (startMySQL function)  
-**Issue:** Fixed 2.5s hardcoded wait; could block Electron indefinitely if MySQL was slow  
+**File:** `electron-main.js` (startPostgreSQL function)  
+**Issue:** Fixed 2.5s hardcoded wait; could block Electron indefinitely if PostgreSQL was slow  
 **Fix Applied:**
 - Added port polling loop (0.5s intervals)
 - 15-second total timeout with health checks
@@ -20,7 +20,7 @@
 
 **Before:**
 ```javascript
-await wait(2500); // Hope MySQL is ready
+await wait(2500); // Hope PostgreSQL is ready
 ```
 
 **After:**
@@ -28,7 +28,7 @@ await wait(2500); // Hope MySQL is ready
 const timeout = 15000;
 while (Date.now() - startTime < timeout) {
   if (await isPortInUse(3306)) {
-    console.log('[MySQL] Connected...');
+    console.log('[PostgreSQL] Connected...');
     return;
   }
   await wait(500);
@@ -93,10 +93,10 @@ while (Date.now() - startTime < timeout) {
 ### 6. Incomplete Startup Error Handling
 **Severity:** CRITICAL  
 **File:** `electron-main.js` (start function)  
-**Issue:** If MySQL or backend failed, app continued anyway (no health check)  
+**Issue:** If PostgreSQL or backend failed, app continued anyway (no health check)  
 **Fix Applied:**
 - Wrapped startup in try-catch blocks
-- MySQL failure: warning only (demo mode works)
+- PostgreSQL failure: warning only (demo mode works)
 - Backend failure: warning only (can use web dev server)
 - Build failure: FATAL — app quits with error message
 - Better differentiation of recoverable vs. fatal failures
@@ -185,7 +185,7 @@ while (Date.now() - startTime < timeout) {
 **Multiple Files**  
 **Fix Applied:**
 - Replaced all `catch { /* ignore */ }` with logged versions in Electron main
-- Example in startMySQL: `catch (err) { console.error('[MySQL Init Error]', err); resolve(); }`
+- Example in startPostgreSQL: `catch (err) { console.error('[PostgreSQL Init Error]', err); resolve(); }`
 
 ---
 
@@ -216,7 +216,7 @@ while (Date.now() - startTime < timeout) {
 ## 📁 FILES MODIFIED
 
 1. **D:\Vox\electron-main.js** (7 changes)
-   - startMySQL(): Port polling + timeout
+   - startPostgreSQL(): Port polling + timeout
    - startBackend(): Health check + error handler
    - ensureViteBuild(): Build validation
    - start(): Error handling with recovery logic
@@ -240,10 +240,10 @@ while (Date.now() - startTime < timeout) {
 
 ## 🧪 HOW TO TEST THE FIXES
 
-### Test MySQL Startup Handling
-1. Stop MySQL service
+### Test PostgreSQL Startup Handling
+1. Stop PostgreSQL service
 2. Start VOX Desktop
-3. **Expected:** Logs "Timeout waiting for MySQL" but app continues (demo mode)
+3. **Expected:** Logs "Timeout waiting for PostgreSQL" but app continues (demo mode)
 4. **Not Expected:** App hangs indefinitely
 
 ### Test Backend Health Check
@@ -291,7 +291,7 @@ These were identified but not critical; can be addressed in future sprints:
 ## 📈 IMPACT
 
 **Before Fixes:**
-- App could hang indefinitely on MySQL startup
+- App could hang indefinitely on PostgreSQL startup
 - Memory leaks from orphaned screen share callbacks
 - Silent failures with no user feedback
 - Backend crashes wouldn't be detected

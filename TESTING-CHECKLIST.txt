@@ -4,11 +4,11 @@
 
 CRITICAL FIXES TO TEST:
 
-☐ 1. MYSQL STARTUP TIMEOUT
+☐ 1. PostgreSQL STARTUP TIMEOUT
    Location: Start VOX Desktop
-   Test: MySQL should probe port and wait max 15s (was 2.5s fixed)
-   ✓ Check console logs for "[MySQL] Waiting for MySQL to accept connections..."
-   ✓ Check "[MySQL] Connected to MySQL on port 3306" message
+   Test: PostgreSQL should probe port and wait max 15s (was 2.5s fixed)
+   ✓ Check console logs for "[PostgreSQL] Waiting for PostgreSQL to accept connections..."
+   ✓ Check "[PostgreSQL] Connected to PostgreSQL on port 3306" message
    
 ☐ 2. FRONTEND BUILD FAILURE DETECTION
    Location: Start VOX Desktop
@@ -63,7 +63,7 @@ HIGH PRIORITY FIXES TO TEST:
 ☐ 9. STARTUP ERROR RECOVERY
    Location: Start VOX Desktop
    Test: App should handle partial failures gracefully
-   ✓ If MySQL fails: "[Startup] Continuing without database (demo mode only)"
+   ✓ If PostgreSQL fails: "[Startup] Continuing without database (demo mode only)"
    ✓ If Backend fails: "[Startup] Continuing without backend"
    ✓ If Build fails: App quits with error (this IS expected)
    
@@ -102,7 +102,7 @@ GENERAL STABILITY TESTS:
    ✓ All state transitions smooth, no crashes
    
 ☐ D. ERROR HANDLING
-   1. Kill MySQL service while app running → should gracefully degrade
+   1. Kill PostgreSQL service while app running → should gracefully degrade
    2. Kill backend process → should show connection error
    3. Disconnect internet → network errors should be logged
    4. Clear auth token → should show "Session Expired"
@@ -121,7 +121,7 @@ GENERAL STABILITY TESTS:
 CONSOLE LOG EXPECTATIONS:
 
 After startup, console should show:
-✓ [MySQL] Connected to MySQL on port 3306
+✓ [PostgreSQL] Connected to PostgreSQL on port 3306
 ✓ [Backend] Spawn/Reuse message for port 4000
 ✓ [Frontend Build] Success message
 ✓ [Frontend] Using existing dist build OR build completed

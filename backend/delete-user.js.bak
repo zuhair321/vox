@@ -1,0 +1,10 @@
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+async function main() {
+  const deleted = await prisma.user.delete({
+    where: { id: '899eeda1-1d01-4874-9748-6fb12608489e' }
+  });
+  console.log('Deleted:', deleted.username);
+  await prisma.$disconnect();
+}
+main().catch(console.error);

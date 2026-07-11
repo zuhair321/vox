@@ -318,6 +318,7 @@ model PasswordReset {
   id        String   @id @default(uuid())
   userId    String
   tokenHash String   @unique
+  type      String   @default("RESET")
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

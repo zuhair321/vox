@@ -19,7 +19,7 @@ Double-click or run:
 
 What starts:
   ✓ Redis (cache server on port 6379)
-  ✓ MySQL (database on port 3306)
+  ✓ PostgreSQL (database on port 3306)
   ✓ VOX Backend (API server on port 4000)
   ✓ VOX Frontend (web UI on port 3000)
 
@@ -58,7 +58,7 @@ Double-click or run:
 
 What starts:
   ✓ Redis
-  ✓ MySQL  
+  ✓ PostgreSQL  
   ✓ VOX Backend (API)
   ✓ Admin Portal (Vite on port 5173)
 
@@ -73,7 +73,7 @@ Double-click or run:
   D:\Vox\vox-web.bat
 
 What starts:
-  ✓ MySQL
+  ✓ PostgreSQL
   ✓ VOX Backend (Node.js)
   ✓ VOX Frontend (Vite dev server)
 
@@ -99,9 +99,9 @@ The following issues have been CORRECTED in all startup scripts:
    Before: C:\vox\redis\redis-server.exe
    After:  D:\Vox\redis\redis-server.exe
 
-2. ✅ MySQL Data Path Fixed
-   Before: C:\vox\mysql-data
-   After:  D:\Vox\mysql-data
+2. ✅ PostgreSQL Data Path Fixed
+   Before: C:\vox\PostgreSQL-data
+   After:  D:\Vox\PostgreSQL-data
 
 3. ✅ Backend Path Fixed
    Before: cd C:\vox\backend && node src\server.js
@@ -123,8 +123,8 @@ Issue: "The system cannot find the file C:\vox\redis\redis-server.exe"
 Solution: Old path was left in script. Scripts have now been updated to use D:\Vox
           Try: D:\Vox\start-vox.bat (newly updated)
 
-Issue: "MySQL fails to start - datadir error"
-Solution: MySQL datadir now set to D:\Vox\mysql-data (instead of C:\vox\mysql-data)
+Issue: "PostgreSQL fails to start - datadir error"
+Solution: PostgreSQL datadir now set to D:\Vox\PostgreSQL-data (instead of C:\vox\PostgreSQL-data)
           Directory exists and is accessible
 
 Issue: "Cannot find module - src/server.js not found"
@@ -144,7 +144,7 @@ Backend Server:          D:\Vox\backend\server.js
 Frontend App:            D:\Vox\frontend\
 Desktop App (Electron):  D:\Vox\electron-main.js
 Admin Portal:            D:\Vox\admin\
-Database Files:          D:\Vox\mysql-data\
+Database Files:          D:\Vox\PostgreSQL-data\
 Redis Cache:             D:\Vox\redis\
 Node Dependencies:       D:\Vox\node_modules\
 Mobile App:              D:\Vox\mobile\ (React Native)
@@ -158,7 +158,7 @@ Frontend Web UI:     http://127.0.0.1:3000     (after start-vox.bat)
 Backend API:         http://127.0.0.1:4000     (after start-vox.bat)
 Admin Portal:        http://localhost:5173      (after start-admin-portal.bat)
 Redis CLI:           D:\Vox\redis\redis-cli.exe
-MySQL:               Command line or MySQL Workbench
+PostgreSQL:               Command line or PostgreSQL Workbench
 
 
 ✅ ALL SCRIPTS VERIFIED AND READY
@@ -186,7 +186,7 @@ All paths have been corrected from C:\vox to D:\Vox.
 • Database and cache data are stored on D: drive
 • First startup may take longer due to service initialization
 • Keep D: drive accessible (do not disconnect external drives if used)
-• Backup D:\Vox\mysql-data regularly for production use
+• Backup D:\Vox\PostgreSQL-data regularly for production use
 
 
 🎯 NEXT STEPS

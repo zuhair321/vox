@@ -34,7 +34,7 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 │  │  ├─ Window management                  │   │
 │  │  ├─ Tray/System integration            │   │
 │  │  ├─ Native notifications               │   │
-│  │  └─ Service spawning (MySQL, Node)     │   │
+│  │  └─ Service spawning (PostgreSQL, Node)     │   │
 │  └────────────────────────────────────────┘   │
 │                    ↓ IPC                        │
 │  ┌────────────────────────────────────────┐   │
@@ -48,7 +48,7 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 │  ┌────────────────────────────────────────┐   │
 │  │  Bundled Backend Services              │   │
 │  │  ├─ Node.js server (port 4000)         │   │
-│  │  ├─ MySQL database (port 3306)         │   │
+│  │  ├─ PostgreSQL database (port 3306)         │   │
 │  │  └─ Redis cache (port 6379)            │   │
 │  └────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────┘
@@ -56,7 +56,7 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 
 **Key Characteristics**:
 - **Monolithic desktop app** with all services bundled
-- Spawns MySQL, Node backend as child processes
+- Spawns PostgreSQL, Node backend as child processes
 - Full OS integration (system tray, native notifications)
 - Chromium-based rendering (full web compatibility)
 - Hardware acceleration enabled (GPU rasterization)
@@ -88,7 +88,7 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 │  ┌────────────────────────────────────────┐    │
 │  │  Remote Backend (Single server)         │    │
 │  │  ├─ Express API (port 4000)             │    │
-│  │  ├─ MySQL database (shared)             │    │
+│  │  ├─ PostgreSQL database (shared)             │    │
 │  │  └─ Socket.io gateway (real-time)       │    │
 │  └────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────┘
@@ -159,7 +159,7 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 | **Screen Share** | ✅ 100% | ❌ 0% | Expo doesn't support native screen share |
 | **Notifications** | ✅ 100% | ✅ 90% | Desktop: Native. Mobile: Expo Push (configured?) |
 | **Themes** | ✅ 8 themes | ✅ 8 themes | Dark/light variants |
-| **Search** | ✅ Full-text | ✅ Full-text | MySQL FTS on backend |
+| **Search** | ✅ Full-text | ✅ Full-text | PostgreSQL FTS on backend |
 | **File Uploads** | ✅ 100% | ✅ 100% | Image/video/document |
 | **User Profiles** | ✅ 100% | ✅ 100% | Avatar, banner, status, bio |
 | **Emoji Reactions** | ✅ 100% | ✅ 100% | Custom server emojis |
@@ -204,7 +204,7 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 - ❌ Large installation footprint (~500MB-1GB)
 - ❌ Higher memory usage
 - ❌ Less touch-friendly interface
-- ❌ Bundled MySQL requires disk space
+- ❌ Bundled PostgreSQL requires disk space
 
 ### 4.2 Mobile App (React Native)
 
@@ -233,8 +233,8 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 
 | Metric | Desktop | Mobile |
 |--------|---------|--------|
-| **First Launch** | 10-15s (spawn MySQL + Node) | 2-5s (connect to remote) |
-| **Subsequent Launches** | 8-12s (MySQL may already run) | 1-3s (hot start) |
+| **First Launch** | 10-15s (spawn PostgreSQL + Node) | 2-5s (connect to remote) |
+| **Subsequent Launches** | 8-12s (PostgreSQL may already run) | 1-3s (hot start) |
 | **Service Readiness** | Wait for 3-4 services | Immediate (remote) |
 
 ### 5.2 Memory Usage
@@ -263,7 +263,7 @@ VOX is available on **two distinct platforms** with shared backend but divergent
 // electron-main.js
 app.on('ready', async () => {
   // 1. Spawn bundled services
-  const mysqldProcess = spawn('mysqld.exe', [...]);
+  const PostgreSQLdProcess = spawn('PostgreSQLd.exe', [...]);
   const backendProcess = spawn('node', ['backend/server.js']);
   
   // 2. Create Electron window
@@ -283,7 +283,7 @@ app.on('ready', async () => {
 **Process Tree**:
 ```
 electron.exe
-├── mysqld.exe          (database service)
+├── PostgreSQLd.exe          (database service)
 ├── node.exe            (Express backend)
 ├── node.exe            (static-server for frontend)
 └── Chromium Renderer   (React app)
@@ -364,7 +364,7 @@ export const useServerStore = create<ServerState>((set) => ({
 
 ### 8.1 Database Schema
 
-**Both apps share the same MySQL schema** (28 tables):
+**Both apps share the same PostgreSQL schema** (28 tables):
 
 | Table | Desktop Access | Mobile Access |
 |-------|----------------|---------------|
@@ -404,7 +404,7 @@ npm run dev:desktop  # Runs electron . (hot reload with Vite)
 **Build Steps**:
 1. `npm install` (dependencies)
 2. `vite build` (frontend bundle)
-3. `npx electron-builder` (package.exe + MySQL + Node.exe)
+3. `npx electron-builder` (package.exe + PostgreSQL + Node.exe)
 4. Sign executable (optional)
 
 **Distribution**:
@@ -446,7 +446,7 @@ expo start -c  # Clear cache and reload
 ### 10.1 Desktop Development
 
 ```bash
-# Terminal 1: Backend + MySQL
+# Terminal 1: Backend + PostgreSQL
 cd backend
 npm install
 npm run dev
@@ -467,7 +467,7 @@ npm run dev:desktop
 - ✅ Fast hot reload (Vite)
 - ✅ Can inspect with DevTools (F12)
 - ✅ Easy debugging with Chrome DevTools
-- ✅ Local MySQL for data manipulation
+- ✅ Local PostgreSQL for data manipulation
 - ❌ Must run 3+ processes
 
 ### 10.2 Mobile Development
@@ -544,7 +544,7 @@ expo start --tunnel  # Tunnel mode
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| MySQL fails to start | Port 3306 occupied | Kill process on :3306 |
+| PostgreSQL fails to start | Port 3306 occupied | Kill process on :3306 |
 | Frontend doesn't load | Vite server not running | `cd frontend && npm run dev` |
 | High memory usage | Chromium overhead | Use Task Manager to monitor |
 | Screen capture fails | No desktopCapturer available | Only works on Windows 10+ |
@@ -695,7 +695,7 @@ vox-monorepo/
 
 | Bottleneck | Desktop Solution | Mobile Solution |
 |------------|------------------|-----------------|
-| Slow startup | Pre-spawn MySQL | Use EAS build cache |
+| Slow startup | Pre-spawn PostgreSQL | Use EAS build cache |
 | High memory | Disable GPU acceleration | Reduce re-renders with useMemo |
 | Poor voice quality | Switch to wired connection | Use 5GHz WiFi |
 | Message lag | Increase Redis TTL | Optimize Socket.io message batching |

@@ -25,7 +25,7 @@
 ✅ PHASE 2: STARTUP SCRIPTS UPDATE
 ─────────────────────────────────────────────────────────────────────────────────
 Updated ALL 5 startup scripts to use D:\Vox instead of C:\vox:
-  ✓ start-vox.bat (All services: Redis, MySQL, Backend, Frontend)
+  ✓ start-vox.bat (All services: Redis, PostgreSQL, Backend, Frontend)
   ✓ vox-desktop.bat (Electron desktop app)
   ✓ vox-web.bat (Web dev mode)
   ✓ start-admin-portal.bat (Admin panel)
@@ -33,7 +33,7 @@ Updated ALL 5 startup scripts to use D:\Vox instead of C:\vox:
 
 Paths corrected:
   • Redis:   C:\vox\redis → D:\Vox\redis ✓
-  • MySQL:   C:\vox\mysql-data → D:\Vox\mysql-data ✓
+  • PostgreSQL:   C:\vox\PostgreSQL-data → D:\Vox\PostgreSQL-data ✓
   • Backend: C:\vox\backend → D:\Vox\backend ✓
   • Frontend: C:\vox\frontend → D:\Vox\frontend ✓
 
@@ -41,7 +41,7 @@ Paths corrected:
 ✅ PHASE 3: SERVICE STARTUP
 ─────────────────────────────────────────────────────────────────────────────────
   ✓ Redis Server: Started on port 6379 (PID: 4892)
-  ✓ MySQL Server: Started on port 3306 (PID: 12068)
+  ✓ PostgreSQL Server: Started on port 3306 (PID: 12068)
   ✓ Database: vox_dev (accessible and responding)
 
 
@@ -62,7 +62,7 @@ Fixed Prisma schema error "Unknown field `hasTurbo`":
 
 ✅ Services Running:
   ✓ Redis:  127.0.0.1:6379 (Cache server)
-  ✓ MySQL:  127.0.0.1:3306 (Database server)
+  ✓ PostgreSQL:  127.0.0.1:3306 (Database server)
 
 ✅ Application Files:
   ✓ Location: D:\Vox\
@@ -83,13 +83,13 @@ Fixed Prisma schema error "Unknown field `hasTurbo`":
 🚀 HOW TO START VOX APPLICATION
 ════════════════════════════════════════════════════════════════════════════════════
 
-OPTION 1: FULL APPLICATION (Redis, MySQL, Backend, Frontend)
+OPTION 1: FULL APPLICATION (Redis, PostgreSQL, Backend, Frontend)
 ─────────────────────────────────────────────────────────────────────────────────
 1. Double-click: D:\Vox\start-vox.bat
 
 2. Wait for startup (5-10 seconds):
    - Redis starts on port 6379
-   - MySQL starts on port 3306  
+   - PostgreSQL starts on port 3306  
    - Backend starts on port 4000
    - Frontend starts on port 3000
 
@@ -140,7 +140,7 @@ Backend Server:                D:\Vox\backend\server.js
 Backend Package:               D:\Vox\backend\package.json
 Frontend Application:          D:\Vox\frontend\
 Frontend Package:              D:\Vox\frontend\package.json
-Database Files:                D:\Vox\mysql-data\
+Database Files:                D:\Vox\PostgreSQL-data\
 Redis Configuration:           D:\Vox\redis\redis.windows-service.conf
 Node Dependencies:             D:\Vox\node_modules\
 Mobile Application:            D:\Vox\mobile\
@@ -155,7 +155,7 @@ Frontend Web UI:               http://127.0.0.1:3000
 Backend API:                   http://127.0.0.1:4000
 Admin Portal:                  http://localhost:5173
 Redis CLI:                     D:\Vox\redis\redis-cli.exe
-MySQL CLI:                     C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe
+PostgreSQL CLI:                     C:\Program Files\PostgreSQL\PostgreSQL Server 8.0\bin\PostgreSQL.exe
 
 
 ════════════════════════════════════════════════════════════════════════════════════
@@ -168,8 +168,8 @@ Solution: Close other applications using those ports, or run stop-vox.bat first
 Problem: "Cannot connect to Redis"
 Solution: Verify D:\Vox\start-vox.bat started Redis (check port 6379)
 
-Problem: "Cannot connect to MySQL"
-Solution: Verify D:\Vox\start-vox.bat started MySQL (check port 3306)
+Problem: "Cannot connect to PostgreSQL"
+Solution: Verify D:\Vox\start-vox.bat started PostgreSQL (check port 3306)
 
 Problem: "Module not found: hasTurbo"
 Solution: ALREADY FIXED - Database columns were added successfully
@@ -191,7 +191,7 @@ Before running the application, verify:
     - backend/ (frontend/ subdirectory)
     - frontend/ (subdirectory)
     - mobile/ (subdirectory)
-    - mysql-data/ (subdirectory)
+    - PostgreSQL-data/ (subdirectory)
     - redis/ (subdirectory)
     - node_modules/ (large folder)
     - package.json
@@ -203,7 +203,7 @@ Before running the application, verify:
 
   ✓ Services responding:
     - netstat -ano | findstr :6379 (Redis)
-    - netstat -ano | findstr :3306 (MySQL)
+    - netstat -ano | findstr :3306 (PostgreSQL)
 
   ✓ No C: drive VOX files:
     C:\Vox should NOT exist
@@ -238,7 +238,7 @@ Prisma Config:
 Your VOX application is now:
   ✓ Completely migrated to D: drive
   ✓ All scripts updated with correct paths
-  ✓ Services (Redis, MySQL) running
+  ✓ Services (Redis, PostgreSQL) running
   ✓ Database schema fixed
   ✓ Ready to start backend and frontend
 

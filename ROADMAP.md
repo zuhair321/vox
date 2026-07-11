@@ -93,8 +93,8 @@
 
 ### 2.2 Server Management
 - [x] **Server settings** — Name, icon, banner, description
-- [ ] **Server insights** — Member count, message count, online count
-- [ ] **Server audit log** — Track all admin actions
+- [x] **Server insights** — Member count, message count, online count
+- [x] **Server audit log** — Track all admin actions
 - [ ] **Server templates** — Save/load server configurations
 - [ ] **Discovery** — Public server listing (optional)
 
@@ -465,8 +465,8 @@ These features are quick to implement and make VOX feel much more complete:
 
 ## 🔧 NEXT PRIORITY ITEMS
 
-1. **Server insights** — Analytics dashboard
-2. **Server audit log** — Track admin actions
+1. ✅ **Server insights** — Analytics dashboard (DONE)
+2. ✅ **Server audit log** — Track admin actions (DONE)
 3. **Slow mode** — Channel rate limiting
 4. **Offline mode** — Cache data locally
 5. **Polls** — Create polls in channels

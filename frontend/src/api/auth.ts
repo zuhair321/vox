@@ -2,8 +2,6 @@ import { api } from './client';
 
 export interface SessionInfo {
   id: string;
-  userId: string;
-  token: string;
   expiresAt: string;
   createdAt: string;
   deviceInfo?: string;
@@ -11,14 +9,100 @@ export interface SessionInfo {
   userAgent?: string;
 }
 
-export const fetchSessions = async (): Promise<SessionInfo[]> => {
+export interface AuthResponse {
+  user: any;
+  tokens: {
+    access: string;
+    refresh: string;
+  };
+}
+
+export interface TwoFactorChallenge {
+  twoFactorRequired: true;
+  tempToken: string;
+}
+
+export async function register(email: string, username: string, password: string): Promise<AuthResponse> {
+  return api('/api/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, username, password }),
+    skipAuth: true,
+  } as any);
+}
+
+export async function login(emailOrUsername: string, password: string): Promise<AuthResponse | TwoFactorChallenge> {
+  return api('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ emailOrUsername, password }),
+    skipAuth: true,
+  } as any);
+}
+
+export async function twoFactorLogin(tempToken: string, code: string): Promise<AuthResponse> {
+  return api('/api/auth/2fa/login', {
+    method: 'POST',
+    body: JSON.stringify({ tempToken, code }),
+    skipAuth: true,
+  } as any);
+}
+
+export async function refreshToken(refreshTokenValue: string): Promise<AuthResponse> {
+  return api('/api/auth/refresh', {
+    method: 'POST',
+    body: JSON.stringify({ refreshToken: refreshTokenValue }),
+    skipAuth: true,
+  } as any);
+}
+
+export async function logout(refreshTokenValue: string): Promise<void> {
+  await api('/api/auth/logout', {
+    method: 'POST',
+    body: JSON.stringify({ refreshToken: refreshTokenValue }),
+  } as any);
+}
+
+export async function getMe(): Promise<{ user: any }> {
+  return api('/api/auth/me');
+}
+
+export async function updateMe(data: { displayName?: string; bio?: string; status?: string }): Promise<{ user: any }> {
+  return api('/api/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  } as any);
+}
+
+export async function forgotPassword(email: string): Promise<{ ok: boolean }> {
+  return api('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+    skipAuth: true,
+  } as any);
+}
+
+export async function resetPassword(token: string, password: string): Promise<{ ok: boolean }> {
+  return api('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+    skipAuth: true,
+  } as any);
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+  return api('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ currentPassword, newPassword }),
+  } as any);
+}
+
+export async function fetchSessions(): Promise<SessionInfo[]> {
   return api('/api/auth/sessions') as Promise<SessionInfo[]>;
-};
+}
 
-export const revokeSession = async (sessionId: string): Promise<void> => {
+export async function revokeSession(sessionId: string): Promise<void> {
   await api(`/api/auth/sessions/${sessionId}`, { method: 'DELETE' });
-};
+}
 
-export const revokeAllSessions = async (): Promise<void> => {
+export async function revokeAllSessions(): Promise<void> {
   await api('/api/auth/sessions', { method: 'DELETE' });
-};
+}

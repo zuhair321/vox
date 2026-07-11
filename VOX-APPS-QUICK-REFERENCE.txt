@@ -11,13 +11,13 @@ DESKTOP (Windows Only)
 │  Electron Application (electron-main.js + preload.js)                       │
 │  ├─ React 18 Frontend (Vite, port 5173)                                    │
 │  ├─ Express Backend (Node.js, port 4000) [BUNDLED]                         │
-│  ├─ MySQL Database (MySQL Server, port 3306) [BUNDLED]                     │
+│  ├─ PostgreSQL Database (PostgreSQL Server, port 3306) [BUNDLED]                     │
 │  └─ Redis Cache (Redis, port 6379) [BUNDLED]                               │
 │                                                                              │
 │  Installation Size: 500MB - 1GB                                             │
 │  Memory: 400-600MB (idle)                                                   │
 │  Startup: 10-15 seconds                                                     │
-│  Services: 4 processes (Electron + MySQL + Node.js x2)                      │
+│  Services: 4 processes (Electron + PostgreSQL + Node.js x2)                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 
@@ -53,7 +53,7 @@ TECHNOLOGY STACK BREAKDOWN
 │ Shell/Platform  │ Electron 30.0         │ React Native 0.86    │
 │ Dev/Build       │ Node.js 18+           │ EAS Build            │
 │ Backend         │ Express 5.2 (local)   │ Express (remote)     │
-│ Database        │ MySQL 8.0 (local)     │ MySQL (remote)       │
+│ Database        │ PostgreSQL 8.0 (local)     │ PostgreSQL (remote)       │
 │ Cache           │ Redis 4.6 (local)     │ Redis (remote)       │
 └─────────────────┴──────────────────────┴──────────────────────┘
 
@@ -92,7 +92,7 @@ PERFORMANCE METRICS
 ════════════════════════════════════════════════════════════════════════════════════
 
 Startup Time:
-  Desktop:  1st launch 10-15s (spawn MySQL/Node) | Subsequent 8-12s
+  Desktop:  1st launch 10-15s (spawn PostgreSQL/Node) | Subsequent 8-12s
   Mobile:   1st launch 2-5s (connect to server) | Subsequent 1-3s
 
 Memory Footprint:
@@ -108,8 +108,8 @@ Installation Size:
   Mobile:   80-150MB (APK only)
 
 Database:
-  Desktop:  Local MySQL instance
-  Mobile:   Remote MySQL (single server)
+  Desktop:  Local PostgreSQL instance
+  Mobile:   Remote PostgreSQL (single server)
 
 
 FILE STRUCTURE GUIDE
@@ -151,7 +151,7 @@ DEVELOPMENT WORKFLOW COMPARISON
 
 DESKTOP DEVELOPMENT:
 ┌────────────────────────────────────────────────────────────────────────────┐
-│ Terminal 1: MySQL + Express Backend                                        │
+│ Terminal 1: PostgreSQL + Express Backend                                        │
 │   $ cd backend && npm run dev                                              │
 │                                                                             │
 │ Terminal 2: React Frontend (Vite dev server, hot reload)                  │
@@ -275,7 +275,7 @@ Desktop Limitations:
   • Windows only (no Mac/Linux native builds)
   • Large installation footprint
   • High memory usage
-  • Bundled MySQL requires disk space
+  • Bundled PostgreSQL requires disk space
   • Not suitable for low-end hardware
 
 Mobile Limitations:
