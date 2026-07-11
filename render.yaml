@@ -1,8 +1,12 @@
+# VOX - All Free Tier Deploy
+# Note: Render no longer offers free Redis. Use Upstash (free tier) instead.
+# Sign up at https://upstash.com and get REDIS_URL
+
 services:
   - type: web
     name: vox-backend
     runtime: node
-    plan: starter
+    plan: free
     autoDeploy: true
     branch: master
     buildCommand: cd backend && npm install && npx prisma generate && npx prisma migrate deploy
@@ -33,11 +37,10 @@ services:
         value: VOX
       - key: TWO_FACTOR_ENCRYPTION_KEY
         generateValue: true
+      # IMPORTANT: Redis no longer free on Render. Use Upstash free tier instead:
+      # Sign up at https://upstash.com, create Redis, paste URL here:
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: vox-redis
-          property: connectionString
+        sync: false
       - key: REDIS_CACHE_TTL
         value: 60
       - key: RESEND_API_KEY
@@ -45,13 +48,9 @@ services:
       - key: RESEND_FROM_ADDRESS
         value: VOX <noreply@vox.app>
 
-  - type: pserv
-    name: vox-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
-
   - type: static
     name: vox-frontend
+    plan: free
     autoDeploy: true
     branch: master
     buildCommand: cd frontend && npm install && npm run build
