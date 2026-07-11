@@ -15,6 +15,7 @@ import { getIO } from '../sockets/index.js';
 import { sanitize } from '../middleware/sanitize.js';
 import { normalizeAttachments } from '../lib/attachments.js';
 import { getMessagesBefore } from '../services/chat.service.js';
+import { getCache } from '../lib/redis.js';
 
 export const messageRouter = Router();
 
@@ -71,6 +72,28 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
     const attachments = normalizeAttachments(req.body?.attachments);
     if (!content && attachments.length === 0) {
       throw new HttpError(400, 'Message body or attachment is required.');
+    }
+
+    // Slowmode enforcement: check Redis for last message timestamp
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (channel?.slowmode > 0) {
+      const slowmodeKey = `slowmode:${channelId}:${req.user.id}`;
+      const redis = await getCache();
+      if (redis) {
+        const lastSent = await redis.get(slowmodeKey);
+        if (lastSent) {
+          const elapsed = (Date.now() - parseInt(lastSent, 10)) / 1000;
+          const remaining = Math.ceil(channel.slowmode - elapsed);
+          if (remaining > 0) {
+            return res.status(429).json({
+              error: `Slowmode is active. You can send another message in ${remaining}s.`,
+              retryAfter: remaining,
+            });
+          }
+        }
+        // Set/refresh the slowmode key
+        await redis.set(slowmodeKey, Date.now().toString(), { EX: channel.slowmode + 5 });
+      }
     }
 
     // Never-500 safety net. If the authed user id doesn't resolve (e.g. a stale

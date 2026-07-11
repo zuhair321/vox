@@ -62,7 +62,7 @@
 - [x] **Reply threads** — Thread sidebar, thread participants
 - [x] **Message search** — Full-text search in channels
 - [x] **Pinned messages** — Per-channel pin list
-- [ ] **Slow mode** — Channel-level rate limiting (admin setting)
+- [x] **Slow mode** — Channel-level rate limiting (admin setting)
 - [ ] **Slash commands** — `/giphy`, `/poll`, `/nickname`
 
 ### 1.3 Voice Chat Polish
@@ -166,7 +166,7 @@
 - [ ] **Quick moderation** — Kick/ban with reason
 - [ ] **Strike system** — Track user violations
 - [ ] **Timeout** — Temporary mute (like Discord timeout)
-- [ ] **Slowmode** — Channel-level message rate limit
+- [x] **Slowmode** — Channel-level message rate limit
 
 ### 5.2 Reporting System
 - [ ] **Report messages** — Report inappropriate messages
@@ -467,7 +467,7 @@ These features are quick to implement and make VOX feel much more complete:
 
 1. ✅ **Server insights** — Analytics dashboard (DONE)
 2. ✅ **Server audit log** — Track admin actions (DONE)
-3. **Slow mode** — Channel rate limiting
+3. ✅ **Slow mode** — Channel rate limiting (DONE)
 4. **Offline mode** — Cache data locally
 5. **Polls** — Create polls in channels
 6. **Read receipts** — Show when messages are read

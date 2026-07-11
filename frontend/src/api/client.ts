@@ -134,10 +134,11 @@ export async function api(path: string, options: RequestInit = {}, _retry = fals
 
   if (res.status === 429) {
     const retryAfter = res.headers.get('Retry-After');
-    const seconds = retryAfter ? parseInt(retryAfter, 10) : 60;
-    const err = new Error(`You're doing that too fast. Please wait ${seconds}s.`);
+    const seconds = retryAfter ? parseInt(retryAfter, 10) : (data?.retryAfter ? Math.ceil(data.retryAfter) : 60);
+    const err = new Error(data?.error || `You're doing that too fast. Please wait ${seconds}s.`);
     (err as any).rateLimited = true;
     (err as any).retryAfter = seconds;
+    (err as any).status = 429;
     throw err;
   }
 

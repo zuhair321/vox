@@ -32,12 +32,22 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
   const [showFuseMenu, setShowFuseMenu] = useState(false);
   const [busy, setBusy] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [slowmodeCooldown, setSlowmodeCooldown] = useState(0); // seconds remaining
   const { sendDM, startTyping, stopTyping, startDmTyping, stopDmTyping } = useSocketStore();
   const { addToast } = useUiStore();
   const { selectedServer } = useServerStore();
   const { replyingTo, setReplyingTo } = useMessageStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Slowmode countdown timer
+  useEffect(() => {
+    if (slowmodeCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setSlowmodeCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [slowmodeCooldown > 0]);
 
   const memberNames = useMemo(() => {
     const names: string[] = [];
@@ -111,7 +121,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     .filter((p) => p.status === 'done' && p.attachment)
     .map((p) => p.attachment!) as Attachment[];
 
-  const canSend = !busy && content.length <= 2000 && (content.trim().length > 0 || readyAttachments.length > 0);
+  const canSend = !busy && slowmodeCooldown === 0 && content.length <= 2000 && (content.trim().length > 0 || readyAttachments.length > 0);
 
   const charCountColor = content.length >= 2000 ? 'var(--blood)' : content.length >= 1900 ? 'var(--gold)' : 'var(--ash)';
 
@@ -174,7 +184,12 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
 
     const onError = (err: any) => {
       playError();
-      if (err?.rateLimited) {
+      if (err?.status === 429 && err?.retryAfter) {
+        // Slowmode cooldown
+        const secs = Math.ceil(err.retryAfter);
+        setSlowmodeCooldown(secs);
+        addToast(`Slowmode is active. You can send in ${secs}s.`, 'warning', { duration: secs * 1000 });
+      } else if (err?.rateLimited) {
         addToast(err.message || "You're doing that too fast. Slow down!", 'warning', { duration: 5000 });
       } else {
         addToast(err?.message || 'Message failed to send.', 'error');
@@ -443,6 +458,26 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
           }}
         >
           {content.length} / 2000
+        </div>
+      )}
+
+      {/* Slowmode indicator */}
+      {slowmodeCooldown > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            left: '8px',
+            top: '-20px',
+            fontSize: '11px',
+            color: 'var(--chaos)',
+            fontFamily: "'Share Tech Mono', monospace",
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+        >
+          <span style={{ animation: 'pulse 1s infinite' }}>⏱</span>
+          {slowmodeCooldown}s
         </div>
       )}
 
