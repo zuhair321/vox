@@ -61,6 +61,10 @@ interface UiStore {
   // Turbo modal
   showTurboModal: boolean;
   setShowTurboModal: (show: boolean) => void;
+
+  // Shortcuts modal
+  showShortcuts: boolean;
+  setShowShortcuts: (show: boolean) => void;
 }
 
 export const useUiStore = create<UiStore>((set) => ({
@@ -117,4 +121,7 @@ export const useUiStore = create<UiStore>((set) => ({
 
   showTurboModal: false,
   setShowTurboModal: (show) => set({ showTurboModal: show }),
+
+  showShortcuts: false,
+  setShowShortcuts: (show) => set({ showShortcuts: show }),
 }));

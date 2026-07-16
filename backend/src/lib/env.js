@@ -9,7 +9,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 const required = [
-  'DATABASE_URL',
   'JWT_ACCESS_SECRET',
   'JWT_REFRESH_SECRET',
   'TWO_FACTOR_APP_NAME',
@@ -30,9 +29,10 @@ const clientOrigin = process.env.CLIENT_ORIGIN || 'http://127.0.0.1:3000';
 // hardcoded in source — the old code baked in a personal ngrok URL that broke
 // for everyone else and leaked a private tunnel.
 //
-// `null` is included so the React Native (VOX mobile) app — which sends
-// `Origin: null` for native fetches — is allowed. The public API origin is
-// also allowed for the production domain.
+// Native apps send Origin: null, but we deliberately exclude null from the
+// allowed origins list because `Origin: null` is also used by sandboxed iframes
+// and CSRF vectors. The mobile app authenticates via API key / token headers
+// instead of relying on CORS origin matching.
 const apiBaseOrigin = (process.env.API_BASE || '').replace(/\/+$/, '');
 
 // Support all platforms: localhost dev, LAN IP, production domains, mobile
@@ -41,7 +41,6 @@ const extraOrigins = String(process.env.EXTRA_CORS_ORIGINS || '')
   .map((o) => o.trim())
   .filter(Boolean);
 
-// Include all localhost variants and null origin for native apps
 const localOrigins = [
   'http://localhost:3000',
   'http://127.0.0.1:3000',
@@ -49,7 +48,8 @@ const localOrigins = [
   'http://127.0.0.1:3001',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
-  null, // Native apps send Origin: null
+  'file://',
+  null,
 ];
 
 const corsOrigins = Array.from(
@@ -86,6 +86,30 @@ export const env = {
   resend: {
     apiKey: process.env.RESEND_API_KEY || 'dev',
     fromAddress: process.env.RESEND_FROM_ADDRESS || 'VOX <noreply@vox.app>',
+  },
+  oauth: {
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    githubClientId: process.env.GITHUB_CLIENT_ID || '',
+    githubClientSecret: process.env.GITHUB_CLIENT_SECRET || '',
+    appleClientId: process.env.APPLE_CLIENT_ID || '',     // Services ID
+    appleTeamId: process.env.APPLE_TEAM_ID || '',
+    appleKeyId: process.env.APPLE_KEY_ID || '',
+    applePrivateKey: process.env.APPLE_PRIVATE_KEY || '', // PEM private key
+  },
+  livekit: {
+    url: process.env.LIVEKIT_URL || '',
+    apiKey: process.env.LIVEKIT_API_KEY || '',
+    apiSecret: process.env.LIVEKIT_API_SECRET || '',
+  },
+  vapid: {
+    subject: process.env.VAPID_SUBJECT || 'mailto:noreply@vox.app',
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+  },
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
   },
 };
 

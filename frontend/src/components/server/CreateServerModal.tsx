@@ -6,6 +6,7 @@ import { createServer } from '../../api/servers';
 import { API_BASE, getToken } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
 import { validateServerName } from '../../utils/validation';
+import { listTemplates, createFromTemplate, type ServerTemplate } from '../../api/templates';
 
 const CreateServerModal: React.FC = () => {
   const { isCreateServerOpen, setCreateServerOpen, addToast } = useUiStore();
@@ -20,8 +21,21 @@ const CreateServerModal: React.FC = () => {
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<'blank' | 'template'>('blank');
+  const [templates, setTemplates] = useState<ServerTemplate[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
 
   if (!isCreateServerOpen) return null;
+
+  // Load public templates whenever the modal is shown.
+  React.useEffect(() => {
+    if (!isCreateServerOpen) return;
+    listTemplates().then((d) => {
+      setTemplates(d.templates);
+      setSelectedTemplate(d.templates[0]?.id || '');
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreateServerOpen]);
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -61,6 +75,43 @@ const CreateServerModal: React.FC = () => {
   };
 
   const handleCreate = async () => {
+    // Template mode: build a server from a saved template.
+    if (mode === 'template') {
+      if (!selectedTemplate) {
+        addToast('Select a template first.', 'error');
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await createFromTemplate({ templateId: selectedTemplate, name: name.trim() || undefined });
+        const { addServer, setSelectedServer, setSelectedChannel } = useServerStore.getState();
+        addServer(res.server);
+        await fetchServers();
+        // Land on the freshly forged realm. fetchServers() keeps the previously
+        // selected server, so we must explicitly select the new one to match the
+        // URL we're about to navigate to.
+        setSelectedServer(res.server);
+        setSelectedChannel(res.server.channels?.[0] || null);
+        if (res.server.channels?.length > 0) {
+          navigate(`/channels/${res.server.id}/${res.server.channels[0].id}`);
+        } else {
+          navigate(`/channels/${res.server.id}`);
+        }
+        addToast('⚡ Realm forged from template.', 'success');
+        setCreateServerOpen(false);
+        setName('');
+        setIconPreview(null);
+        setIconFile(null);
+        setBannerPreview(null);
+        setBannerFile(null);
+        setMode('blank');
+      } catch (e: any) {
+        addToast(e.message || 'Failed to create server', 'error');
+      }
+      setLoading(false);
+      return;
+    }
+
     const error = validateServerName(name);
     if (error) {
       addToast(error, 'error');
@@ -125,6 +176,14 @@ const CreateServerModal: React.FC = () => {
       // Also refresh the full list from the server for other consumers
       await fetchServers();
 
+      // Land on the freshly forged realm. fetchServers() keeps the previously
+      // selected server, so we must explicitly select the new one to match the
+      // URL we're about to navigate to (otherwise the sidebar/main view show a
+      // different server than the one just created).
+      const { setSelectedServer, setSelectedChannel } = useServerStore.getState();
+      setSelectedServer(serverWithImages);
+      setSelectedChannel(serverWithImages.channels?.[0] || null);
+
       // Navigate to the new server
       if (serverWithImages.channels?.length > 0) {
         navigate(`/channels/${serverWithImages.id}/${serverWithImages.channels[0].id}`);
@@ -182,6 +241,53 @@ const CreateServerModal: React.FC = () => {
         
         <h2 style={{ color: 'var(--ghost-white)', fontSize: '20px', marginBottom: '24px', textAlign: 'center', fontFamily: 'Cinzel, serif' }}>CREATE YOUR REALM</h2>
 
+        {/* Mode toggle: blank vs. from template */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+          {(['blank', 'template'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              style={{
+                flex: 1,
+                padding: '8px',
+                background: mode === m ? 'rgba(216,74,90,0.12)' : 'var(--obsidian)',
+                border: mode === m ? '1px solid rgba(216,74,90,0.4)' : '1px solid var(--rim)',
+                borderRadius: '4px',
+                color: mode === m ? 'var(--chaos)' : 'var(--ash)',
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontFamily: "'Share Tech Mono', monospace",
+              }}
+            >
+              {m === 'blank' ? 'FROM SCRATCH' : 'FROM TEMPLATE'}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'template' ? (
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '10px', color: 'var(--shadow)', marginBottom: '8px', letterSpacing: '0.1em' }}>CHOOSE TEMPLATE</label>
+            <select
+              className="angular-input"
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
+            >
+              {templates.length === 0 && <option value="">No templates available</option>}
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>{t.name} — {t.channelCount} channels, {t.roleCount} roles</option>
+              ))}
+            </select>
+            <label style={{ display: 'block', fontSize: '10px', color: 'var(--shadow)', margin: '12px 0 8px', letterSpacing: '0.1em' }}>REALM NAME (OPTIONAL)</label>
+            <input
+              className="angular-input"
+              placeholder="Leave blank to use template name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+        ) : (
+        <>
         {/* Server Icon Upload */}
         <div style={{ marginBottom: '20px' }}>
           <label style={{ display: 'block', fontSize: '10px', color: 'var(--shadow)', marginBottom: '8px', letterSpacing: '0.1em' }}>REALM ICON (OPTIONAL)</label>
@@ -399,6 +505,7 @@ const CreateServerModal: React.FC = () => {
             }}
           />
         </div>
+        </>)}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '24px' }}>
           <button className="angular-button" onClick={() => {

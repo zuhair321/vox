@@ -12,15 +12,18 @@
 //   - On connect: getRecentMessages(50) — latest 50 messages from user's channels.
 //   - Older history: getMessagesBefore(cursor, limit) — cursor = oldest
 //     message id already loaded, returns up to `limit` older messages.
-import { prisma } from '../lib/prisma.js';
+import { prisma, prismaReplica } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
-import { cacheGet, cacheSet, cacheInvalidate } from '../lib/redis.js';
+import { cacheGet, cacheSet, cacheInvalidate, cacheInvalidatePattern } from '../lib/redis.js';
 
 const MESSAGE_INCLUDE = { author: true, reactions: true };
+const MESSAGE_INCLUDE_CREATE = { author: true };
 const CHANNELS_CACHE_KEY = 'vox:channels';
 const MEMBERS_CACHE_KEY = 'vox:members:online';
 const STATE_CACHE_KEY = 'vox:state';  // prefix; full key = vox:state:{userId}
+const CHANNEL_RECENT_KEY = 'vox:channel';
 const CACHE_TTL = 30;
+const CHANNEL_RECENT_TTL = 300;
 
 let nitroClaimed = false;
 let databaseAvailable = true;
@@ -116,19 +119,56 @@ export async function invalidateMembersCache(serverId) {
   }
 }
 
+// ── Hot-channel message cache (roadmap Month 1) ─────────────────
+// Caches the 50 most recent messages per channel for 5 minutes.
+// On any new message in a channel the cache is invalidated so the next
+// reader always sees fresh data. Uses SCAN-pattern invalidation so we
+// don't depend on knowing the exact channelId ahead of time.
+
+function channelRecentKey(channelId) {
+  return `${CHANNEL_RECENT_KEY}:${channelId}:recent`;
+}
+
+export async function invalidateChannelRecentCache(channelId) {
+  const key = channelRecentKey(channelId);
+  await cacheInvalidate(key);
+}
+
+export async function invalidateChannelRecentCachePattern(channelId) {
+  const key = channelRecentKey(channelId);
+  await cacheInvalidatePattern(`${CHANNEL_RECENT_KEY}:*:recent`);
+}
+
 // ── Messages (paginated) ───────────────────────────────────────
 // Latest `limit` messages, newest last — used for initial state hydration.
 // When userId is provided, scopes to channels the user can access.
+// Hot-channel cache: 50 most recent messages per channel, 5min TTL.
 export async function getRecentMessages(limit = 50, userId = null) {
   if (!databaseAvailable) return fallbackMessages.slice(-limit);
 
-  // If we already fetched scoped state, this function is only called
-  // for un-authed / fallback paths
-  return prisma.message.findMany({
+  return prismaReplica.message.findMany({
     take: Math.min(limit, 100),
     orderBy: { createdAt: 'asc' },
     include: MESSAGE_INCLUDE,
   });
+}
+
+export async function getRecentMessagesForChannel(channelId, limit = 50) {
+  if (!databaseAvailable) return [];
+
+  const key = channelRecentKey(channelId);
+  const cached = await cacheGet(key);
+  if (cached) return cached;
+
+  const messages = await prismaReplica.message.findMany({
+    where: { channelId },
+    take: Math.min(limit, 100),
+    orderBy: { createdAt: 'asc' },
+    include: MESSAGE_INCLUDE,
+  });
+
+  await cacheSet(key, messages, CHANNEL_RECENT_TTL);
+  return messages;
 }
 
 // Cursor-based pagination: returns messages older than the cursor message.
@@ -138,107 +178,135 @@ export async function getMessagesBefore(cursorId, limit = 50) {
   if (!databaseAvailable) return fallbackMessages.slice(-limit);
   const safeLimit = Math.min(parseInt(limit, 10) || 50, 100);
 
-  const cursorMsg = await prisma.message.findUnique({ where: { id: cursorId } });
+  const cursorMsg = await prismaReplica.message.findUnique({ 
+    where: { id: cursorId },
+    select: { channelId: true, createdAt: true }
+  });
   if (!cursorMsg) return []; // invalid cursor
 
-  return prisma.message.findMany({
+  return prismaReplica.message.findMany({
     take: safeLimit,
-    where: { createdAt: { lt: cursorMsg.createdAt } },
+    where: { channelId: cursorMsg.channelId, createdAt: { lt: cursorMsg.createdAt } },
     orderBy: { createdAt: 'asc' },
     include: MESSAGE_INCLUDE,
   });
 }
 
-// ── Full State (socket init) ───────────────────────────────────
-// v2: fully parallel, Redis-cached per user (30s), scopes messages to user's channels.
+// Per-user in-flight coalescing for getState(). If 1,000 users in the same big
+// server reconnect at once, they'd otherwise trigger 1,000 parallel DB queries.
+// One in-flight promise per user collapses that stampede to a single query.
+const stateInflight = new Map();
+
 export async function getState(userId) {
   const cacheKey = userId ? `${STATE_CACHE_KEY}:${userId}` : null;
 
-  // 1. Check per-user cache (instant on cache hit — no DB at all)
   if (cacheKey) {
-    const cached = await cacheGet(cacheKey);
-    if (cached) return cached;
+    const existing = stateInflight.get(cacheKey);
+    if (existing) return existing;
   }
 
-  let channels, members, recentMessages, messagesCount;
-
-  try {
-    if (userId && databaseAvailable) {
-      // Fetch member servers first (needed to scope everything else)
-      const memberServerIds = (await prisma.serverMember.findMany({
-        where: { userId },
-        select: { serverId: true },
-      })).map(m => m.serverId);
-
-      if (memberServerIds.length > 0) {
-        // All 4 DB calls now fire in parallel — no chaining
-        const [chResults, msgCount] = await Promise.all([
-          // Channels: scoped to user's servers
-          prisma.channel.findMany({
-            where: { serverId: { in: memberServerIds } },
-            orderBy: { position: 'asc' },
-          }),
-          // Total message count across accessible channels
-          prisma.message.count({
-            where: { channel: { serverId: { in: memberServerIds } } },
-          }),
-        ]);
-
-        channels = chResults;
-        messagesCount = msgCount;
-
-        // Get channel IDs for message scoping
-        const channelIds = channels.map(c => c.id);
-
-        // Recent messages: scoped to user's channels, latest 50
-        recentMessages = channelIds.length > 0
-          ? await prisma.message.findMany({
-              where: { channelId: { in: channelIds } },
-              include: MESSAGE_INCLUDE,
-              orderBy: { createdAt: 'asc' },
-              take: 50,
-            })
-          : [];
-
-        // Online members: across all servers the user is in
-        const [onlineMembers] = await Promise.all([
-          getOnlineMembers(),
-        ]);
-        members = onlineMembers;
-      } else {
-        // User has no server memberships — return empty state instead of fallback demo messages
-        channels = [];
-        recentMessages = [];
-        messagesCount = 0;
-        members = [];
+  const promise = (async () => {
+    try {
+      // 1. Check per-user cache (instant on cache hit — no DB at all)
+      if (cacheKey) {
+        const cached = await cacheGet(cacheKey);
+        if (cached) return cached;
       }
-    } else {
-      // Unauthenticated: public channels + total count
-      const [chResults, msgCount] = await Promise.all([
-        getChannels(),
-        databaseAvailable ? prisma.message.count() : Promise.resolve(fallbackMessages.length),
-      ]);
-      channels = chResults;
-      messagesCount = msgCount;
-      recentMessages = await getRecentMessages(50);
-      members = await getOnlineMembers();
+
+      let channels, members, recentMessages, messagesCount;
+
+      try {
+        if (userId && databaseAvailable) {
+          // Fetch member servers first (needed to scope everything else)
+          const memberServerIds = (await prisma.serverMember.findMany({
+            where: { userId },
+            select: { serverId: true },
+          })).map(m => m.serverId);
+
+          if (memberServerIds.length > 0) {
+            // All 4 DB calls now fire in parallel — no chaining
+            const [chResults, msgCount] = await Promise.all([
+              // Channels: scoped to user's servers
+              prisma.channel.findMany({
+                where: { serverId: { in: memberServerIds } },
+                orderBy: { position: 'asc' },
+              }),
+              // Total message count across accessible channels
+              prisma.message.count({
+                where: { channel: { serverId: { in: memberServerIds } } },
+              }),
+            ]);
+
+            channels = chResults;
+            messagesCount = msgCount;
+
+            // Get channel IDs for message scoping
+            const channelIds = channels.map(c => c.id);
+
+            // Recent messages: scoped to user's channels, latest 50
+            recentMessages = channelIds.length > 0
+              ? await prisma.message.findMany({
+                  where: { channelId: { in: channelIds } },
+                  include: MESSAGE_INCLUDE,
+                  orderBy: { createdAt: 'asc' },
+                  take: 50,
+                })
+              : [];
+
+            // Online members: across all servers the user is in
+            const [onlineMembers] = await Promise.all([
+              getOnlineMembers(),
+            ]);
+            members = onlineMembers;
+          } else {
+            // User has no server memberships — return empty state instead of fallback demo messages
+            channels = [];
+            recentMessages = [];
+            messagesCount = 0;
+            members = [];
+          }
+        } else {
+          // Unauthenticated: public channels + total count
+          const [chResults, msgCount] = await Promise.all([
+            getChannels(),
+            databaseAvailable ? prisma.message.count() : Promise.resolve(fallbackMessages.length),
+          ]);
+          channels = chResults;
+          messagesCount = msgCount;
+          const publicChannelIds = channels.map(c => c.id);
+          recentMessages = publicChannelIds.length > 0
+            ? await prisma.message.findMany({
+                where: { channelId: { in: publicChannelIds } },
+                include: MESSAGE_INCLUDE,
+                orderBy: { createdAt: 'asc' },
+                take: 50,
+              })
+            : [];
+          members = await getOnlineMembers();
+        }
+      } catch (error) {
+        useFallback(error);
+        channels = fallbackChannels;
+        recentMessages = fallbackMessages.slice(-50);
+        members = fallbackMembers;
+        messagesCount = fallbackMessages.length;
+      }
+
+      const state = { channels, members, recentMessages, nitroClaimed, messagesCount };
+
+      // Cache per-user state (30s) so 500 simultaneous connects don't all hit the database
+      if (cacheKey) {
+        await cacheSet(cacheKey, state, CACHE_TTL);
+      }
+
+      return state;
+    } finally {
+      if (cacheKey) stateInflight.delete(cacheKey);
     }
-  } catch (error) {
-    useFallback(error);
-    channels = fallbackChannels;
-    recentMessages = fallbackMessages.slice(-50);
-    members = fallbackMembers;
-    messagesCount = fallbackMessages.length;
-  }
+  })();
 
-  const state = { channels, members, recentMessages, nitroClaimed, messagesCount };
-
-  // Cache per-user state (30s) so 500 simultaneous connects don't all hit the database
-  if (cacheKey) {
-    await cacheSet(cacheKey, state, CACHE_TTL);
-  }
-
-  return state;
+  if (cacheKey) stateInflight.set(cacheKey, promise);
+  return promise;
 }
 
 // ── Nitro ─────────────────────────────────────────────────────
@@ -275,7 +343,8 @@ export async function createMessage({ channelId, author, body, user, attachments
       data.authorOverride = String(author || 'Guest').slice(0, 32);
     }
 
-    const message = await prisma.message.create({ data, include: MESSAGE_INCLUDE });
+    const message = await prisma.message.create({ data, include: MESSAGE_INCLUDE_CREATE });
+    await invalidateChannelRecentCache(channelId);
     return message;
   } catch (error) {
     if (error instanceof HttpError) throw error;

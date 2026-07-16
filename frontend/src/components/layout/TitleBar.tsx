@@ -8,9 +8,7 @@ const TitleBar: React.FC = () => {
     const api = (window as any).electronAPI;
     if (api?.windowControls?.platform) {
       setPlatform(api.windowControls.platform);
-      // Get initial state
       api.windowControls.isMaximized?.().then((max: boolean) => setIsMaximized(max));
-      // Listen for changes
       api.onMaximizeChange?.((max: boolean) => setIsMaximized(max));
     }
   }, []);

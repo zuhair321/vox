@@ -49,7 +49,7 @@ export function useKeyboardShortcuts(callbacks: ShortcutCallbacks) {
         e.preventDefault();
         // Toggle shortcuts help via the UI store flag.
         ui.setCreateServerOpen(false);
-        (ui as any).setShortcutsOpen?.(true);
+        ui.setShowShortcuts(true);
         return;
       }
       if (matches(e, { ctrl: true, key: ',' })) {

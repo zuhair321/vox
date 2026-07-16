@@ -9,13 +9,16 @@ import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { requirePermission, checkChannelPermission } from '../middleware/permissions.js';
 import { HttpError } from '../middleware/error.js';
-import { prisma } from '../lib/prisma.js';
+import { prisma, prismaReplica } from '../lib/prisma.js';
 import { mapMessage } from '../lib/mappers.js';
 import { getIO } from '../sockets/index.js';
 import { sanitize } from '../middleware/sanitize.js';
+import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 import { normalizeAttachments } from '../lib/attachments.js';
-import { getMessagesBefore } from '../services/chat.service.js';
-import { getCache } from '../lib/redis.js';
+import { getMessagesBefore, getRecentMessagesForChannel, invalidateChannelRecentCache, createMessage } from '../services/chat.service.js';
+import { getCache, perChannelWriteBudget } from '../lib/redis.js';
+import { runAutomod } from '../services/automod.service.js';
+import { notifyMentions } from '../lib/notify.js';
 
 export const messageRouter = Router();
 
@@ -42,6 +45,10 @@ const CHANNEL_MESSAGE_INCLUDE = {
   parentMessage: { include: { author: true, reactions: true } },
 };
 
+const CHANNEL_MESSAGE_INCLUDE_CREATE = {
+  author: true,
+};
+
 // Paginated: GET /channels/:channelId/messages?before=<cursorId>&limit=50
 messageRouter.get('/channels/:channelId/messages', requireAuth, requirePermission('read'), async (req, res, next) => {
   try {
@@ -55,12 +62,8 @@ messageRouter.get('/channels/:channelId/messages', requireAuth, requirePermissio
     }
 
     // Otherwise: latest messages for this channel (for channel switching).
-    const messages = await prisma.message.findMany({
-      where: { channelId, deleted: false },
-      include: CHANNEL_MESSAGE_INCLUDE,
-      orderBy: { createdAt: 'asc' },
-      take: Math.min(parseInt(limit, 10) || 100, 100),
-    });
+    // Hot-channel cache (roadmap Month 1): Redis-backed, 50 msgs, 5min TTL.
+    const messages = await getRecentMessagesForChannel(channelId, limit);
     res.json(messages);
   } catch (e) { next(e); }
 });
@@ -74,8 +77,16 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
       throw new HttpError(400, 'Message body or attachment is required.');
     }
 
-    // Slowmode enforcement: check Redis for last message timestamp
-    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    // Slowmode enforcement + write budget + mute/automod checks.
+    const channel = req.channel || await prisma.channel.findUnique({ where: { id: channelId } });
+    const budget = await perChannelWriteBudget(channelId);
+    if (!budget.ok) {
+      return res.status(429).json({
+        error: 'This channel is sending too fast. Please slow down.',
+        retryAfterMs: budget.retryAfterMs,
+      });
+    }
+
     if (channel?.slowmode > 0) {
       const slowmodeKey = `slowmode:${channelId}:${req.user.id}`;
       const redis = await getCache();
@@ -93,6 +104,32 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
         }
         // Set/refresh the slowmode key
         await redis.set(slowmodeKey, Date.now().toString(), { EX: channel.slowmode + 5 });
+      }
+    }
+
+    if (channel?.serverId) {
+      const [member, verdict] = await Promise.all([
+        prisma.serverMember.findUnique({
+          where: { serverId_userId: { serverId: channel.serverId, userId: req.user.id } },
+        }),
+        content ? runAutomod({ serverId: channel.serverId, userId: req.user.id, content }) : Promise.resolve({ blocked: false }),
+      ]);
+
+      if (member?.mutedUntil && new Date(member.mutedUntil) > new Date()) {
+        const remaining = Math.ceil((member.mutedUntil.getTime() - Date.now()) / 60000);
+        return res.status(403).json({
+          error: `You are timed out for ${remaining} more minute${remaining !== 1 ? 's' : ''}.`,
+          timeoutUntil: member.mutedUntil.toISOString(),
+        });
+      }
+
+      if (verdict.blocked) {
+        return res.status(403).json({
+          error: `Message blocked by auto-mod: ${verdict.reason}.`,
+          automod: true,
+          reason: verdict.reason,
+          timedOut: !!verdict.timedOut,
+        });
       }
     }
 
@@ -115,10 +152,9 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
     try {
       message = await prisma.message.create({
         data: { ...baseData, userId: req.user.id },
-        include: CHANNEL_MESSAGE_INCLUDE,
+        include: CHANNEL_MESSAGE_INCLUDE_CREATE,
       });
     } catch (createErr) {
-      // P2003 = FK violation; also cover P2002/other create failures defensively.
       const code = createErr?.code || createErr?.constructor?.name;
       console.warn(`[messages] create with userId=${req.user.id} failed (${code}); retrying as anonymous`);
       message = await prisma.message.create({
@@ -127,12 +163,24 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
           userId: null,
           authorOverride: req.user?.username || 'Guest',
         },
-        include: CHANNEL_MESSAGE_INCLUDE,
+        include: CHANNEL_MESSAGE_INCLUDE_CREATE,
       });
     }
 
-    const io = getIO();
-    if (io) io.to(`channel:${channelId}`).emit('message:new', { message });
+    emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
+
+    invalidateChannelRecentCache(channelId).catch(() => {});
+
+    // Best-effort mention notifications (email), async + non-blocking.
+    if (content) {
+      notifyMentions({
+        content,
+        authorName: req.user.username,
+        channelId,
+        serverId: channel?.serverId,
+      }).catch(() => {});
+    }
+
     res.status(201).json({ message });
   } catch (e) { next(e); }
 });
@@ -144,8 +192,7 @@ messageRouter.post('/messages', requireAuth, messageLimiter, async (req, res, ne
     const attachments = normalizeAttachments(req.body?.attachments);
     const message = await createMessage({ channelId, author: req.user.username, body: sanitizedBody, user: req.user, attachments });
     const mapped = mapMessage(message);
-    const io = getIO();
-    if (io) io.to(`channel:${channelId}`).emit('message:new', { message });
+    emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
     res.status(201).json(mapped);
   } catch (e) { next(e); }
 });
@@ -162,10 +209,9 @@ messageRouter.post('/messages/:id/reactions', requireAuth, reactionLimiter, asyn
     const emoji = sanitize(String(req.body?.emoji || ''));
     if (!emoji) throw new HttpError(400, 'emoji is required.');
 
-    // Load message + channel in one query (needed for permission check)
     const message = await prisma.message.findUnique({
       where: { id: messageId },
-      include: { channel: true, reactions: true },
+      select: { id: true, channelId: true, deleted: true, channel: { select: { serverId: true, id: true } } },
     });
     if (!message || message.deleted) throw new HttpError(404, 'Message not found.');
 
@@ -175,34 +221,35 @@ messageRouter.post('/messages/:id/reactions', requireAuth, reactionLimiter, asyn
     }
 
     // Toggle: delete if exists, create if not — single atomic transaction
-    const existing = message.reactions.find(
-      (r) => r.userId === req.user.id && r.emoji === emoji
-    );
+    const existing = await prisma.reaction.findFirst({
+      where: { messageId, userId: req.user.id, emoji },
+    });
 
     let updatedReactions;
     if (existing) {
-      // Remove: delete + rebuild reaction list without this one
       await prisma.reaction.delete({ where: { id: existing.id } });
-      updatedReactions = message.reactions.filter((r) => r.id !== existing.id);
+      updatedReactions = await prisma.reaction.findMany({
+        where: { messageId },
+        select: { emoji: true, userId: true },
+      });
     } else {
-      // Add: upsert + rebuild reaction list with new one
-      const created = await prisma.reaction.create({
+      await prisma.reaction.create({
         data: { id: `rxn-${Date.now()}-${Math.random().toString(36).slice(2,8)}`, messageId, userId: req.user.id, emoji },
       });
-      updatedReactions = [...message.reactions, created];
+      updatedReactions = await prisma.reaction.findMany({
+        where: { messageId },
+        select: { emoji: true, userId: true },
+      });
     }
 
-    // Build the mapped message with updated reactions — no extra DB round-trip
     const mapped = {
       id: message.id,
       channelId: message.channelId,
-      body: message.body,
-      author: message.author,
-      reactions: updatedReactions.map((r) => ({ emoji: r.emoji, userId: r.userId })),
+      reactions: updatedReactions,
     };
 
     const io = getIO();
-    if (io) io.to(`channel:${message.channelId}`).emit('message:reactions', mapped);
+    emitRealtimeEvent('message:reactions', message.channelId, mapped);
     res.json(mapped);
   } catch (e) { next(e); }
 });
@@ -249,7 +296,7 @@ messageRouter.patch('/messages/:id', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    if (io) io.to(`channel:${updated.channelId}`).emit('message:updated', { message: updated });
+    emitRealtimeEvent('message:updated', updated.channelId, { message: updated });
 
     // Audit log: moderator editing someone else's message.
     if (isModerator && !isAuthor && existing.channel?.serverId) {
@@ -304,7 +351,7 @@ messageRouter.delete('/messages/:id', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    if (io) io.to(`channel:${existing.channelId}`).emit('message:deleted', { messageId, channelId: existing.channelId });
+    emitRealtimeEvent('message:deleted', existing.channelId, { messageId, channelId: existing.channelId });
 
     // Audit log: moderator deletion.
     if (isModerator && !isAuthor && existing.channel?.serverId) {
@@ -354,7 +401,7 @@ messageRouter.post('/messages/:id/pin', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    if (io) io.to(`channel:${updated.channelId}`).emit('message:pinned', {
+    emitRealtimeEvent('message:pinned', updated.channelId, {
       message: {
         id: updated.id,
         channelId: updated.channelId,
@@ -481,5 +528,100 @@ messageRouter.get('/channels/:channelId/messages/pinned', requireAuth, requirePe
       orderBy: { createdAt: 'desc' },
     });
     res.json(messages);
+  } catch (e) { next(e); }
+});
+
+// Message read receipts
+messageRouter.post('/messages/:id/read', requireAuth, async (req, res, next) => {
+  try {
+    const messageId = req.params.id;
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { channel: true },
+    });
+    if (!message || message.deleted) throw new HttpError(404, 'Message not found');
+
+    // Check if user has access to this message's channel
+    const hasAccess = await prisma.$queryRaw`
+      SELECT 1 FROM "Channel" c
+      WHERE c.id = ${message.channelId}
+      AND (
+        c.serverId IS NULL
+        OR EXISTS (
+          SELECT 1 FROM "ServerMember" sm
+          WHERE sm.serverId = c.serverId AND sm.userId = ${req.user.id}
+        )
+      )
+    `;
+
+    if (!hasAccess.length) throw new HttpError(403, 'No access to this message');
+
+    // Create or update read receipt
+    const readReceipt = await prisma.messageRead.upsert({
+      where: {
+        messageId_userId: {
+          messageId,
+          userId: req.user.id
+        }
+      },
+      update: { readAt: new Date() },
+      create: {
+        messageId,
+        userId: req.user.id,
+        readAt: new Date()
+      }
+    });
+
+    res.json({ read: true, readAt: readReceipt.readAt });
+  } catch (e) { next(e); }
+});
+
+messageRouter.get('/messages/:id/read', requireAuth, async (req, res, next) => {
+  try {
+    const messageId = req.params.id;
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+      include: { channel: true },
+    });
+    if (!message || message.deleted) throw new HttpError(404, 'Message not found');
+
+    // Check if user has access to this message's channel
+    const hasAccess = await prisma.$queryRaw`
+      SELECT 1 FROM "Channel" c
+      WHERE c.id = ${message.channelId}
+      AND (
+        c.serverId IS NULL
+        OR EXISTS (
+          SELECT 1 FROM "ServerMember" sm
+          WHERE sm.serverId = c.serverId AND sm.userId = ${req.user.id}
+        )
+      )
+    `;
+
+    if (!hasAccess.length) throw new HttpError(403, 'No access to this message');
+
+    const reads = await prisma.messageRead.findMany({
+      where: { messageId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            avatarUrl: true,
+          }
+        }
+      },
+      orderBy: { readAt: 'desc' }
+    });
+
+    const formattedReads = reads.map(r => ({
+      userId: r.user.id,
+      username: r.user.username,
+      avatar: r.user.avatarUrl || null,
+      status: 'read',
+      readAt: r.readAt.toISOString()
+    }));
+
+    res.json({ reads: formattedReads });
   } catch (e) { next(e); }
 });

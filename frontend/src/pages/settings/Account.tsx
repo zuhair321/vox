@@ -73,7 +73,7 @@ const Account: React.FC = () => {
 
   return (
     <main className="settings-page">
-      <BackHeader title="ACCOUNT" badge="99" onBack={() => navigate(-1)} />
+      <BackHeader title="ACCOUNT" onBack={() => navigate(-1)} />
 
       <div className="settings-tabs">
         {(['SECURITY', 'STANDING'] as const).map((tab) => (

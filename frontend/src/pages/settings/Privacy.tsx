@@ -16,7 +16,7 @@ const Privacy: React.FC = () => {
 
   return (
     <main className="settings-page">
-      <BackHeader title="DATA & PRIVACY" badge="99" onBack={() => navigate(-1)} />
+      <BackHeader title="DATA & PRIVACY" onBack={() => navigate(-1)} />
       <div className="settings-list-stack">
         <ToggleRow label="USE DATA TO IMPROVE VOX" description="Allows us to use and process your information to understand and improve our services." value={settings.dataImprovement} onChange={() => settings.toggle('dataImprovement')} />
         <ToggleRow label="USE DATA TO PERSONALIZE MY VOX EXPERIENCE" description="Allows us to use who you talk to and how you use VOX to personalize the app for you." value={settings.dataPersonalization} onChange={() => settings.toggle('dataPersonalization')} />

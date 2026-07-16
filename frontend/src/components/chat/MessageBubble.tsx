@@ -18,7 +18,6 @@ import LinkPreviewCard from './LinkPreviewCard';
 import ThreadIndicator from './ThreadIndicator';
 import AttachmentList from './AttachmentList';
 import SeenByStack from './SeenByStack';
-import AvatarRing from './AvatarRing';
 import { normalizeRole, ROLES, roleGlowShadow } from '../../config/roles';
 import { IconEdit, IconReply, IconReact, IconCopy, IconLink, IconBookmark, IconPin, IconDelete, IconFlag } from './Icons';
 
@@ -27,6 +26,8 @@ interface Props {
   isGrouped: boolean;
   isOwn: boolean;
   myUsername?: string;
+  myId?: string;
+  myRole?: string;
 }
 
 function resolveAvatarUrl(url?: string) {
@@ -82,7 +83,7 @@ function formatRelativeTime(dateString: string) {
   return `${format(d, 'MMM d')} at ${format(d, 'h:mm a')}`;
 }
 
-const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: isOwnProp, myUsername }) => {
+const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: isOwnProp, myUsername, myId: myIdProp, myRole: myRoleProp }) => {
   const { setReplyingTo, messages } = useMessageStore();
   const { setThreadMessageId, setShowPinnedPanel, addToast } = useUiStore();
   const { show, hide, contextMenu } = useContextMenu();
@@ -147,13 +148,12 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
   // standard `msg.userId === myId` comparison, but if `vox_user` is stale or
   // missing for any reason we'd silently lose the toolbar. Read localStorage
   // here too and treat the message as own if either check matches.
-  const myId = (() => {
+  const myId = myIdProp || (() => {
     try { return JSON.parse(localStorage.getItem('vox_user') || '{}')?.id; }
     catch { return undefined; }
   })();
   const myName = myUsername || (() => {
-    try { return JSON.parse(localStorage.getItem('vox_user') || '{}')?.username; }
-    catch { return undefined; }
+    try { return JSON.parse(localStorage.getItem('vox_user') || '{}')?.username; } catch { return undefined; }
   })();
   const isOwn =
     !!isOwnProp ||
@@ -206,9 +206,9 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
     ? message.body.replace(/^\[GIF\]\s*\S+\s*/i, '').trim()
     : message.body;
 
-  const myRole = (() => {
+  const myRole = (myRoleProp || (() => {
     try { return (JSON.parse(localStorage.getItem('vox_user') || '{}')?.role || '').toUpperCase(); } catch { return ''; }
-  })();
+  })());
   const canModerate = ['FOUNDER', 'ADMIN', 'MODERATOR'].includes(myRole);
 
   const handleCopyText = async () => {

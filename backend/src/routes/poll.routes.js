@@ -6,6 +6,7 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 import { getIO } from '../sockets/index.js';
+import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 
 export const pollRouter = Router();
 
@@ -38,8 +39,8 @@ pollRouter.post('/channels/:channelId/polls', requireAuth, requirePermission('wr
       throw new HttpError(400, 'Provide 2-10 options.');
     }
     const sanitizedOptions = options
-      .filter((o: any) => typeof o === 'string' && o.trim().length > 0)
-      .map((o: string) => sanitize(o.trim()).slice(0, 100));
+      .filter((o) => typeof o === 'string' && o.trim().length > 0)
+      .map((o) => sanitize(o.trim()).slice(0, 100));
 
     if (sanitizedOptions.length < 2) {
       throw new HttpError(400, 'At least 2 valid options required.');
@@ -63,7 +64,7 @@ pollRouter.post('/channels/:channelId/polls', requireAuth, requirePermission('wr
     });
 
     const io = getIO();
-    if (io) io.to(`channel:${channelId}`).emit('poll:new', { poll });
+    emitRealtimeEvent('poll:new', channelId, { poll });
 
     res.status(201).json(poll);
   } catch (e) { next(e); }
@@ -90,7 +91,7 @@ pollRouter.post('/polls/:pollId/vote', requireAuth, async (req, res, next) => {
     }
 
     const validOptionIds = poll.options.map((o) => o.id);
-    const selected = optionIds.filter((id: string) => validOptionIds.includes(id));
+    const selected = optionIds.filter((id) => validOptionIds.includes(id));
     if (selected.length === 0) throw new HttpError(400, 'Invalid option(s).');
     if (selected.length > poll.maxVotes) {
       throw new HttpError(400, `You can vote for up to ${poll.maxVotes} option(s).`);
@@ -106,7 +107,7 @@ pollRouter.post('/polls/:pollId/vote', requireAuth, async (req, res, next) => {
 
     // Add new votes
     await prisma.pollVote.createMany({
-      data: selected.map((optionId: string) => ({
+      data: selected.map((optionId) => ({
         optionId,
         userId: req.user.id,
       })),
@@ -122,7 +123,7 @@ pollRouter.post('/polls/:pollId/vote', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    if (io) io.to(`channel:${poll.channelId}`).emit('poll:update', { poll: updated });
+    emitRealtimeEvent('poll:update', poll.channelId, { poll: updated });
 
     res.json(updated);
   } catch (e) { next(e); }
@@ -151,7 +152,7 @@ pollRouter.post('/polls/:pollId/end', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    if (io) io.to(`channel:${poll.channelId}`).emit('poll:ended', { poll: updated });
+    emitRealtimeEvent('poll:ended', poll.channelId, { poll: updated });
 
     res.json(updated);
   } catch (e) { next(e); }

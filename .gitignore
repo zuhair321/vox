@@ -7,7 +7,27 @@ vox-mobile/node_modules/
 # Logs
 *.log
 *.err.log
+*.err
 logs/
+
+# Debug / scratch output
+*.tmp
+*.temp
+*_tmp.*
+*-tmp.*
+env_temp.txt
+berr.txt
+bout.txt
+boot.log
+boot.err
+stderr.log
+stdout.log
+_t_out.log
+_t_err.log
+_test_stdout.log
+_test_stderr.log
+nul
+/dir
 
 # Environment variables (secrets)
 .env
@@ -16,7 +36,13 @@ frontend/.env
 
 # Build outputs
 frontend/build/
+frontend/dist/
+frontend/stats.html
 dist/
+dist-v2/
+dist-final/
+dist-temp/
+win-unpacked/
 vox-mobile/dist/
 
 # OS / Editor
@@ -41,6 +67,9 @@ redis/
 
 # Uploads
 backend/uploads/
+backend/vox.db
+backend/prisma/vox.db
+*.db
 
 # Prisma generated client (can be regenerated)
 backend/prisma/generated/
@@ -49,5 +78,6 @@ backend/prisma/generated/
 *.pid
 *.seed
 *.pid.lock
+*.bak
 nul
 backend/nul

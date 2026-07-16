@@ -11,7 +11,6 @@ export class HttpError extends Error {
   }
 }
 
-// eslint-disable-next-line no-unused-vars
 export function errorHandler(err, req, res, next) {
   // Prisma unique-constraint violations → 409 Conflict
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -25,6 +24,7 @@ export function errorHandler(err, req, res, next) {
 
   if (status >= 500) {
     console.error('[unhandled error]', err);
+    reportError(err, req).catch(() => {});
   }
 
   return res.status(status).json({
@@ -32,6 +32,25 @@ export function errorHandler(err, req, res, next) {
     ...(err.details ? { details: err.details } : {}),
   });
 }
+
+// Best-effort error alerting (observability). Posts 5xx stack traces to a
+// configured webhook (e.g. Slack/Discord/Sentry ingest) when
+// ERROR_WEBHOOK_URL is set. No-op otherwise.
+async function reportError(err, req) {
+  const url = process.env.ERROR_WEBHOOK_URL;
+  if (!url) return;
+  try {
+    const payload = {
+      text: `🚨 VOX 5xx on ${req.method} ${req.originalUrl}\n\`\`\`${String(err.stack || err.message).slice(0, 1800)}\`\`\``,
+    };
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch { /* swallow — never block the error response */ }
+}
+
 
 // 404 for unknown routes
 export function notFound(req, res) {

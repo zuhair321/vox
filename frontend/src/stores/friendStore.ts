@@ -9,6 +9,7 @@ export interface User {
   bannerUrl?: string | null;
   displayName?: string;
   color?: string;
+  hasTurbo?: boolean;
 }
 
 export interface FriendRelationship {
@@ -65,39 +66,47 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
 
   sendRequest: async (username) => {
     await sendFriendRequest(username);
-    await get().fetchFriends();
+    set((state) => ({ outgoing: [...state.outgoing, { id: Date.now().toString(), userId: '', friendId: '', status: 'pending', user: { id: '', username, status: 'offline', avatarUrl: '' }, friend: { id: '', username, status: 'offline', avatarUrl: '' } }] }));
   },
 
   acceptRequest: async (id) => {
     await acceptFriendRequest(id);
-    await get().fetchFriends();
+    set((state) => {
+      const request = state.incoming.find(r => r.id === id);
+      const newFriend = request?.user.id === state.friends[0]?.id ? request?.friend : request?.user;
+      return { 
+        incoming: state.incoming.filter(r => r.id !== id),
+        friends: newFriend ? [...state.friends, newFriend] : state.friends
+      };
+    });
   },
 
   declineRequest: async (id) => {
     await declineOrRemoveFriend(id);
-    await get().fetchFriends();
+    set((state) => ({ incoming: state.incoming.filter(r => r.id !== id) }));
   },
 
   cancelRequest: async (id) => {
     await declineOrRemoveFriend(id);
-    await get().fetchFriends();
+    set((state) => ({ outgoing: state.outgoing.filter(r => r.id !== id) }));
   },
 
   removeFriend: async (id) => {
     await declineOrRemoveFriend(id);
-    await get().fetchFriends();
+    set((state) => ({ friends: state.friends.filter(f => f.id !== id) }));
   },
 
   blockUser: async (userId) => {
     await blockUser(userId);
-    await get().fetchFriends();
+    set((state) => ({ 
+      friends: state.friends.filter(f => f.id !== userId),
+      blocked: [...state.blocked, state.friends.find(f => f.id === userId)].filter((b): b is User => !!b)
+    }));
   },
 
   unblockUser: async (userId) => {
-    // Previously this only refetched and never hit the API, so unblocking a
-    // user silently did nothing. Call the unblock endpoint, then refresh.
     await unblockUser(userId);
-    await get().fetchFriends();
+    set((state) => ({ blocked: state.blocked.filter(f => f.id !== userId) }));
   },
 
   // Tear down the prior session so the next user starts clean.

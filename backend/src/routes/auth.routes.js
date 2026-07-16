@@ -110,26 +110,13 @@ authRouter.post('/logout', async (req, res, next) => {
 // ── Current user info (authed) ────────────────────────────────
 authRouter.get('/me', requireAuth, async (req, res, next) => {
   try {
-    try {
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
-      if (user) return res.json({ user: auth.publicUser(user) });
-    } catch {
-      // DB unavailable — fall through to in-memory lookup
-    }
-    // Fallback: return user from token payload (works with in-memory auth)
-    const user = {
-      id: req.user.id,
-      username: req.user.username,
-      displayName: req.user.username,
-      email: '',
-      role: req.user.role || 'MEMBER',
-      color: '#5865f2',
-      status: 'online',
-      bio: null,
-      twoFactorEnabled: false,
-    };
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: 'User not found.' });
     return res.json({ user: auth.publicUser(user) });
-  } catch (e) { return next(e); }
+  } catch (e) {
+    // Surface DB failures instead of fabricating a fake user.
+    return next(e);
+  }
 });
 
 const updateProfileSchema = z.object({
@@ -146,23 +133,58 @@ authRouter.patch('/me', requireAuth, async (req, res, next) => {
     if (data.displayName) cleanData.displayName = sanitize(data.displayName);
     if (data.bio !== undefined) cleanData.bio = data.bio ? sanitize(data.bio) : null;
     if (data.status) cleanData.status = data.status;
-    try {
-      const user = await prisma.user.update({
-        where: { id: req.user.id },
-        data: cleanData,
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: cleanData,
+    });
+    // Inform sockets if status changed
+    if (data.status) {
+      import('../sockets/index.js').then(({ emitAll }) => {
+        emitAll('member:status', { userId: user.id, status: user.status });
       });
-      // Inform sockets if status changed
-      if (data.status) {
-        import('../sockets/index.js').then(({ emitAll }) => {
-          emitAll('member:status', { userId: user.id, status: user.status });
-        });
-      }
-      return res.json({ user: auth.publicUser(user) });
-    } catch (e) {
-      console.warn('[vox/auth] DB error during profile update:', e.message);
-      return res.json({ ok: false, error: 'Database unavailable' });
     }
+    return res.json({ user: auth.publicUser(user) });
   } catch (e) { return next(e); }
+});
+
+// Voice settings (quality / region / device toggles). Persisted on the user so
+// a client can restore a user's preferred calling configuration on any device.
+const VOICE_SETTINGS_KEYS = ['quality', 'region', 'noiseSuppression', 'echoCancellation', 'autoGain', 'videoQuality'];
+authRouter.get('/users/me/voice-settings', requireAuth, async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: { voiceSettings: true } });
+    res.json({ voiceSettings: user?.voiceSettings || {} });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Profile customization (themes / avatar frames / animated avatar).
+const ALLOWED_THEMES = ['midnight', 'sunset', 'aurora', 'mono', 'candy', 'ocean', 'forest', 'galaxy'];
+const ALLOWED_FRAMES = ['none', 'ring', 'glow', 'pixel', 'gold', 'neon', 'heart', 'star'];
+
+authRouter.get('/customization/themes', requireAuth, async (req, res) => {
+  res.json({
+    themes: ALLOWED_THEMES.map((id) => ({ id, name: id[0].toUpperCase() + id.slice(1) })),
+    frames: ALLOWED_FRAMES.map((id) => ({ id, name: id[0].toUpperCase() + id.slice(1) })),
+  });
+});
+
+authRouter.put('/users/me/profile-customization', requireAuth, async (req, res, next) => {
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const data = {};
+    if (typeof body.profileTheme === 'string') {
+      data.profileTheme = ALLOWED_THEMES.includes(body.profileTheme) ? body.profileTheme : null;
+    }
+    if (typeof body.avatarFrame === 'string') {
+      data.avatarFrame = ALLOWED_FRAMES.includes(body.avatarFrame) ? body.avatarFrame : null;
+    }
+    if (typeof body.animatedAvatar === 'boolean') data.animatedAvatar = body.animatedAvatar;
+    if (Object.keys(data).length === 0) return res.json({ ok: false, error: 'Nothing to update' });
+    const user = await prisma.user.update({ where: { id: req.user.id }, data, select: { profileTheme: true, avatarFrame: true, animatedAvatar: true } });
+    res.json({ profileTheme: user.profileTheme, avatarFrame: user.avatarFrame, animatedAvatar: user.animatedAvatar });
+  } catch (e) { next(e); }
 });
 
 authRouter.post('/2fa/setup', requireAuth, async (req, res, next) => {
@@ -307,6 +329,48 @@ authRouter.delete('/sessions', requireAuth, async (req, res, next) => {
       data: { revoked: true },
     });
     res.json({ revoked: true });
+  } catch (e) { next(e); }
+});
+
+// ── Login History ────────────────────────────────────────────
+// GET /api/auth/login-history — list recent login events for current user
+authRouter.get('/login-history', requireAuth, async (req, res, next) => {
+  try {
+    const history = await prisma.loginHistory.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        deviceInfo: true,
+        ipAddress: true,
+        userAgent: true,
+        location: true,
+        alertSent: true,
+        createdAt: true,
+      },
+    });
+    res.json({ history });
+  } catch (e) { next(e); }
+});
+
+// DELETE /api/auth/login-history/:id — delete a login history entry
+authRouter.delete('/login-history/:id', requireAuth, async (req, res, next) => {
+  try {
+    const entry = await prisma.loginHistory.findUnique({ where: { id: req.params.id } });
+    if (!entry || entry.userId !== req.user.id) {
+      return res.status(404).json({ error: 'Login history entry not found' });
+    }
+    await prisma.loginHistory.delete({ where: { id: req.params.id } });
+    res.json({ deleted: true });
+  } catch (e) { next(e); }
+});
+
+// DELETE /api/auth/login-history — clear all login history for current user
+authRouter.delete('/login-history', requireAuth, async (req, res, next) => {
+  try {
+    await prisma.loginHistory.deleteMany({ where: { userId: req.user.id } });
+    res.json({ cleared: true });
   } catch (e) { next(e); }
 });
 

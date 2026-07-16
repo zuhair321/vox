@@ -10,24 +10,7 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      // ── SW reset: kill any stale service worker + clear its caches ──
-      // Runs once per session. The previous SW was cache-first for HTML
-      // and could lock the page onto an old bundle. This forces a clean slate.
-      if ('serviceWorker' in navigator && !sessionStorage.getItem('vox-sw-killed')) {
-        sessionStorage.setItem('vox-sw-killed', '1');
-        navigator.serviceWorker.getRegistrations().then(function (regs) {
-          regs.forEach(function (r) { r.unregister(); });
-          // Only reload if there were actually SWs to clean up.
-          if (regs.length > 0 && window.caches) {
-            caches.keys().then(function (keys) {
-              keys.forEach(function (k) { caches.delete(k); });
-            });
-            window.location.reload();
-          }
-        });
-      }
-    </script>
+    <!-- Service workers disabled in Electron (asar + file:// = broken SW) -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

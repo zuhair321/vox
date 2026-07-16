@@ -71,9 +71,9 @@ const RolesPanel: React.FC<Props> = ({ serverId }) => {
                   overflow: 'hidden',
                 }}
               >
-                {member.user?.avatarUrl
-                  ? <img src={member.user.avatarUrl.startsWith('http') ? member.user.avatarUrl : `${API_BASE}${member.user.avatarUrl}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : (member.user?.username?.slice(0, 1).toUpperCase() || '?')}
+                 {member.user?.avatarUrl
+                   ? <img src={member.user.avatarUrl.startsWith('http') ? member.user.avatarUrl : `${API_BASE}${member.user.avatarUrl}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                   : ((member.user?.username?.slice(0, 1) || '?').toUpperCase())}
               </div>
               <span style={{ color: 'var(--ghost-white)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                 {member.user?.username || member.userId}

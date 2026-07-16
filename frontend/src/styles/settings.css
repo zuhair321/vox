@@ -1,7 +1,7 @@
 .settings-page {
   flex: 1;
   min-width: 0;
-  height: 100vh;
+  height: 100%;
   overflow-y: auto;
   padding: 20px clamp(18px, 4vw, 48px) 48px;
   color: var(--ghost-white);
@@ -1074,4 +1074,391 @@
 .radio-option,
 .vox-card {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.vox-card {
+  background: var(--obsidian);
+  border: 1px solid var(--rim);
+  border-radius: 8px;
+  transition: border-color 0.2s ease;
+}
+
+.vox-card:hover {
+  border-color: rgba(216, 74, 90, 0.2);
+}
+
+.vox-setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.vox-setting-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ash);
+  flex-shrink: 0;
+}
+
+.vox-setting-value {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--ghost-white);
+  text-align: right;
+  word-break: break-word;
+}
+
+.field-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ash);
+  margin-bottom: 6px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13px;
+  color: var(--ghost-white);
+  background: var(--obsidian);
+  border: 1px solid var(--rim);
+  outline: none;
+  clip-path: var(--cut-corner-all);
+}
+
+.text-input:focus {
+  border-color: var(--chaos);
+  box-shadow: 0 0 14px var(--chaos-glow);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ghost-white);
+  background: var(--obsidian);
+  border: 1px solid var(--rim);
+  clip-path: var(--cut-corner-all);
+}
+
+.knob {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ghost-white);
+  background: var(--obsidian);
+  border: 1px solid var(--rim);
+  clip-path: var(--octagon);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.knob:hover {
+  background: var(--chaos);
+}
+
+.settings-sidebar {
+  width: 240px;
+  min-width: 240px;
+  background:
+    linear-gradient(180deg, rgba(216, 74, 90, 0.03), transparent 26%),
+    var(--abyss);
+  border-right: 1px solid rgba(216, 74, 90, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.settings-sidebar-banner {
+  width: 100%;
+  height: 64px;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.settings-sidebar-banner-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, var(--abyss) 100%);
+}
+
+.settings-sidebar-info {
+  padding: 0 16px 12px;
+  flex-shrink: 0;
+}
+
+.settings-sidebar-title {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ghost-white);
+  margin: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sidebar-subtitle {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  color: var(--shadow);
+  margin: 4px 0 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.settings-sidebar-nav {
+  flex: 1;
+  padding: 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--shadow);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  text-align: left;
+}
+
+.settings-nav-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ash);
+}
+
+.settings-nav-item.active {
+  background: rgba(216, 74, 90, 0.12);
+  color: var(--ghost-white);
+  font-weight: 600;
+}
+
+.settings-nav-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: var(--chaos);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 8px var(--chaos-glow);
+}
+
+.settings-nav-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--dark-matter);
+}
+
+.settings-content-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 32px 40px 48px;
+}
+
+.settings-banner-area {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.settings-banner-img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+
+.settings-banner-placeholder {
+  width: 100%;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--shadow);
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  background: linear-gradient(135deg, #1a1d23 0%, #2d323b 50%, #1a1d23 100%);
+}
+
+.settings-banner-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.settings-banner-overlay:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.settings-banner-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ghost-white);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.settings-banner-overlay:hover .settings-banner-text {
+  opacity: 1;
+}
+
+.settings-icon-overlay {
+  position: absolute;
+  bottom: -32px;
+  left: 24px;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--obsidian);
+  border: 4px solid var(--abyss);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.settings-icon-gradient {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ghost-white);
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--chaos), #ff6b6b);
+}
+
+.settings-title {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ghost-white);
+  margin: 0 0 4px 0;
+}
+
+.settings-subtitle {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  color: var(--shadow);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 20px 0;
+}
+
+.danger-zone {
+  background: rgba(216, 74, 90, 0.05);
+  border: 1px solid rgba(216, 74, 90, 0.3);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+.danger-zone-title {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--chaos);
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.danger-zone-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.danger-zone-label {
+  color: var(--ghost-white);
+  font-weight: 500;
+  font-size: 14px;
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+.danger-zone-desc {
+  color: var(--shadow);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.danger-button {
+  padding: 10px 20px;
+  background: var(--chaos);
+  border: none;
+  border-radius: 6px;
+  color: var(--ghost-white);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 0 12px var(--chaos-glow);
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+}
+
+@media (max-width: 768px) {
+  .settings-sidebar {
+    width: 200px;
+    min-width: 200px;
+  }
+
+  .settings-content-inner {
+    padding: 24px 20px 32px;
+  }
+
+  .settings-banner-img,
+  .settings-banner-placeholder {
+    height: 120px;
+  }
 }

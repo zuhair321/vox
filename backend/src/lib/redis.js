@@ -244,6 +244,121 @@ export async function isRateLimited(userId, event, max, windowMs) {
   }
 }
 
+// ── Per-channel write budget (token bucket) ────────────────────
+// Roadmap (100k MAU, Month 1): protects the Postgres primary from a single
+// hot channel. Each channel gets `max` message writes per `windowMs`; once the
+// bucket is empty the request is rejected instead of hammering the DB.
+export async function perChannelWriteBudget(channelId, max = 30, windowMs = 60_000) {
+  const client = await getCache();
+  if (!client) return { ok: true }; // graceful: no Redis → no budget
+  const key = `vox:channel-budget:${channelId}`;
+  const now = Date.now();
+  const windowStart = now - windowMs;
+  try {
+    const multi = client.multi();
+    multi.zRemRangeByScore(key, 0, windowStart);
+    multi.zCard(key);
+    multi.zAdd(key, { score: now, value: `${now}:${Math.random()}` });
+    multi.pExpire(key, windowMs);
+    const results = await multi.exec();
+    const count = results[1];
+    if (count > max) {
+      // Roll back the token we just added so we don't over-count.
+      const cleanup = client.multi();
+      cleanup.zRemRangeByScore(key, now, now);
+      await cleanup.exec();
+      return { ok: false, retryAfterMs: windowMs };
+    }
+    return { ok: true };
+  } catch {
+    return { ok: true };
+  }
+}
+
+// ── Presence (Redis-only, per roadmap Month 1) ──────────────────
+// Online/offline state lives in a Redis SET so status changes never hit
+// Postgres. User-initiated IDLE/DND still persist to the DB; the connect/
+// disconnect cycle is Redis-only (SADD on connect, SREM on disconnect).
+const PRESENCE_SET = 'vox:presence:online';
+
+export async function presenceAdd(userId) {
+  const client = await getCache();
+  if (!client) return;
+  try { await client.sAdd(PRESENCE_SET, userId); } catch { /* ignore */ }
+}
+
+export async function presenceRemove(userId) {
+  const client = await getCache();
+  if (!client) return;
+  try { await client.sRem(PRESENCE_SET, userId); } catch { /* ignore */ }
+}
+
+export async function presenceIsOnline(userId) {
+  const client = await getCache();
+  if (!client) return null; // unknown → fall back to DB
+  try { return (await client.sIsMember(PRESENCE_SET, userId)) === true; } catch { return null; }
+}
+
+export async function presenceSnapshot(userIds) {
+  const client = await getCache();
+  if (!client || !userIds?.length) return {};
+  try {
+    const members = await client.sMembers(PRESENCE_SET);
+    const set = new Set(members);
+    const out = {};
+    for (const id of userIds) out[id] = set.has(id);
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+// ── Raid protection (roadmap Month 1/Moderation) ───────────────
+// Tracks join velocity per server. If more than `max` joins hit a server within
+// `windowMs`, we flag it as raiding and start rejecting new joins until a mod
+// clears it (or the flag expires). Stored in Redis so it works across workers.
+const RAID_KEY = (serverId) => `vox:raid-joins:${serverId}`;
+const RAID_MODE_KEY = (serverId) => `vox:raid-mode:${serverId}`;
+
+export async function raidJoin(serverId, max = 20, windowMs = 60_000) {
+  const client = await getCache();
+  if (!client) return { raiding: false };
+  const key = RAID_KEY(serverId);
+  const now = Date.now();
+  try {
+    const multi = client.multi();
+    multi.zRemRangeByScore(key, 0, now - windowMs);
+    multi.zCard(key);
+    multi.zAdd(key, { score: now, value: `${now}:${Math.random()}` });
+    multi.pExpire(key, windowMs);
+    const results = await multi.exec();
+    const count = results[1];
+    if (count > max) {
+      // Auto-engage raid mode for 10 minutes.
+      await client.set(RAID_MODE_KEY(serverId), '1', { PX: 10 * 60_000 }).catch(() => {});
+      return { raiding: true, count };
+    }
+    return { raiding: false, count };
+  } catch {
+    return { raiding: false };
+  }
+}
+
+export async function getRaidMode(serverId) {
+  const client = await getCache();
+  if (!client) return false;
+  try { return (await client.get(RAID_MODE_KEY(serverId))) === '1'; } catch { return false; }
+}
+
+export async function setRaidMode(serverId, on) {
+  const client = await getCache();
+  if (!client) return;
+  try {
+    if (on) await client.set(RAID_MODE_KEY(serverId), '1', { PX: 10 * 60_000 });
+    else await client.del(RAID_MODE_KEY(serverId));
+  } catch { /* ignore */ }
+}
+
 // ── Init both (call at server boot) ─────────────────────────────
 export async function initRedis() {
   await Promise.all([getCache(), getPubSub()]);

@@ -40,6 +40,7 @@ export async function invalidateMembershipCache(userId, serverId) {
  * Check if a user has permission to perform an action in a channel.
  * Respects channel-specific Permission overrides and role hierarchy.
  * Uses Redis-cached membership lookups to avoid N+1 DB hits on every request.
+ * Returns { allowed: boolean, channel: Channel | null }
  */
 export async function checkChannelPermission(userId, channelId, action) {
   const channel = await prisma.channel.findUnique({
@@ -47,16 +48,16 @@ export async function checkChannelPermission(userId, channelId, action) {
     include: { server: { select: { ownerId: true } }, permissions: true },
   });
 
-  if (!channel) return false;
-  if (!channel.serverId) return true; // DM channels — no server permissions
-  if (!channel.server) return false;
+  if (!channel) return { allowed: false, channel: null };
+  if (!channel.serverId) return { allowed: true, channel }; // DM channels — no server permissions
+  if (!channel.server) return { allowed: false, channel };
 
   // Server owner always has all permissions
-  if (channel.server.ownerId === userId) return true;
+  if (channel.server.ownerId === userId) return { allowed: true, channel };
 
   // Cached membership lookup — avoids full member list fetch
   const membership = await getMembership(userId, channel.serverId);
-  if (!membership) return false; // Not a member
+  if (!membership) return { allowed: false, channel }; // Not a member
 
   const role = membership.role;
   const userPower = ROLE_POWER[role] || 0;
@@ -64,19 +65,19 @@ export async function checkChannelPermission(userId, channelId, action) {
   // Check channel-specific permission overrides first
   const override = channel.permissions.find((p) => p.role === role);
   if (override) {
-    if (action === 'read') return override.canRead;
-    if (action === 'write') return override.canWrite;
-    if (action === 'manage') return override.canManage || override.canAdmin;
-    if (action === 'admin') return override.canAdmin;
+    if (action === 'read') return { allowed: override.canRead, channel };
+    if (action === 'write') return { allowed: override.canWrite || override.canAdmin, channel };
+    if (action === 'manage') return { allowed: override.canManage || override.canAdmin, channel };
+    if (action === 'admin') return { allowed: override.canAdmin, channel };
   }
 
   // Default permissions based on role
-  if (action === 'read') return true; // Everyone can read by default
-  if (action === 'write') return userPower >= 1; // MEMBER+ can write
-  if (action === 'manage') return userPower >= 2; // MODERATOR+ can manage
-  if (action === 'admin') return userPower >= 3; // ADMIN+ can admin
+  if (action === 'read') return { allowed: true, channel };
+  if (action === 'write') return { allowed: userPower >= 1, channel };
+  if (action === 'manage') return { allowed: userPower >= 2, channel };
+  if (action === 'admin') return { allowed: userPower >= 3, channel };
 
-  return false;
+  return { allowed: false, channel };
 }
 
 /**
@@ -88,15 +89,15 @@ export function requirePermission(action) {
       const userId = req.user?.id;
       if (!userId) throw new HttpError(401, 'Authentication required.');
 
-      // Try to get channelId from body, params, or query
-      const channelId = req.body?.channelId || req.params?.channelId || req.query?.channelId;
+      const channelId =
+        req.body?.channelId || req.params?.channelId || req.params?.id || req.query?.channelId;
       if (!channelId) {
-        // If no channelId, allow (might be a non-channel route using this middleware)
         return next();
       }
 
-      const hasPermission = await checkChannelPermission(userId, channelId, action);
-      if (!hasPermission) {
+      const result = await checkChannelPermission(userId, channelId, action);
+      req.channel = result.channel;
+      if (!result.allowed) {
         throw new HttpError(403, `You do not have ${action} permission in this channel.`);
       }
       next();
@@ -111,27 +112,25 @@ export function requirePermission(action) {
  * Uses cached membership lookup for fast path.
  */
 export async function checkServerPermission(userId, serverId, action) {
-  // Quick owner check first (no DB)
   const server = await prisma.server.findUnique({
     where: { id: serverId },
     select: { ownerId: true },
   });
-  if (!server) return false;
-  if (server.ownerId === userId) return true;
+  if (!server) return { allowed: false, server: null };
+  if (server.ownerId === userId) return { allowed: true, server };
 
-  // Cached membership lookup
   const membership = await getMembership(userId, serverId);
-  if (!membership) return false;
+  if (!membership) return { allowed: false, server };
 
   const userPower = ROLE_POWER[membership.role] || 0;
 
-  if (action === 'kick') return userPower >= 2; // MODERATOR+
-  if (action === 'ban') return userPower >= 3; // ADMIN+
-  if (action === 'manageRoles') return userPower >= 3; // ADMIN+
-  if (action === 'manageChannels') return userPower >= 3; // ADMIN+
-  if (action === 'manageServer') return userPower >= 3; // ADMIN+
+  if (action === 'kick') return { allowed: userPower >= 2, server };
+  if (action === 'ban') return { allowed: userPower >= 3, server };
+  if (action === 'manageRoles') return { allowed: userPower >= 3, server };
+  if (action === 'manageChannels') return { allowed: userPower >= 3, server };
+  if (action === 'manageServer') return { allowed: userPower >= 3, server };
 
-  return false;
+  return { allowed: false, server };
 }
 
 /**
@@ -144,11 +143,12 @@ export function requireServerAdmin() {
       const userId = req.user?.id;
       if (!userId) throw new HttpError(401, 'Authentication required.');
 
-      const { serverId } = req.params;
+      const serverId = req.params.serverId ?? req.params.id;
       if (!serverId) throw new HttpError(400, 'serverId is required.');
 
-      const hasPermission = await checkServerPermission(userId, serverId, 'manageRoles');
-      if (!hasPermission) throw new HttpError(403, 'Server admin access required.');
+      const result = await checkServerPermission(userId, serverId, 'manageRoles');
+      req.server = result.server;
+      if (!result.allowed) throw new HttpError(403, 'Server admin access required.');
 
       next();
     } catch (e) {

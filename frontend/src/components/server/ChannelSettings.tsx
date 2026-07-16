@@ -4,7 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import { useServerStore } from '../../stores/serverStore';
 import { useUiStore } from '../../stores/uiStore';
 import { api, API_BASE } from '../../api/client';
-import { Trash2, AlertTriangle, Hash, Volume2, Eye, Clock, Type } from 'lucide-react';
+import { getArchiveConfig, setArchiveConfig, getArchivedMessages, type ArchiveConfig } from '../../api/archives';
+import { fetchVoiceRegions, setChannelRegion, type VoiceRegion } from '../../api/regions';
+import { Trash2, AlertTriangle, Hash, Volume2, Eye, Clock, Type, Archive, Globe } from 'lucide-react';
 
 interface ChannelSettingsProps {
   channelId: string;
@@ -28,10 +30,13 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
   const { selectedServer } = useServerStore();
   const { addToast } = useUiStore();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'PERMISSIONS'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'PERMISSIONS' | 'ARCHIVE'>('OVERVIEW');
+  const [archive, setArchive] = useState<ArchiveConfig | null>(null);
+  const [archiveMessages, setArchiveMessages] = useState<any[]>([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
 
   // Find the channel from the server's channels
-  const channel = selectedServer?.channels?.find((c: any) => c.id === channelId);
+  const channel = selectedServer?.channels?.find((c: any) => c.id === channelId) as any;
 
   const [name, setName] = useState(channel?.name || '');
   const [topic, setTopic] = useState(channel?.topic || '');
@@ -40,6 +45,10 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [region, setRegion] = useState(channel?.region || 'auto');
+  const [regions, setRegions] = useState<VoiceRegion[]>([]);
+
+  const isVoice = channel?.type === 'VOICE' || channel?.type === 'STAGE';
 
   if (!channel || !selectedServer) return null;
 
@@ -49,6 +58,42 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
     (m: any) => m.userId === (() => { try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id; } catch { return ''; } })() && ['FOUNDER', 'ADMIN'].includes(m.role)
   );
   const canManage = isOwner || isAdmin;
+
+  React.useEffect(() => {
+    if (activeTab !== 'ARCHIVE') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await getArchiveConfig(channelId);
+        if (!cancelled) setArchive(data.config);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, channelId]);
+
+  React.useEffect(() => {
+    if (!isVoice) return;
+    let cancelled = false;
+    fetchVoiceRegions()
+      .then((d) => { if (!cancelled) setRegions(d.regions || []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isVoice]);
+
+  const handleRegionChange = async (next: string) => {
+    const prev = region;
+    setRegion(next);
+    try {
+      await setChannelRegion(channelId, next);
+      useServerStore.getState().updateChannel(selectedServer!.id, channelId, { region: next } as any);
+      addToast('Voice region updated.', 'success');
+    } catch (e: any) {
+      setRegion(prev);
+      addToast(e?.message || 'Failed to set region.', 'error');
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -155,7 +200,7 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '4px', padding: '8px 20px', borderBottom: '1px solid var(--rim)' }}>
-          {(['OVERVIEW', 'PERMISSIONS'] as const).map(tab => (
+          {(['OVERVIEW', 'PERMISSIONS', 'ARCHIVE'] as const).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -276,6 +321,29 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
                 </div>
               </div>
 
+              {/* Voice Region (voice/stage channels only) */}
+              {isVoice && (
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--ash)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>
+                    <Globe size={12} /> VOICE REGION
+                  </label>
+                  <select
+                    value={region}
+                    onChange={(e) => canManage && handleRegionChange(e.target.value)}
+                    disabled={!canManage}
+                    style={inputStyle}
+                  >
+                    {regions.length === 0 && <option value={region}>{region}</option>}
+                    {regions.map((r) => (
+                      <option key={r.id} value={r.id}>{r.flag} {r.name}</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: '10px', color: 'var(--shadow)', marginTop: '4px' }}>
+                    Automatic picks the lowest-latency region for connected members.
+                  </div>
+                </div>
+              )}
+
               {/* Delete Channel */}
               {isOwner && (
                 <div style={{ borderTop: '1px solid var(--rim)', paddingTop: '16px' }}>
@@ -347,6 +415,88 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
               <p style={{ fontSize: '11px', color: 'var(--shadow)' }}>
                 Role-level permission overrides can be configured per channel. This feature is under development.
               </p>
+            </div>
+          )}
+
+          {activeTab === 'ARCHIVE' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Archive size={14} color={archive?.enabled ? 'var(--chaos)' : 'var(--ash)'} />
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--ghost-white)', fontWeight: 600 }}>Archive Old Messages</div>
+                    <div style={{ fontSize: '10px', color: 'var(--shadow)' }}>Messages older than the retention window are viewable in an archive.</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => canManage && archive && setArchiveConfig(channelId, { enabled: !archive.enabled }).then(d => setArchive(d.config))}
+                  disabled={!canManage || !archive}
+                  style={{
+                    width: '40px', height: '22px', borderRadius: '11px', border: 'none',
+                    background: archive?.enabled ? 'var(--chaos)' : 'var(--rim)',
+                    cursor: canManage ? 'pointer' : 'not-allowed', position: 'relative', transition: 'background 0.2s',
+                  }}
+                >
+                  <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'white', position: 'absolute', top: '3px', left: archive?.enabled ? '21px' : '3px', transition: 'left 0.2s' }} />
+                </button>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: 'var(--ash)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>
+                  RETENTION WINDOW (DAYS)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={3650}
+                  value={archive?.daysToKeep ?? 90}
+                  disabled={!canManage || !archive}
+                  onChange={(e) => {
+                    const v = Math.max(1, Math.min(3650, parseInt(e.target.value, 10) || 1));
+                    setArchive((a) => (a ? { ...a, daysToKeep: v } : a));
+                  }}
+                  onBlur={() => archive && setArchiveConfig(channelId, { daysToKeep: archive.daysToKeep }).then(d => setArchive(d.config))}
+                  style={{ ...inputStyle, maxWidth: 160 }}
+                />
+                <div style={{ fontSize: '10px', color: 'var(--shadow)', marginTop: '4px' }}>
+                  Messages older than this are considered archived.
+                </div>
+              </div>
+
+              <div>
+                <button
+                  type="button"
+                  className="angular-button"
+                  onClick={async () => {
+                    setArchiveLoading(true);
+                    try {
+                      const data = await getArchivedMessages(channelId);
+                      setArchiveMessages(data.messages);
+                    } catch {
+                      addToast('Failed to load archive', 'error');
+                    } finally {
+                      setArchiveLoading(false);
+                    }
+                  }}
+                  disabled={archiveLoading}
+                  style={{ marginTop: 8 }}
+                >
+                  {archiveLoading ? 'Loading...' : 'View Archived Messages'}
+                </button>
+
+                {archiveMessages.length > 0 && (
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto' }}>
+                    {archiveMessages.map((m) => (
+                      <div key={m.id} className="vox-card" style={{ fontSize: 12 }}>
+                        <div style={{ color: 'var(--text-secondary)', marginBottom: 4 }}>
+                          {m.author?.displayName || m.authorOverride || 'Unknown'} · {new Date(m.createdAt).toLocaleDateString()}
+                        </div>
+                        <div style={{ color: 'var(--ghost-white)' }}>{m.body}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

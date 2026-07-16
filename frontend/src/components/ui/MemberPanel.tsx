@@ -173,11 +173,12 @@ const MemberPanel: React.FC = () => {
               label: 'Timeout Member',
               icon: '⏱️',
               submenu: [
-                { id: 't60', label: '60 seconds', onClick: () => addToast('Timed out 60s.', 'info') },
-                { id: 't5', label: '5 minutes', onClick: () => addToast('Timed out 5m.', 'info') },
-                { id: 't10', label: '10 minutes', onClick: () => addToast('Timed out 10m.', 'info') },
-                { id: 't1h', label: '1 hour', onClick: () => addToast('Timed out 1h.', 'info') },
-                { id: 'tc', label: 'Custom...', onClick: () => addToast('Custom timeout — open server settings to configure.', 'info') },
+                { id: 't1', label: '1 minute', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 1 }) }); r.ok ? addToast(`${username} timed out for 1 minute.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't5', label: '5 minutes', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 5 }) }); r.ok ? addToast(`${username} timed out for 5 minutes.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't15', label: '15 minutes', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 15 }) }); r.ok ? addToast(`${username} timed out for 15 minutes.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't60', label: '1 hour', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 60 }) }); r.ok ? addToast(`${username} timed out for 1 hour.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't1440', label: '1 day', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 1440 }) }); r.ok ? addToast(`${username} timed out for 1 day.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't0', label: 'Remove Timeout', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 0 }) }); r.ok ? addToast(`Timeout removed for ${username}.`, 'success') : addToast('Failed to remove timeout.', 'error'); }, danger: true },
               ],
             },
             {

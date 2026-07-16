@@ -49,8 +49,11 @@ function sendFile(response, filePath) {
     }
 
     const ext = path.extname(filePath).toLowerCase();
+    
+    // For development or when we need to ensure fresh content, use no-cache
+    // In production Electron app, we want to serve fresh content always
     response.writeHead(200, {
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Content-Type': mimeTypes[ext] || 'application/octet-stream',
     });
     response.end(data);

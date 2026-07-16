@@ -1,32 +1,35 @@
 {
   "name": "vox-backend",
   "version": "0.2.0",
-  "description": "VOX backend — Express + Prisma (PostgreSQL) + JWT + 2FA + Socket.io",
+  "description": "VOX backend — Express + Prisma (SQLite) + JWT + 2FA + Socket.io",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "cluster": "pm2 start ../ecosystem.config.json",
+    "cluster": "pm2 start ../ecosystem.config.cjs",
     "cluster:restart": "pm2 restart vox-backend",
     "cluster:stop": "pm2 stop vox-backend",
     "cluster:logs": "pm2 logs vox-backend",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:seed": "tsx prisma/seed.js",
+    "prisma:seed": "node seed.mjs",
     "prisma:studio": "prisma studio",
-    "db:setup": "prisma migrate dev --name init && prisma db seed"
+    "verify:routes": "node scripts/verify-routes.mjs",
+    "db:setup": "prisma migrate dev --name init && prisma db seed",
+    "check": "node --check server.js && node -e \"const{execSync}=require('child_process');require('fs').readdirSync('src').filter(f=>f.endsWith('.js')).forEach(f=>execSync('node --check src/'+f))\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "prisma": {
-    "seed": "tsx prisma/seed.js"
+    "seed": "node seed.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
     "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -43,6 +46,8 @@
     "resend": "^6.16.0",
     "sanitize-html": "^2.17.5",
     "socket.io": "^4.8.3",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

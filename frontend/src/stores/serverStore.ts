@@ -10,6 +10,11 @@ export interface Channel {
   nsfw?: boolean;
   categoryId?: string | null;
   position?: number;
+  region?: string;
+  slowmode?: number;
+  rtcMode?: string;
+  maxParticipants?: number;
+  stageEnabled?: boolean;
 }
 
 export interface Category {
@@ -41,6 +46,21 @@ export interface Server {
   ownerId?: string;
   channels: Channel[];
   members: ServerMember[];
+  verificationLevel?: string;
+  vanityUrl?: string | null;
+  createdAt?: string;
+  categories?: any[];
+  isPublic?: boolean;
+  boosters?: string[];
+  boosts?: number;
+  category?: string;
+  require2FA?: boolean;
+  featured?: boolean;
+  featuredOrder?: number;
+  rulesScreening?: boolean;
+  welcomeMessage?: string | null;
+  welcomeChannels?: string | null;
+  defaultChannelId?: string | null;
 }
 
 interface ServerStore {
@@ -97,43 +117,51 @@ export const useServerStore = create<ServerStore>((set, get) => ({
     selectedServer: state.selectedServer?.id === serverId ? null : state.selectedServer
   })),
   
-  addChannel: (serverId, channel) => set((state) => ({
-    servers: state.servers.map(s => 
-      s.id === serverId ? { ...s, channels: [...s.channels, channel] } : s
-    ),
-    selectedServer: state.selectedServer?.id === serverId 
-      ? { ...state.selectedServer, channels: [...state.selectedServer.channels, channel] }
-      : state.selectedServer
-  })),
+  addChannel: (serverId, channel) => set((state) => {
+    const serverIndex = state.servers.findIndex(s => s.id === serverId);
+    if (serverIndex === -1) return state;
+    const updatedServer = { ...state.servers[serverIndex], channels: [...state.servers[serverIndex].channels, channel] };
+    const newServers = [...state.servers];
+    newServers[serverIndex] = updatedServer;
+    return {
+      servers: newServers,
+      selectedServer: state.selectedServer?.id === serverId ? updatedServer : state.selectedServer
+    };
+  }),
 
-  updateChannel: (serverId, channelId, data) => set((state) => ({
-    servers: state.servers.map(s =>
-      s.id === serverId ? { ...s, channels: s.channels.map(c => c.id === channelId ? { ...c, ...data } : c) } : s
-    ),
-    selectedServer: state.selectedServer?.id === serverId
-      ? { ...state.selectedServer, channels: state.selectedServer.channels.map(c => c.id === channelId ? { ...c, ...data } : c) }
-      : state.selectedServer
-  })),
+  updateChannel: (serverId, channelId, data) => set((state) => {
+    const serverIndex = state.servers.findIndex(s => s.id === serverId);
+    if (serverIndex === -1) return state;
+    const updatedChannels = state.servers[serverIndex].channels.map(c => c.id === channelId ? { ...c, ...data } : c);
+    const updatedServer = { ...state.servers[serverIndex], channels: updatedChannels };
+    const newServers = [...state.servers];
+    newServers[serverIndex] = updatedServer;
+    return {
+      servers: newServers,
+      selectedServer: state.selectedServer?.id === serverId ? updatedServer : state.selectedServer
+    };
+  }),
 
-  removeChannel: (serverId, channelId) => set((state) => ({
-    servers: state.servers.map(s =>
-      s.id === serverId ? { ...s, channels: s.channels.filter(c => c.id !== channelId) } : s
-    ),
-    selectedServer: state.selectedServer?.id === serverId
-      ? { ...state.selectedServer, channels: state.selectedServer.channels.filter(c => c.id !== channelId) }
-      : state.selectedServer
-  })),
+  removeChannel: (serverId, channelId) => set((state) => {
+    const serverIndex = state.servers.findIndex(s => s.id === serverId);
+    if (serverIndex === -1) return state;
+    const updatedChannels = state.servers[serverIndex].channels.filter(c => c.id !== channelId);
+    const updatedServer = { ...state.servers[serverIndex], channels: updatedChannels };
+    const newServers = [...state.servers];
+    newServers[serverIndex] = updatedServer;
+    return {
+      servers: newServers,
+      selectedServer: state.selectedServer?.id === serverId ? updatedServer : state.selectedServer
+    };
+  }),
 
-  updateMemberStatus: (userId, status) => set((state) => ({
-    servers: state.servers.map(s => ({
-      ...s,
-      members: s.members.map(m => m.userId === userId ? { ...m, user: { ...m.user, status } } : m)
-    })),
-    selectedServer: state.selectedServer ? {
-      ...state.selectedServer,
-      members: state.selectedServer.members.map(m => m.userId === userId ? { ...m, user: { ...m.user, status } } : m)
-    } : null
-  })),
+  updateMemberStatus: (userId, status) => set((state) => {
+    const updateMember = (members: ServerMember[]) => members.map((m: ServerMember) => m.userId === userId ? { ...m, user: { ...m.user, status } } : m);
+    const selectedServerIndex = state.selectedServer ? state.servers.findIndex((s: Server) => s.id === state.selectedServer!.id) : -1;
+    const newServers = state.servers.map((s: Server) => ({ ...s, members: updateMember(s.members) }));
+    const selectedServer = selectedServerIndex >= 0 ? { ...newServers[selectedServerIndex], members: updateMember(newServers[selectedServerIndex].members) } : state.selectedServer;
+    return { servers: newServers, selectedServer };
+  }),
 
   // Tear down the prior session so the next user starts clean.
   reset: () => set({ servers: [], selectedServer: null, selectedChannel: null, loading: false }),

@@ -116,11 +116,27 @@ linkPreviewRouter.get('/link-preview', async (req, res, next) => {
       description: description.slice(0, 500),
       image: image.slice(0, 1024),
       site,
+      provider: detectProvider(url),
     };
     cache.set(url, { at: Date.now(), data });
     res.json(data);
   } catch (e) { next(e); }
 });
+
+// Map a URL to a known provider so the client can render a rich card
+// (video / tweet / repo / track) instead of a generic OG preview.
+function detectProvider(url) {
+  const host = deriveHost(url).toLowerCase();
+  if (host.includes('youtube.com') || host.includes('youtu.be')) return 'youtube';
+  if (host.includes('twitter.com') || host.includes('x.com')) return 'twitter';
+  if (host.includes('github.com')) return 'github';
+  if (host.includes('reddit.com')) return 'reddit';
+  if (host.includes('spotify.com')) return 'spotify';
+  if (host.includes('tiktok.com')) return 'tiktok';
+  if (host.includes('twitch.tv')) return 'twitch';
+  if (host.includes('vimeo.com')) return 'vimeo';
+  return 'web';
+}
 
 function deriveHost(url) {
   try {

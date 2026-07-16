@@ -1,6 +1,8 @@
 {
   "name": "vox-desktop",
   "version": "1.0.0",
+  "description": "VOX Desktop - Voice and Text Chat",
+  "author": "VOX Team",
   "main": "electron-main.js",
   "scripts": {
     "start": "electron .",
@@ -13,12 +15,79 @@
     "prod:backend": "pm2 start ecosystem.config.cjs",
     "prod:stop": "pm2 stop all && pm2 delete all",
     "prod:logs": "pm2 logs vox-backend",
-    "prod:status": "pm2 status"
+    "prod:status": "pm2 status",
+    "setup:backend": "cd backend && npm install",
+    "setup:nodejs": "node -e \"console.log('Portable Node.js is bundled automatically during electron-builder build')\"",
+    "build": "npm run build:win",
+    "build:win": "npm run build:win",
+    "build:all": "electron-builder --win --mac --linux",
+    "dist": "electron-builder --win"
   },
-  "dependencies": {
-    "lucide-react": "^1.18.0"
+  "build": {
+    "appId": "com.vox.desktop",
+    "productName": "VOX",
+    "asar": true,
+    "asarUnpack": [
+      "frontend/dist/**/*.node",
+      "backend/**/*.node"
+    ],
+    "directories": {
+      "output": "./dist-v2",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "electron-main.js",
+      "preload.js",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "tools/nodejs",
+        "to": "nodejs"
+      },
+      {
+        "from": "backend",
+        "to": "backend"
+      },
+      {
+        "from": "scripts/installer.nsh",
+        "to": "installer.nsh"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build-resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "VOX",
+      "installerIcon": "build-resources/icon.ico",
+      "uninstallerIcon": "build-resources/icon.ico",
+      "installerHeaderIcon": "build-resources/icon.ico",
+      "runAfterFinish": true
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "build-resources/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build-resources/icon.ico"
+    }
   },
   "devDependencies": {
-    "electron": "^30.0.0"
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
   }
 }

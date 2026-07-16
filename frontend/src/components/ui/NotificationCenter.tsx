@@ -10,7 +10,8 @@ const TYPE_BORDER: Record<NotificationType, string> = {
   dm: 'var(--void-purple)',
   join: 'var(--toxic)',
   system: 'var(--gold)',
-  warning: 'var(--blood)',
+  warning: 'var(--gold)',
+  error: 'var(--crimson)',
 };
 
 function resolveAvatar(url?: string | null) {

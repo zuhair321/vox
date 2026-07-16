@@ -12,7 +12,7 @@ const Devices: React.FC = () => {
 
   return (
     <main className="settings-page">
-      <BackHeader title="DEVICES" badge="99" onBack={() => navigate(-1)} />
+      <BackHeader title="DEVICES" onBack={() => navigate(-1)} />
       <div className="settings-list-stack">
         <p className="settings-copy">Here are all devices currently logged into your VOX account. You can log out of each individually or all other devices.</p>
         <p className="settings-copy">If you see an entry you do not recognize, log out of that device and change your VOX account password immediately.</p>

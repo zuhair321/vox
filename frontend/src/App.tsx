@@ -25,6 +25,7 @@ import CreateChannelModal from './components/server/CreateChannelModal';
 import ThemeSwitcher from './components/ui/ThemeSwitcher';
 import QuickSwitcher from './components/ui/QuickSwitcher';
 import ShortcutsModal from './components/ui/ShortcutsModal';
+import FeedbackWidget from './components/ui/FeedbackWidget';
 import FriendsPage from './components/friends/FriendsPage';
 import DMConversation from './components/friends/DMConversation';
 import LoginDummy from './components/ui/LoginDummy';
@@ -119,7 +120,14 @@ const AppLayout = () => {
 
   // Post-registration redirect: SplashScreen delays AppLayout mount, so we use a
   // session flag instead of direct navigation from RegisterPage.
+  // Also wait for auth initialization to complete before checking login state
+  const { isInitialized } = useAuthStore();
   useEffect(() => {
+    // Don't do anything until auth initialization is complete
+    if (!isInitialized) {
+      return;
+    }
+    
     if (sessionStorage.getItem('vox_just_registered') === '1') {
       sessionStorage.removeItem('vox_just_registered');
       navigate('/friends');
@@ -129,7 +137,7 @@ const AppLayout = () => {
     if (location.pathname === '/') {
       navigate('/friends');
     }
-  }, [navigate, location.pathname]);
+  }, [navigate, location.pathname, isInitialized]);
 
   // Close everything (Escape) and open quick switcher (Ctrl+K) via the hook.
   useKeyboardShortcuts({
@@ -162,18 +170,22 @@ const AppLayout = () => {
         }
       }
       connect();
-      fetchServers().then(() => {
+      Promise.all([fetchServers(), fetchFriends()]).then(() => {
         const servers = useServerStore.getState().servers;
         if (servers && servers.length === 0 && !localStorage.getItem('vox_onboarding_done')) {
           setShowOnboarding(true);
           localStorage.setItem('vox_onboarding_done', 'true');
         }
       });
-      fetchFriends();
     }
 
-    return () => disconnect();
-  }, [connect, disconnect, fetchServers, fetchFriends, hydrateFromUser, navigate, location.pathname, user, accessToken]);
+    return () => {
+      // Only disconnect when logging out (user becomes null), not on every route change.
+      if (!user) {
+        disconnect();
+      }
+    };
+  }, [connect, disconnect, fetchServers, fetchFriends, hydrateFromUser, navigate, user, accessToken]);
 
   return (
     <div className="app-container">
@@ -296,16 +308,11 @@ const AppLayout = () => {
 };
 
 function App() {
-  const [isBooting, setIsBooting] = useState(true);
-  const { initialize, accessToken } = useAuthStore();
+  const { initialize } = useAuthStore();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
-
-  if (isBooting) {
-    return <SplashScreen onComplete={() => setIsBooting(false)} token={accessToken} />;
-  }
 
   return (
     <ErrorBoundary>

@@ -8,27 +8,37 @@ const RegisterPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const { addToast } = useUiStore();
   const { register, isLoading } = useAuthStore();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
 
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      addToast('Please enter a valid email address', 'error');
+      const msg = 'Please enter a valid email address';
+      setError(msg);
+      addToast(msg, 'error');
       return;
     }
     if (username.length < 3) {
-      addToast('Username must be at least 3 characters', 'error');
+      const msg = 'Username must be at least 3 characters';
+      setError(msg);
+      addToast(msg, 'error');
       return;
     }
     if (password.length < 8) {
-      addToast('Password must be at least 8 characters', 'error');
+      const msg = 'Password must be at least 8 characters';
+      setError(msg);
+      addToast(msg, 'error');
       return;
     }
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-      addToast('Username: letters, numbers, underscores only', 'error');
+      const msg = 'Username: letters, numbers, underscores only';
+      setError(msg);
+      addToast(msg, 'error');
       return;
     }
 
@@ -38,7 +48,9 @@ const RegisterPage: React.FC = () => {
       sessionStorage.setItem('vox_just_registered', '1');
       navigate('/');
     } catch (err: any) {
-      addToast(err.message || 'Registration failed', 'error');
+      const msg = err.message || 'Registration failed';
+      setError(msg);
+      addToast(msg, 'error');
     }
   };
 
@@ -131,6 +143,12 @@ const RegisterPage: React.FC = () => {
               />
             </div>
           </div>
+
+          {error && (
+            <div className="vox-login-error" role="alert">
+              {error}
+            </div>
+          )}
 
           <button type="submit" className="vox-login-submit" disabled={isLoading}>
             <LogIn size={16} aria-hidden="true" />

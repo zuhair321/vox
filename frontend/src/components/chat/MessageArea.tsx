@@ -183,6 +183,10 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
                 isGrouped={isGrouped}
                 isOwn={msg.userId === myId || (!msg.userId && msg.authorOverride === myUsername)}
                 myUsername={myUsername}
+                myId={myId}
+                myRole={(() => {
+                  try { return (JSON.parse(localStorage.getItem('vox_user') || '{}')?.role || '').toUpperCase(); } catch { return ''; }
+                })()}
               />
             );
           })

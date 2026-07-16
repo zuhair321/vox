@@ -7,6 +7,7 @@ export interface SessionInfo {
   deviceInfo?: string;
   ipAddress?: string;
   userAgent?: string;
+  token?: string;
 }
 
 export interface AuthResponse {
@@ -14,6 +15,10 @@ export interface AuthResponse {
   tokens: {
     access: string;
     refresh: string;
+  };
+  loginAlert?: {
+    isNewLogin: boolean;
+    alertMessage: string | null;
   };
 }
 
@@ -105,4 +110,26 @@ export async function revokeSession(sessionId: string): Promise<void> {
 
 export async function revokeAllSessions(): Promise<void> {
   await api('/api/auth/sessions', { method: 'DELETE' });
+}
+
+export interface LoginHistoryEntry {
+  id: string;
+  deviceInfo: string | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  location: string | null;
+  alertSent: boolean;
+  createdAt: string;
+}
+
+export async function getLoginHistory(): Promise<{ history: LoginHistoryEntry[] }> {
+  return api('/api/auth/login-history');
+}
+
+export async function deleteLoginHistoryEntry(id: string): Promise<{ deleted: boolean }> {
+  return api(`/api/auth/login-history/${id}`, { method: 'DELETE' });
+}
+
+export async function clearLoginHistory(): Promise<{ cleared: boolean }> {
+  return api('/api/auth/login-history', { method: 'DELETE' });
 }

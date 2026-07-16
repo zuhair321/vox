@@ -10,6 +10,7 @@ export interface User {
   role?: string;
   color?: string;
   avatarUrl?: string;
+  hasTurbo?: boolean;
 }
 
 export interface Message {

@@ -86,9 +86,7 @@ const DMConversation: React.FC = () => {
       });
       setEditingId(null);
       addToast('Message edited', 'success');
-      fetchDMMessages(dmId).then((loaded: any) => {
-        if (Array.isArray(loaded)) setMessages(dmId, loaded);
-      });
+      useDMStore.getState().updateMessage({ ...(useDMStore.getState().messages[dmId || '']?.find(m => m.id === msgId) || {}), body: editValue.trim() } as any);
     } catch (e: any) {
       addToast(e?.message || 'Edit failed', 'error');
     }
@@ -99,9 +97,7 @@ const DMConversation: React.FC = () => {
     try {
       await api(`/api/dm/${dmId}/messages/${msgId}`, { method: 'DELETE' });
       addToast('Deleted', 'success');
-      fetchDMMessages(dmId).then((loaded: any) => {
-        if (Array.isArray(loaded)) setMessages(dmId, loaded);
-      });
+      useDMStore.getState().removeMessage(dmId, msgId);
     } catch (e: any) {
       addToast(e?.message || 'Delete failed', 'error');
     }

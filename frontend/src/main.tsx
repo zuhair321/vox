@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { HashRouter } from 'react-router-dom'
 import App from './App'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import './index.css'
@@ -11,38 +11,36 @@ import './styles/advanced.css'
 import './styles/micro-interactions.css'
 import './styles/animations.css'
 
-// Request browser notification permission on load
-if ('Notification' in window && Notification.permission === 'default') {
-  Notification.requestPermission();
-}
+// Clear stale session token on startup so the login page always shows
+// (getMe() will re-validate with the backend; if token is still valid the
+// user goes straight to friends, if not they log in fresh).
+try { sessionStorage.removeItem('vox_access'); } catch {}
+try { sessionStorage.removeItem('vox_refresh'); } catch {}
 
-// Register service worker for offline support + push notifications.
-// The one-time reset of any stale SW + cache wipe is handled inline in
-// index.html so it runs before this bundle even loads.
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then((reg) => {
-      console.log('[SW] Registered:', reg.scope);
-    }).catch((err) => {
-      console.warn('[SW] Registration failed:', err);
-    });
+// Force login page on startup — clear all auth tokens so the login screen
+// always appears. The user can re-authenticate fresh.
+try { sessionStorage.removeItem('vox_access'); } catch {}
+try { localStorage.removeItem('vox_access'); } catch {}
+try { localStorage.removeItem('vox_refresh'); } catch {}
+try { localStorage.removeItem('vox_remember_me'); } catch {}
+try { localStorage.removeItem('vox_user'); } catch {}
 
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      const { type, channelId, messageId } = event.data || {};
-      if (type === 'NOTIFICATION_CLICK' && channelId) {
-        window.location.hash = `#/channels/${channelId}`;
-        window.dispatchEvent(new HashChangeEvent('hashchange'));
-      }
-    });
-  });
-}
+// Also clear auth cookies (HTTP-only cookies from the backend can otherwise
+// silently re-authenticate the previous test/demo user on reload).
+try {
+  document.cookie = 'vox_access=; Path=/; Max-Age=0; SameSite=Lax';
+  document.cookie = 'vox_refresh=; Path=/; Max-Age=0; SameSite=Lax';
+} catch {}
+
+// @ts-ignore — injected marker consumed by renderer.log reader
+window.__VOX_START = Date.now();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
+      <HashRouter>
         <App />
-      </BrowserRouter>
+      </HashRouter>
     </ErrorBoundary>
   </React.StrictMode>,
 )

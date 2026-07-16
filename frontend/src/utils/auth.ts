@@ -14,13 +14,15 @@ const SESSION_KEYS = [
 ];
 
 export function logout() {
+  const refreshToken = sessionStorage.getItem('vox_refresh') || localStorage.getItem('vox_refresh') || '';
+  
   try {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), 4000);
     fetch(`${API_BASE}/api/auth/logout`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: '' }),
+      body: JSON.stringify({ refreshToken }),
       signal: ctrl.signal,
       keepalive: true,
       credentials: 'include',
@@ -51,7 +53,7 @@ export function logout() {
     useUiStore.getState().setThreadMessageId(null);
     useUiStore.getState().setShowPinnedPanel(false);
     useUiStore.getState().setShowSearchPanel(false);
-    useUiStore.getState().setShowInviteModal(false);
+    useUiStore.getState().setInviteModalOpen(null);
     useUiStore.getState().setShowDiscover(false);
     useUiStore.getState().setShowCustomStatus(false);
     useUiStore.getState().setShowEmojiPicker(false);

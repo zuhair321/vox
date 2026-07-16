@@ -29,7 +29,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('VOX Error Boundary:', error, errorInfo);
+    console.error('VOX Error Boundary:', error.message);
+    try { console.error('VOX-STACK: ' + (error.stack || 'no stack')); } catch {}
+    try { console.error('VOX-COMPSTACK: ' + (errorInfo?.componentStack || 'no compstack')); } catch {}
     this.props.onError?.(error, errorInfo);
   }
 

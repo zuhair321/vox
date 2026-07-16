@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useUiStore } from '../../stores/uiStore';
 import { useFriendStore } from '../../stores/friendStore';
@@ -6,6 +6,17 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../../api/client';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { buildDmId } from '../../api/dm';
+import { fetchUserBadges, type Badge } from '../../api/badges';
+import { fetchUserActivity, type Activity } from '../../api/activity';
+
+const ACTIVITY_VERB: Record<string, string> = {
+  PLAYING: 'Playing',
+  LISTENING: 'Listening to',
+  WATCHING: 'Watching',
+  STREAMING: 'Streaming',
+};
+
+const isBadgeImage = (icon: string) => /^https?:\/\//.test(icon) || icon.startsWith('/');
 
 const ROLE_BADGES: Record<string, { color: string; label: string }> = {
   FOUNDER: { color: '#e7edf5', label: 'FOUNDER' },
@@ -22,11 +33,48 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const ProfilePopup: React.FC = () => {
-  const { profilePopupUser, profilePopupPosition, closeProfilePopup } = useUiStore();
+  const { profilePopupUser, profilePopupPosition, closeProfilePopup, addToast } = useUiStore();
   const { sendRequest, blockUser } = useFriendStore();
   const voice = useVoiceStore();
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
+  const [note, setNote] = useState('');
+  const [editingNote, setEditingNote] = useState(false);
+  const [badges, setBadges] = useState<Badge[]>([]);
+  const [activity, setActivityState] = useState<Activity | null>(null);
+
+  useEffect(() => {
+    if (!profilePopupUser?.id) return;
+    let cancelled = false;
+    fetchUserBadges(profilePopupUser.id)
+      .then((d) => { if (!cancelled) setBadges(d.badges || []); })
+      .catch(() => { if (!cancelled) setBadges([]); });
+    fetchUserActivity(profilePopupUser.id)
+      .then((d) => { if (!cancelled) setActivityState(d.activity || null); })
+      .catch(() => { if (!cancelled) setActivityState(null); });
+    return () => { cancelled = true; };
+  }, [profilePopupUser?.id]);
+
+  useEffect(() => {
+    if (!profilePopupUser?.id) return;
+    const token = localStorage.getItem('vox_token');
+    fetch(`${API_BASE}/api/users/${profilePopupUser.id}/notes`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setNote(d.note?.text || ''))
+      .catch(() => setNote(''));
+    setEditingNote(false);
+  }, [profilePopupUser?.id]);
+
+  const saveNote = async (text: string) => {
+    const token = localStorage.getItem('vox_token');
+    const res = await fetch(`${API_BASE}/api/users/${profilePopupUser?.id}/notes`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text }),
+    });
+    if (res.ok) { setNote(text); setEditingNote(false); addToast('Note saved.', 'success'); }
+    else addToast('Failed to save note.', 'error');
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -163,6 +211,50 @@ const ProfilePopup: React.FC = () => {
             @{profilePopupUser.username}
           </p>
 
+          {/* Activity / Rich Presence */}
+          {activity?.name && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '6px 8px', marginBottom: '12px',
+              background: 'rgba(88,101,242,0.1)', border: '1px solid rgba(88,101,242,0.25)',
+              borderRadius: '4px', fontSize: '11px', color: 'var(--ash)',
+            }}>
+              <span>🎮</span>
+              <span>
+                <strong style={{ color: 'var(--ghost-white)' }}>{ACTIVITY_VERB[activity.type] || 'Playing'}</strong>{' '}
+                {activity.url ? (
+                  <a href={activity.url} target="_blank" rel="noreferrer" style={{ color: 'var(--chaos)' }}>{activity.name}</a>
+                ) : activity.name}
+              </span>
+            </div>
+          )}
+
+          {/* Badges */}
+          {badges.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>
+                BADGES
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {badges.map((b) => (
+                  <span
+                    key={b.id}
+                    title={b.description || b.name}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: '26px', height: '26px', borderRadius: '6px',
+                      background: (b.color || '#5865f2') + '22', border: `1px solid ${b.color || '#5865f2'}`,
+                    }}
+                  >
+                    {isBadgeImage(b.icon)
+                      ? <img src={b.icon} alt={b.name} style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+                      : <span style={{ fontSize: '15px' }}>{b.icon}</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Divider */}
           <div style={{ height: '1px', background: 'var(--rim)', margin: '0 0 12px' }} />
 
@@ -205,6 +297,35 @@ const ProfilePopup: React.FC = () => {
             <div style={{ fontSize: '12px', color: 'var(--ash)' }}>
               {profilePopupUser.memberSince ? new Date(profilePopupUser.memberSince).toLocaleDateString() : 'Unknown'}
             </div>
+          </div>
+
+          {/* User note */}
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>MY NOTE</div>
+              <button
+                onClick={() => { if (editingNote) { const input = document.getElementById('note-input') as HTMLInputElement; if (input) saveNote(input.value); } else setEditingNote(true); }}
+                style={{ background: 'none', border: 'none', color: 'var(--chaos)', cursor: 'pointer', fontSize: '10px' }}
+              >
+                {editingNote ? '💾 Save' : '✏️ Edit'}
+              </button>
+            </div>
+            {editingNote ? (
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input
+                  id="note-input"
+                  defaultValue={note}
+                  placeholder="Add a note about this user..."
+                  maxLength={500}
+                  style={{ flex: 1, padding: '6px 8px', background: 'var(--phantom)', border: '1px solid var(--rim)', borderRadius: '4px', color: 'var(--ghost-white)', fontSize: '12px', outline: 'none' }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { const input = e.currentTarget as HTMLInputElement; saveNote(input.value); } if (e.key === 'Escape') setEditingNote(false); }}
+                />
+              </div>
+            ) : (
+              <p style={{ fontSize: '12px', color: note ? 'var(--ash)' : 'var(--shadow)', margin: 0, fontStyle: note ? 'normal' : 'italic' }}>
+                {note || 'No note yet.'}
+              </p>
+            )}
           </div>
 
           {/* Action buttons */}

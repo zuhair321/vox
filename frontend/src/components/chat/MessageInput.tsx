@@ -2,12 +2,19 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSocketStore } from '../../stores/socketStore';
 import { useServerStore } from '../../stores/serverStore';
 import { useMessageStore } from '../../stores/messageStore';
+import { useAuthStore } from '../../stores/authStore';
+import { useDMStore } from '../../stores/dmStore';
+import { API_BASE } from '../../api/client';
 import { sendMessageHTTP } from '../../api/messages';
 import { uploadChatAttachment } from '../../api/uploads';
 import { sendDMHTTP } from '../../api/dm';
+import { scheduleMessage } from '../../api/scheduled';
 import { useUiStore } from '../../stores/uiStore';
 import EmojiPicker from '../ui/EmojiPicker';
+import StickerPicker from './StickerPicker';
+import type { Sticker } from '../../api/stickers';
 import CreatePollModal from './CreatePollModal';
+import { SlashCommandMenu, COMMANDS, type SlashCommand } from './SlashCommandMenu';
 import type { Attachment } from '../../types';
 import { playMessageSend, playError } from '../../utils/sounds';
 
@@ -26,13 +33,21 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function toLocalInput(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo(({ channelId, dmId }) => {
   const [content, setContent] = useState('');
   const [pending, setPending] = useState<PendingAttachment[]>([]);
   const [fuseTime, setFuseTime] = useState<string>(''); // ISO string for future reveal
   const [showFuseMenu, setShowFuseMenu] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState<string>(''); // ISO string for scheduled send
+  const [showScheduleMenu, setShowScheduleMenu] = useState(false);
   const [busy, setBusy] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [stickerOpen, setStickerOpen] = useState(false);
   const [slowmodeCooldown, setSlowmodeCooldown] = useState(0); // seconds remaining
   const [showPollModal, setShowPollModal] = useState(false);
   const { sendDM, startTyping, stopTyping, startDmTyping, stopDmTyping } = useSocketStore();
@@ -64,6 +79,13 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     const m = content.slice(0, content.length).match(/@([A-Za-z0-9_]*)$/);
     if (!m) return { open: false, query: '', start: 0 };
     return { open: true, query: m[1], start: m.index || 0 };
+  })();
+
+  // Slash command detection
+  const slashState = (() => {
+    const m = content.match(/^\/([A-Za-z0-9_-]*)$/);
+    if (!m) return { open: false, query: '', start: 0 };
+    return { open: true, query: m[1], start: 0 };
   })();
 
   const mentionMatches = useMemo(() => {
@@ -162,6 +184,34 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     setBusy(false);
   };
 
+  const updateNickname = async (nickname: string) => {
+    try {
+      const { selectedServer } = useServerStore();
+      const { user } = useAuthStore();
+      if (!selectedServer?.id || !user?.id) return;
+
+      // Get token from localStorage as a fallback
+      const token = localStorage.getItem('vox_token') || '';
+      
+      const res = await fetch(`${API_BASE}/api/servers/${selectedServer.id}/members/${user.id}/nickname`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+        },
+        body: JSON.stringify({ nickname }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to update nickname: ${res.status}`);
+      }
+
+      addToast('Nickname updated successfully', 'success');
+    } catch (error: any) {
+      addToast(`Failed to update nickname: ${error.message}`, 'error');
+    }
+  };
+
   const removePending = (id: string) =>
     setPending((prev) => prev.filter((p) => p.id !== id));
 
@@ -178,6 +228,61 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     window.addEventListener('vox:upload-files', handler);
     return () => window.removeEventListener('vox:upload-files', handler);
   }, [channelId]);
+
+  const handleSlashCommand = async (cmd: SlashCommand) => {
+    if (cmd.handleInParent) {
+      // Let parent handle this command (e.g., poll opens modal)
+      if (cmd.id === 'poll' && channelId) {
+        setShowPollModal(true);
+      }
+      setContent('');
+      return;
+    }
+
+    if (cmd.args && cmd.args.length > 0) {
+      // Command requires arguments
+      const inputs: Record<string, string> = {};
+      
+      for (const arg of cmd.args) {
+        const value = prompt(`${arg.label}: ${arg.placeholder}${arg.required ? ' *' : ''}`);
+        if (arg.required && (!value || value.trim() === '')) {
+          addToast(`${arg.label} is required`, 'error');
+          setContent('');
+          return;
+        }
+        inputs[arg.label.toLowerCase()] = value || '';
+      }
+      
+      try {
+        const result = await cmd.action('');
+        if (result && typeof result === 'string') {
+          if (result.startsWith('/')) {
+            // Handle special commands like /nickname
+            if (result.startsWith('/nickname ') && channelId) {
+              const nickname = result.substring(10); // Remove '/nickname '
+               await updateNickname(nickname);
+            }
+          } else {
+            setContent(`${result}`);
+          }
+        }
+      } catch (error) {
+        addToast(`Error executing command: ${(error as Error)?.message}`, 'error');
+      }
+    } else {
+      // Command doesn't require arguments
+      try {
+        const result = await cmd.action('');
+        if (result && typeof result === 'string') {
+          setContent(`${result}`);
+        }
+      } catch (error) {
+        addToast(`Error executing command: ${(error as Error)?.message}`, 'error');
+      }
+    }
+    
+    setContent('');
+  };
 
   const send = () => {
     if (!canSend) return;
@@ -199,9 +304,18 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     };
 
     if (channelId) {
-      sendMessageHTTP(channelId, text, replyingTo?.id, attachments, fuseTime || undefined)
-        .then(() => playMessageSend())
-        .catch(onError);
+      if (scheduleTime) {
+        scheduleMessage({ channelId, body: text, scheduledAt: scheduleTime })
+          .then(() => {
+            playMessageSend();
+            addToast('Message scheduled for ' + new Date(scheduleTime).toLocaleString(), 'success');
+          })
+          .catch(onError);
+      } else {
+        sendMessageHTTP(channelId, text, replyingTo?.id, attachments, fuseTime || undefined)
+          .then(() => playMessageSend())
+          .catch(onError);
+      }
       stopTyping(channelId);
     } else if (dmId) {
       const rid = resolveRecipientId();
@@ -223,15 +337,47 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         playMessageSend();
       } else {
         sendDMHTTP(dmId, text, attachments.length ? attachments : undefined)
-          .then(() => playMessageSend())
+          .then((data) => {
+            if (data?.message) {
+              useDMStore.getState().addMessage(data.message);
+            }
+            playMessageSend();
+            setContent('');
+            setFuseTime('');
+            clearDone();
+            if (replyingTo) setReplyingTo(null);
+          })
           .catch(onDmError);
+        return;
       }
     }
 
     setContent('');
     setFuseTime('');
+    setScheduleTime('');
     clearDone();
     if (replyingTo) setReplyingTo(null);
+  };
+
+  const sendSticker = (sticker: Sticker) => {
+    const att = [{ url: sticker.url, kind: 'image', name: sticker.name, size: 0, mime: 'image/png' }] as any;
+    const onError = (err: any) => {
+      playError();
+      addToast(err?.message || 'Failed to send sticker.', 'error');
+    };
+    if (channelId) {
+      sendMessageHTTP(channelId, '', replyingTo?.id, att).then(() => playMessageSend()).catch(onError);
+      if (replyingTo) setReplyingTo(null);
+    } else if (dmId) {
+      const { connected } = useSocketStore.getState();
+      if (connected) {
+        const rid = resolveRecipientId();
+        if (rid) { sendDM(rid, '', att); playMessageSend(); }
+      } else {
+        sendDMHTTP(dmId, '', att).then(() => playMessageSend()).catch(onError);
+      }
+    }
+    setStickerOpen(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -240,9 +386,26 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
       insertMention(mentionMatches[0]);
       return;
     }
-    if (e.key === 'Escape' && mentionState.open) {
+    
+    // Handle slash commands
+    if (e.key === 'Enter' && !e.shiftKey && slashState.open) {
+      e.preventDefault();
+      const cmd = COMMANDS.find(c => c.id === slashState.query || c.name.toLowerCase() === slashState.query.toLowerCase());
+      if (cmd) {
+        handleSlashCommand(cmd);
+      } else {
+        // If no command found, treat as regular message
+        send();
+      }
       return;
     }
+    
+    if (e.key === 'Escape' && (mentionState.open || slashState.open)) {
+      // Close mention or slash dropdown on Escape
+      setContent(content.slice(0, mentionState.start)); // Reset content to before mention/slash
+      return;
+    }
+    
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -318,8 +481,26 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
           ))}
         </div>
       )}
+      
+      {slashState.open && (
+        <SlashCommandMenu
+          query={slashState.query}
+          onSelect={handleSlashCommand}
+          onClose={() => {
+            // Close slash command menu by resetting content to before the slash
+            setContent(content.slice(0, slashState.start));
+          }}
+        />
+      )}
 
       <EmojiPicker open={emojiOpen} onClose={() => setEmojiOpen(false)} onSelect={insertEmoji} />
+
+      <StickerPicker
+        open={stickerOpen}
+        serverId={selectedServer?.id}
+        onClose={() => setStickerOpen(false)}
+        onSelect={sendSticker}
+      />
 
       {pending.length > 0 && (
         <div
@@ -389,8 +570,31 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
         aria-label={channelId ? `Message #${selectedServer?.name || 'channel'}` : 'Send a direct message'}
-        style={{ paddingRight: '140px' }}
+        style={{ paddingRight: '172px' }}
       />
+
+      <button
+        type="button"
+        onClick={() => { setStickerOpen((v) => !v); setEmojiOpen(false); }}
+        className="input-action-btn"
+        title="Pick a sticker"
+        aria-label="Pick a sticker"
+        aria-expanded={stickerOpen}
+        style={{
+          position: 'absolute',
+          right: '152px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: stickerOpen ? 'var(--chaos)' : 'var(--ash, #8a93a3)',
+          fontSize: '18px',
+          padding: 0,
+        }}
+      >
+        🏷️
+      </button>
 
       <button
         type="button"
@@ -536,6 +740,95 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
       >
         ➤
       </button>
+
+      {/* Scheduled send button + menu */}
+      {channelId && (
+        <div style={{ position: 'absolute', right: '66px', top: '50%', transform: 'translateY(-50%)' }}>
+          <button
+            type="button"
+            onClick={() => setShowScheduleMenu((v) => !v)}
+            title={scheduleTime ? `Scheduled for ${new Date(scheduleTime).toLocaleString()}` : 'Schedule send'}
+            style={{
+              width: '24px',
+              height: '24px',
+              border: 'none',
+              background: scheduleTime ? 'rgba(114,137,218,0.2)' : 'transparent',
+              color: scheduleTime ? '#7289da' : 'var(--shadow)',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s',
+            }}
+          >
+            🕒
+          </button>
+          {showScheduleMenu && (
+            <div style={{
+              position: 'absolute',
+              bottom: '100%',
+              right: 0,
+              marginBottom: '6px',
+              background: 'var(--dark-matter)',
+              border: '1px solid var(--rim)',
+              borderRadius: '8px',
+              padding: '8px',
+              minWidth: '180px',
+              zIndex: 50,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            }}>
+              <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px' }}>
+                SCHEDULE SEND
+              </div>
+              {[
+                { label: 'No schedule', value: '' },
+                { label: '⏱ In 1 hour', value: new Date(Date.now() + 3600000).toISOString() },
+                { label: '🌙 Tomorrow', value: new Date(Date.now() + 86400000).toISOString() },
+                { label: '📅 In 1 week', value: new Date(Date.now() + 604800000).toISOString() },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => { setScheduleTime(opt.value); setShowScheduleMenu(false); }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '4px 8px',
+                    background: scheduleTime === opt.value ? 'rgba(114,137,218,0.12)' : 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: scheduleTime === opt.value ? '#7289da' : 'var(--ghost-white)',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    textAlign: 'left',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <label style={{ display: 'block', fontSize: '11px', color: 'var(--shadow)', marginTop: '6px', marginBottom: '4px' }}>
+                Custom time
+              </label>
+              <input
+                type="datetime-local"
+                value={scheduleTime ? toLocalInput(new Date(scheduleTime)) : ''}
+                onChange={(e) => setScheduleTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
+                style={{
+                  width: '100%',
+                  background: 'var(--obsidian)',
+                  border: '1px solid var(--rim)',
+                  color: 'var(--ghost-white)',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  padding: '3px 4px',
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Fuse timer button */}
       <div style={{ position: 'absolute', right: '40px', top: '50%', transform: 'translateY(-50%)' }}>

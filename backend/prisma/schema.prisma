@@ -1,11 +1,11 @@
-// Prisma Schema for VOX Backend — PostgreSQL
+// Prisma Schema for VOX Backend — SQLite
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -61,6 +61,17 @@ model User {
   apiKeys         ApiKey[]
   pinnerPins      PinNotification[] @relation("PinPinner")
   pinTargets      PinNotification[] @relation("PinTarget")
+  loginHistory    LoginHistory[]
+  badges          UserBadge[]
+  pushSubscriptions PushSubscription[]
+  reminders       Reminder[]
+  activityData    Json?
+  profileTheme    String? // theme id, e.g. "midnight", "sunset"
+  avatarFrame     String? // emoji or image url frame around avatar
+  animatedAvatar  Boolean  @default(false)
+  voiceSettings   Json?   // { quality, region, noiseSuppression, echoCancellation, autoGain }
+  notificationSettings NotificationSettings[]
+  integrations      Integration[]
 }
 
 // ─── Server ──────────────────────────────────────────────────────
@@ -76,6 +87,16 @@ model Server {
   verificationLevel String  @default("NONE")
   vanityUrl        String?
   defaultChannelId String?
+  require2FA       Boolean   @default(false)
+  region           String?
+  featured         Boolean   @default(false)
+  featuredOrder    Int       @default(0)
+  boosts           Int       @default(0) // raw boost count
+  boosters         Json?     // array of userIds who boosted (dedup)
+  rulesScreening   Boolean   @default(false)
+  welcomeMessage   String?
+  welcomeChannels  Json?
+  subcategory      String?
   createdAt        DateTime @default(now())
   ownerId          String
   updatedAt        DateTime @default(now())
@@ -90,7 +111,64 @@ model Server {
   webhooks   Webhook[]
   emojis     CustomEmoji[]
   templates  ServerTemplate[]
+  widgets    ServerWidget[]
   stats      ServerStats[]
+  badges     Badge[]
+  stickers   Sticker[]
+  sounds     Sound[]
+  automodConfig AutomodConfig?
+  strikes    Strike[]
+
+  @@index([ownerId])
+}
+
+// ─── AutomodConfig (per-server auto-moderation settings) ──
+
+model AutomodConfig {
+  id            String   @id @default(uuid())
+  serverId      String   @unique
+  filterWords   Boolean  @default(true)
+  filterLinks   Boolean  @default(true)
+  filterSpam    Boolean  @default(true)
+  maxStrikes    Int      @default(3)
+  strikeTimeout Int      @default(1440) // minutes to timeout after maxStrikes
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+}
+
+// ─── Strike (auto-mod / moderator strikes against a member) ──
+
+model Strike {
+  id        String    @id @default(uuid())
+  serverId  String
+  userId    String
+  issuedBy  String
+  reason    String
+  auto      Boolean   @default(false)
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId, userId])
+}
+
+// ── ServerWidget (embeddable server widget config) ──
+
+model ServerWidget {
+  id         String   @id @default(uuid())
+  serverId   String   @unique
+  enabled    Boolean  @default(false)
+  theme      String   @default("dark")
+  showOnline Boolean  @default(true)
+  showJoin   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }
 
 // ─── Channel ─────────────────────────────────────────────────────
@@ -103,6 +181,10 @@ model Channel {
   position   Int      @default(0)
   nsfw       Boolean  @default(false)
   slowmode   Int      @default(0)
+  region     String   @default("auto")
+  rtcMode    String   @default("MESH") // MESH (peer-to-peer) | SFU (media server)
+  maxParticipants Int  @default(0) // 0 = mode default (MESH=6, SFU=unlimited)
+  stageEnabled Boolean @default(false)
   createdAt  DateTime @default(now())
   categoryId String?
   serverId   String?
@@ -116,8 +198,13 @@ model Channel {
   archiveConfig ChannelArchiveConfig?
   polls       Poll[]
   pinNotifications PinNotification[]
-  scheduledMsgs ScheduledMessage[]
+
+  @@index([serverId])
+  @@index([categoryId])
+  @@index([serverId, createdAt])
 }
+
+// ─── DmMessage ───────────────────────────────────────────────────
 
 // ─── Message ─────────────────────────────────────────────────────
 
@@ -133,6 +220,8 @@ model Message {
   edited         Boolean  @default(false)
   parentId       String?
   pinned         Boolean  @default(false)
+  isForumPost    Boolean  @default(false)
+  tags           Json?
   fuseTime       DateTime?
 
   channel        Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -145,9 +234,8 @@ model Message {
   @@index([channelId, createdAt])
   @@index([userId])
   @@index([parentId])
+  @@index([channelId, deleted, createdAt])
 }
-
-// ─── DmMessage ───────────────────────────────────────────────────
 
 model DmMessage {
   id          String   @id @default(uuid())
@@ -218,6 +306,9 @@ model Invite {
 
   server  Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
   creator User   @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+  @@index([creatorId])
 }
 
 // ─── ServerBan ───────────────────────────────────────────────────
@@ -234,6 +325,7 @@ model ServerBan {
   user   User   @relation(fields: [userId], references: [id])
 
   @@unique([serverId, userId])
+  @@index([serverId])
 }
 
 // ─── AuditLog ────────────────────────────────────────────────────
@@ -268,6 +360,9 @@ model Poll {
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([userId])
 }
 
 model PollOption {
@@ -277,6 +372,8 @@ model PollOption {
   votes   PollVote[]
 
   poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@index([pollId])
 }
 
 model PollVote {
@@ -353,6 +450,23 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+// ─── LoginHistory ────────────────────────────────────────────────
+
+model LoginHistory {
+  id         String   @id @default(uuid())
+  userId     String
+  deviceInfo String?
+  ipAddress  String?
+  userAgent  String?
+  location   String?
+  alertSent  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
 // ─── PasswordReset ───────────────────────────────────────────────
 
 model PasswordReset {
@@ -395,6 +509,9 @@ model Webhook {
 
   server  Server  @relation(fields: [serverId], references: [id], onDelete: Cascade)
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+  @@index([channelId])
 }
 
 // ─── CustomEmoji ─────────────────────────────────────────────────
@@ -409,6 +526,7 @@ model CustomEmoji {
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
   @@unique([serverId, name])
+  @@index([serverId])
 }
 
 // ─── Report ──────────────────────────────────────────────────────
@@ -421,12 +539,18 @@ model Report {
   serverId       String?
   type           String
   reason         String
-  details        String?  @db.Text
+  details        String?
   status         String   @default("pending")
   createdAt      DateTime @default(now())
 
   reporter     User? @relation("ReportReporter", fields: [reporterId], references: [id])
   reportedUser User? @relation("ReportedUser", fields: [reportedUserId], references: [id])
+
+  @@index([reporterId])
+  @@index([reportedUserId])
+  @@index([serverId])
+  @@index([status])
+  @@index([messageId])
 }
 
 // ─── ServerRole (raw table managed manually) ─────────────────────
@@ -439,11 +563,12 @@ model ServerRole {
   hoist       Boolean  @default(false)
   mentionable Boolean  @default(false)
   position    Int      @default(0)
-  permissions BigInt   @default(0)
+  permissions String   @default("0")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@unique([serverId, name])
+  @@index([serverId])
 }
 
 // ─── ServerMemberRole (raw table managed manually) ──────────────
@@ -453,6 +578,9 @@ model ServerMemberRole {
   serverMemberId String
   roleId         String
   createdAt      DateTime @default(now())
+
+  @@index([serverMemberId])
+  @@index([roleId])
 }
 
 // ─── MessageRead (raw table managed manually) ────────────────────
@@ -474,7 +602,7 @@ model UserNote {
   id        String   @id @default(uuid())
   userId    String
   targetId  String
-  content   String   @db.Text
+  content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -586,4 +714,180 @@ model ServerStats {
 
   @@unique([serverId, date])
   @@index([serverId, date])
+}
+
+// ─── Badge (profile badges: Hypesquad, Nitro, Bug Hunter, custom, server) ──
+
+model Badge {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  icon        String   // emoji or image url
+  type        String   @default("CUSTOM") // HYPESQUAD | NITRO | BUG_HUNTER | STAFF | EARLY | SERVER | CUSTOM
+  color       String?  @default("#5865f2")
+  serverId    String?
+  createdAt   DateTime @default(now())
+
+  server Server?    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  users  UserBadge[]
+
+  @@index([serverId])
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String
+  badgeId   String
+  assignedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+}
+
+// ─── Sticker (server packs + global stickers) ──
+
+model Sticker {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  serverId  String?  // null = global sticker
+  type      String   @default("PNG") // PNG | APNG | LOTTIE | GIF
+  createdAt DateTime @default(now())
+
+  server Server? @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, name])
+  @@index([serverId])
+}
+
+// ─── Sound (soundboard: server sounds + global sounds) ──
+
+model Sound {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  serverId  String?  // null = global sound
+  volume    Float    @default(1.0)
+  createdAt DateTime @default(now())
+
+  server Server? @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@unique([serverId, name])
+  @@index([serverId])
+}
+
+// ─── StageSpeaker (stage channel speakers/requests) ──
+
+model StageSpeaker {
+  id        String   @id @default(uuid())
+  channelId String
+  userId    String
+  status    String   @default("REQUESTED") // REQUESTED | SPEAKER | MOD
+  createdAt DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+}
+
+// ─── PushSubscription (Web Push / VAPID device subscriptions) ──
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ─── Reminder (user-set reminders, delivered via socket) ──
+
+model Reminder {
+  id        String   @id @default(uuid())
+  userId    String
+  channelId String?
+  message   String
+  remindAt  DateTime
+  recurring String?  // null | 'DAILY' | 'WEEKLY' | 'MONTHLY'
+  sent      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, remindAt])
+}
+
+// ─── AnnouncementFollow (crosspost announcements to follower servers) ──
+
+model AnnouncementFollow {
+  id                String   @id @default(uuid())
+  channelId         String   // the announcement channel being followed
+  followerServerId  String   // server that follows it
+  createdAt         DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, followerServerId])
+  @@index([followerServerId])
+}
+
+// ─── Integration (connected external services: Slack, Spotify, Calendar, etc.) ──
+
+model Integration {
+  id         String   @id @default(uuid())
+  userId     String
+  serverId   String?
+  type       String   // SLACK | SPOTIFY | CALENDAR | DISCORD | MATRIX
+  name       String
+  config     Json?    // webhook url, tokens (env-gated, encrypted at rest by caller)
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([serverId])
+}
+
+// ─── NotificationSettings (per-user mute of servers/channels) ──
+
+model NotificationSettings {
+  id         String   @id @default(uuid())
+  userId     String
+  serverId   String?
+  channelId  String?
+  muted      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // A row is either a server-level mute or a channel-level mute.
+  @@unique([userId, serverId, channelId])
+  @@index([userId])
+}
+
+model Feedback {
+  id         String   @id @default(uuid())
+  category   String   @default("general")
+  message    String
+  rating     Int?
+  userAgent  String?
+  page       String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([category])
+  @@index([createdAt])
+  @@index([rating])
 }

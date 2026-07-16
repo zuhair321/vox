@@ -35,7 +35,19 @@ export async function initSockets(server) {
   });
 
   // ── Redis adapter for horizontal scaling ─────────────────
-  const { publisher, subscriber } = await getPubSub();
+  // Bounded so a misconfigured/unreachable REDIS_URL can never block boot:
+  // if pub/sub isn't ready within 3s we proceed in single-process mode.
+  let publisher = null;
+  let subscriber = null;
+  try {
+    const timeout = new Promise((resolve) =>
+      setTimeout(() => resolve({ publisher: null, subscriber: null }), 3000),
+    );
+    ({ publisher, subscriber } = await Promise.race([getPubSub(), timeout]));
+  } catch {
+    publisher = null;
+    subscriber = null;
+  }
   if (publisher && subscriber) {
     io.adapter(createAdapter(publisher, subscriber));
     console.log('[socket.io] Redis adapter active');
@@ -47,7 +59,9 @@ export async function initSockets(server) {
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) {
-      return next(new Error('Authentication required'));
+      // Admit as anonymous guest — keeps demo/desktop working without login.
+      socket.data.user = null;
+      return next();
     }
     try {
       const payload = jwt.verify(token, env.jwt.accessSecret);

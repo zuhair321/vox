@@ -5,17 +5,19 @@ import { useUiStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 
 const LoginDummy: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   const { addToast } = useUiStore();
   const { login, isLoading } = useAuthStore();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
 
     try {
-      const result = await login(email.trim(), password);
+      const result = await login(emailOrUsername.trim(), password);
       if (result.twoFactorRequired) {
         navigate('/2fa');
         return;
@@ -23,7 +25,9 @@ const LoginDummy: React.FC = () => {
       addToast('Welcome back.', 'success');
       navigate('/');
     } catch (err: any) {
-      addToast(err.message || 'Login failed', 'error');
+      const msg = err.message || 'Login failed';
+      setError(msg);
+      addToast(msg, 'error');
     }
   };
 
@@ -85,11 +89,11 @@ const LoginDummy: React.FC = () => {
               <Shield size={16} aria-hidden="true" />
               <input
                 id="vox-login-email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                value={emailOrUsername}
+                onChange={e => setEmailOrUsername(e.target.value)}
                 required
                 autoComplete="off"
-                placeholder="founder@vox"
+                placeholder="email or username"
               />
             </div>
           </div>
@@ -109,6 +113,12 @@ const LoginDummy: React.FC = () => {
               />
             </div>
           </div>
+
+          {error && (
+            <div className="vox-login-error" role="alert">
+              {error}
+            </div>
+          )}
 
           <button type="submit" className="vox-login-submit" disabled={isLoading}>
             <LogIn size={16} aria-hidden="true" />

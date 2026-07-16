@@ -1,8 +1,5 @@
 // Auth business logic: register, login (with 2FA branching), 2FA setup/verify,
 // and the public user shape returned to the client.
-//
-// FALLBACK MODE: When the database is unavailable, we switch to in-memory demo auth
-// so users can still register/login and reach the app.
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import * as otplib from 'otplib';
@@ -54,117 +51,6 @@ export function publicUser(user) {
   };
 }
 
-// ── In-memory fallback store (when the database is unavailable) ──────
-let databaseAvailable = true;
-const memoryUsers = new Map();
-const memoryRefreshTokens = new Set();
-const memoryLoginAttempts = new Map();
-const memoryLockedUntil = new Map();
-
-// Probe the database with a query that exercises the schema (not just the
-// connection) and avoids the BigInt serialization quirk of `$queryRaw SELECT 1`.
-// Returns true when the DB is reachable and the tables exist.
-function probeDatabase() {
-  return prisma.user
-    .count()
-    .then(() => true)
-    .catch(() => false);
-}
-
-// Self-healing availability check.
-//
-// The old code ran `detectDbAvailable()` exactly once at boot. If the database wasn't
-// ready that instant (common on first run / slow machine), `databaseAvailable`
-// got latched to `false` FOREVER for the auth module. Login then minted
-// in-memory users with synthetic ids (`demo-<ts>`), and every later message
-// send failed the Message.userId foreign key (Prisma P2003) — sends silently
-// 500'd.
-//
-// We now re-probe before each auth operation, and flip back to `true` the moment
-// the database recovers. A one-shot boot log is kept for diagnostics.
-let bootProbeDone = false;
-async function checkDatabase() {
-  const ok = await probeDatabase();
-  if (ok && !databaseAvailable) {
-    console.log('[vox/auth] Database recovered — resuming DB-backed auth');
-  } else if (!ok && databaseAvailable) {
-    console.warn('[vox/auth] Database unavailable — using in-memory demo auth');
-  }
-  databaseAvailable = ok;
-  return ok;
-}
-
-// One initial probe so the boot log reflects reality, without latching state.
-probeDatabase().then((ok) => {
-  if (!ok) {
-    console.warn('[vox/auth] Database unavailable at boot — using in-memory demo auth (will retry)');
-  }
-  databaseAvailable = ok;
-  bootProbeDone = true;
-});
-
-function memoryCreateUser({ email, username, passwordHash, color, role }) {
-  const user = {
-    id: `demo-${Date.now()}`,
-    email,
-    username,
-    displayName: username,
-    passwordHash,
-    color: color || pickColor(username),
-    status: 'ONLINE',
-    role: role || 'MEMBER',
-    twoFactorEnabled: false,
-    twoFactorSecret: null,
-    createdAt: new Date().toISOString(),
-    hasTurbo: true,
-    turboSince: new Date().toISOString(),
-  };
-  memoryUsers.set(username.toLowerCase(), user);
-  memoryUsers.set(email.toLowerCase(), user);
-  return user;
-}
-
-function memoryFindUser(identifier) {
-  return memoryUsers.get(identifier.toLowerCase()) || null;
-}
-
-async function memoryMintTokenPair(user) {
-  const access = jwt.sign(
-    { username: user.username, role: user.role || 'MEMBER', userId: user.id },
-    env.jwt.accessSecret,
-    { subject: user.id, expiresIn: env.jwt.accessTtl },
-  );
-
-  const refresh = jwt.sign({}, env.jwt.refreshSecret, {
-    subject: user.id,
-    jwtid: crypto.randomUUID(),
-    expiresIn: env.jwt.refreshTtl,
-  });
-
-  memoryRefreshTokens.add(refresh);
-  return { access, refresh };
-}
-
-async function memoryVerifyRefresh(token) {
-  return jwt.verify(token, env.jwt.refreshSecret);
-}
-
-async function memoryFindValidRefreshToken(token) {
-  if (!memoryRefreshTokens.has(token)) return null;
-  try {
-    const payload = jwt.verify(token, env.jwt.refreshSecret);
-    const user = memoryFindUser(payload.sub);
-    if (!user) return null;
-    return { user };
-  } catch {
-    return null;
-  }
-}
-
-async function memoryRevokeRefreshToken(token) {
-  memoryRefreshTokens.delete(token);
-}
-
 function setAuthCookies(res, access, refresh) {
   const isProd = process.env.NODE_ENV === 'production';
   const maxAgeAccess = env.jwt.accessTtl === '15m' ? 900 : Math.floor(parseInt(env.jwt.accessTtl) * 60) || 900;
@@ -201,58 +87,113 @@ export async function register({ email, username, password }, deviceContext = {}
     throw new HttpError(400, 'Password must be at least 8 characters.');
   }
 
-  // Re-probe so a DB that was down at boot (or went down mid-session) is
-  // picked up as soon as it's back — no more permanent in-memory latching.
-  await checkDatabase();
-
-  if (databaseAvailable) {
-    try {
-      const exists = await prisma.user.findFirst({
-        where: { OR: [{ email }, { username }] },
-        select: { id: true },
-      });
-      if (exists) {
-        throw new HttpError(409, 'That email or username is already registered.');
-      }
-
-      const user = await prisma.user.create({
-        data: {
-          email,
-          username,
-          displayName: username,
-          passwordHash: await bcrypt.hash(password, 10),
-          color: pickColor(username),
-          role: 'MEMBER',
-        },
-      });
-
-      const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
-      return { user: publicUser(user), tokens };
-    } catch (error) {
-      if (error instanceof HttpError) throw error;
-      // Prisma unique constraint violation (P2002) means email/username already exists
-      // Treat this as a user error, not a DB error
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const rawTarget = error.meta?.target;
-        const target = Array.isArray(rawTarget) ? rawTarget.join(', ') : rawTarget || 'field';
-        throw new HttpError(409, `That ${target} is already taken.`);
-      }
-      console.warn('[vox/auth] DB error during register, switching to memory fallback:', error.message);
-      databaseAvailable = false;
-    }
+  const [existingEmail, existingUsername] = await Promise.all([
+    prisma.user.findUnique({ where: { email }, select: { id: true } }),
+    prisma.user.findUnique({ where: { username }, select: { id: true } }),
+  ]);
+  if (existingEmail && existingUsername) {
+    throw new HttpError(409, 'Both this email and username are already registered.');
+  }
+  if (existingEmail) {
+    throw new HttpError(409, 'An account with this email already exists.');
+  }
+  if (existingUsername) {
+    throw new HttpError(409, 'This username is already taken.');
   }
 
-  // Fallback: in-memory
-  if (memoryFindUser(email) || memoryFindUser(username)) {
-    throw new HttpError(409, 'That email or username is already registered.');
-  }
-  const user = memoryCreateUser({
-    email,
-    username,
-    passwordHash: await bcrypt.hash(password, 10),
+  const user = await prisma.user.create({
+    data: {
+      email,
+      username,
+      displayName: username,
+      passwordHash: await bcrypt.hash(password, 10),
+      color: pickColor(username),
+      role: 'MEMBER',
+    },
   });
-  const tokens = await memoryMintTokenPair(user);
+
+  const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
   return { user: publicUser(user), tokens };
+}
+
+// ── Login History & Alerts ───────────────────────────────────
+const pendingTwoFactorContext = new Map();
+
+async function recordLoginHistory(userId, deviceContext) {
+  const deviceInfo = deviceContext.deviceInfo || null;
+  const ipAddress = deviceContext.ipAddress || null;
+  const userAgent = deviceContext.userAgent || null;
+
+  // Check if this is a new login (different device/IP from recent logins)
+  let isNewLogin = false;
+  let alertMessage = '';
+  
+  try {
+    const recentLogins = await prisma.loginHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+
+    if (recentLogins.length === 0) {
+      isNewLogin = true;
+      alertMessage = 'First login to your VOX account.';
+    } else {
+      const isNewDevice = !recentLogins.some(
+        (l) => l.deviceInfo === deviceInfo && l.ipAddress === ipAddress
+      );
+      if (isNewDevice) {
+        isNewLogin = true;
+        const location = await resolveLocation(ipAddress);
+        alertMessage = `New login detected from ${deviceInfo || 'unknown device'}${location ? ` (${location})` : ''}.`;
+      }
+    }
+
+    await prisma.loginHistory.create({
+      data: {
+        userId,
+        deviceInfo,
+        ipAddress,
+        userAgent,
+        location: isNewLogin ? alertMessage : null,
+        alertSent: isNewLogin,
+      },
+    });
+
+    // Login alert email on a new device/IP (Moderation + Notifications: mirrors
+    // Discord's "new login" email). Best-effort — failures are swallowed.
+    if (isNewLogin) {
+      try {
+        const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, displayName: true } });
+        if (u?.email) {
+          const { sendEmail } = await import('../services/email.service.js');
+          await sendEmail({
+            to: u.email,
+            subject: 'VOX — New login to your account',
+            html: `<div style="max-width:480px;margin:0 auto;font-family:sans-serif;color:#e0e0e0;background:#1a1a2e;padding:32px;border-radius:8px;">
+              <h1 style="color:#5865f2;">New login to VOX</h1>
+              <p>${escapeHtml(alertMessage)}</p>
+              <p style="color:#888;font-size:12px;">If this was you, no action is needed. If not, reset your password immediately.</p>
+            </div>`,
+          }).catch(() => {});
+        }
+      } catch { /* ignore */ }
+    }
+  } catch (error) {
+    console.warn('[vox/auth] Failed to record login history:', error.message);
+  }
+
+  return { isNewLogin, alertMessage: isNewLogin ? alertMessage : null };
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function resolveLocation(ipAddress) {
+  if (!ipAddress || ipAddress === '127.0.0.1' || ipAddress === '::1') return 'localhost';
+  // Placeholder: in production, use a GeoIP database or service
+  return null;
 }
 
 // ── Login (branches on 2FA) ──────────────────────────────────
@@ -262,87 +203,46 @@ export async function login({ emailOrUsername, password }, deviceContext = {}) {
     throw new HttpError(400, 'Email/username and password are required.');
   }
 
-  // Re-probe so we honor a recovered DB instead of a stale boot decision.
-  await checkDatabase();
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ email: identifier }, { username: identifier }] },
+  });
 
-  if (databaseAvailable) {
-    try {
-      const user = await prisma.user.findFirst({
-        where: { OR: [{ email: identifier }, { username: identifier }] },
+  if (!user) {
+    throw new HttpError(404, 'No account found with that email or username. Please register first.');
+  }
+
+  if (await bcrypt.compare(String(password), user.passwordHash)) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { loginAttempts: 0, lastLoginAt: new Date() },
+    });
+
+    if (user.twoFactorEnabled) {
+      const tempToken = jwtTemp(user, '5m');
+      // Store device context for use after 2FA completion
+      pendingTwoFactorContext.set(user.id, {
+        deviceInfo: deviceContext.deviceInfo,
+        ipAddress: deviceContext.ipAddress,
+        userAgent: deviceContext.userAgent,
       });
-
-      if (user) {
-        // Account lockout check
-        if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-          const mins = Math.ceil((new Date(user.lockedUntil) - new Date()) / 60000);
-          throw new HttpError(423, `Account locked. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
-        }
-
-        if (await bcrypt.compare(String(password), user.passwordHash)) {
-          // Successful login — reset lockout
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { loginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
-          });
-
-          if (user.twoFactorEnabled) {
-            const tempToken = jwtTemp(user, '5m');
-            return { twoFactorRequired: true, tempToken };
-          }
-          const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
-          return { user: publicUser(user), tokens };
-        }
-
-        // Wrong password — increment attempts
-        const attempts = (user.loginAttempts || 0) + 1;
-        const lockUntil = attempts >= 5 ? new Date(Date.now() + 30 * 60 * 1000) : null; // lock 30min after 5 fails
-        await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            loginAttempts: attempts,
-            ...(lockUntil ? { lockedUntil: lockUntil } : {}),
-          },
-        });
-        if (lockUntil) {
-          throw new HttpError(423, 'Account locked due to too many failed attempts. Try again in 30 minutes.');
-        }
-        throw new HttpError(401, 'Invalid credentials.');
-      }
-      // User not found in DB — check memory fallback
-    } catch (error) {
-      if (error instanceof HttpError) throw error;
-      console.warn('[vox/auth] DB error during login, switching to memory fallback:', error.message);
-      databaseAvailable = false;
+      return { twoFactorRequired: true, tempToken };
     }
+
+    const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
+    
+    // Record login history and detect new logins
+    const loginAlert = await recordLoginHistory(user.id, deviceContext);
+    
+    return { user: publicUser(user), tokens, loginAlert };
   }
 
-  // Fallback: in-memory
-  const memUser = memoryFindUser(identifier);
-  if (!memUser) {
-    memoryLoginAttempts.set(identifier, (memoryLoginAttempts.get(identifier) || 0) + 1);
-    throw new HttpError(401, 'Invalid credentials.');
-  }
-
-  const lockedUntil = memoryLockedUntil.get(identifier);
-  if (lockedUntil && new Date() < lockedUntil) {
-    const mins = Math.ceil((lockedUntil - new Date()) / 60000);
-    throw new HttpError(423, `Account locked. Try again in ${mins} minute${mins !== 1 ? 's' : ''}.`);
-  }
-
-  if (!(await bcrypt.compare(String(password), memUser.passwordHash))) {
-    const attempts = (memoryLoginAttempts.get(identifier) || 0) + 1;
-    memoryLoginAttempts.set(identifier, attempts);
-    if (attempts >= 5) {
-      memoryLockedUntil.set(identifier, new Date(Date.now() + 30 * 60 * 1000));
-      throw new HttpError(423, 'Account locked due to too many failed attempts. Try again in 30 minutes.');
-    }
-    throw new HttpError(401, 'Invalid credentials.');
-  }
-
-  memoryLoginAttempts.set(identifier, 0);
-  memoryLockedUntil.delete(identifier);
-  const tokens = await memoryMintTokenPair(memUser);
-  return { user: publicUser(memUser), tokens };
+  // Wrong password — increment attempts
+  const attempts = (user.loginAttempts || 0) + 1;
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { loginAttempts: attempts },
+  });
+  throw new HttpError(401, 'Incorrect password. Please try again.');
 }
 
 // ── 2FA setup ────────────────────────────────────────────────
@@ -398,8 +298,15 @@ export async function completeTwoFactorLogin(tempToken, code) {
   const ok = authenticator.verify({ token: String(code || '').trim(), secret });
   if (!ok) throw new HttpError(400, 'Invalid 2FA code.');
 
-  const tokens = await mintTokenPair(user);
-  return { user: publicUser(user), tokens };
+  const deviceContext = pendingTwoFactorContext.get(user.id) || {};
+  pendingTwoFactorContext.delete(user.id);
+
+  const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
+  
+  // Record login history for 2FA logins
+  const loginAlert = await recordLoginHistory(user.id, deviceContext);
+  
+  return { user: publicUser(user), tokens, loginAlert };
 }
 
 // ── Refresh ──────────────────────────────────────────────────
@@ -408,40 +315,12 @@ export async function refreshTokens(refreshToken) {
   try {
     payload = verifyRefresh(refreshToken);
   } catch {
-    // If verifyRefresh fails, try memory verify (same JWT lib, same secret)
-    try {
-      payload = await memoryVerifyRefresh(refreshToken);
-    } catch {
-      throw new HttpError(401, 'Invalid refresh token.');
-    }
-  }
-
-  if (!databaseAvailable) {
-    const row = await memoryFindValidRefreshToken(refreshToken);
-    if (!row) throw new HttpError(401, 'Refresh token is no longer valid.');
-    await memoryRevokeRefreshToken(refreshToken);
-    const tokens = await memoryMintTokenPair(row.user);
-    return { user: publicUser(row.user), tokens };
-  }
-
-  // Re-probe before touching the DB so a recovered database is used, and a
-  // freshly-failed one falls through to the memory path below.
-  await checkDatabase();
-  if (!databaseAvailable) {
-    const row = await memoryFindValidRefreshToken(refreshToken);
-    if (!row) throw new HttpError(401, 'Refresh token is no longer valid.');
-    await memoryRevokeRefreshToken(refreshToken);
-    const tokens = await memoryMintTokenPair(row.user);
-    return { user: publicUser(row.user), tokens };
+    throw new HttpError(401, 'Invalid refresh token.');
   }
 
   const row = await findValidRefreshToken(refreshToken);
   if (!row) {
-    const memRow = await memoryFindValidRefreshToken(refreshToken);
-    if (!memRow) throw new HttpError(401, 'Refresh token is no longer valid.');
-    await memoryRevokeRefreshToken(refreshToken);
-    const tokens = await memoryMintTokenPair(memRow.user);
-    return { user: publicUser(memRow.user), tokens };
+    throw new HttpError(401, 'Refresh token is no longer valid.');
   }
 
   await revokeRefreshToken(refreshToken);
@@ -452,7 +331,6 @@ export async function refreshTokens(refreshToken) {
 export async function logout(refreshToken) {
   if (refreshToken) {
     try { await revokeRefreshToken(refreshToken); } catch { /* ignore */ }
-    try { await memoryRevokeRefreshToken(refreshToken); } catch { /* ignore */ }
   }
   return { ok: true };
 }

@@ -1,0 +1,40 @@
+﻿import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+const stmts = [
+  `CREATE TABLE IF NOT EXISTS "Badge" ("id" TEXT NOT NULL, "name" TEXT NOT NULL, "description" TEXT, "icon" TEXT NOT NULL, "type" TEXT NOT NULL DEFAULT 'CUSTOM', "color" TEXT, "serverId" TEXT, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Badge_pkey" PRIMARY KEY ("id"))`,
+  `CREATE TABLE IF NOT EXISTS "UserBadge" ("id" TEXT NOT NULL, "userId" TEXT NOT NULL, "badgeId" TEXT NOT NULL, "assignedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "UserBadge_pkey" PRIMARY KEY ("id"))`,
+  `CREATE TABLE IF NOT EXISTS "Sticker" ("id" TEXT NOT NULL, "name" TEXT NOT NULL, "url" TEXT NOT NULL, "serverId" TEXT, "type" TEXT NOT NULL DEFAULT 'PNG', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Sticker_pkey" PRIMARY KEY ("id"))`,
+  `CREATE TABLE IF NOT EXISTS "Sound" ("id" TEXT NOT NULL, "name" TEXT NOT NULL, "url" TEXT NOT NULL, "serverId" TEXT, "volume" DOUBLE PRECISION NOT NULL DEFAULT 1, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "Sound_pkey" PRIMARY KEY ("id"))`,
+  `CREATE TABLE IF NOT EXISTS "StageSpeaker" ("id" TEXT NOT NULL, "channelId" TEXT NOT NULL, "userId" TEXT NOT NULL, "status" TEXT NOT NULL DEFAULT 'REQUESTED', "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "StageSpeaker_pkey" PRIMARY KEY ("id"))`,
+  `CREATE TABLE IF NOT EXISTS "PushSubscription" ("id" TEXT NOT NULL, "userId" TEXT NOT NULL, "endpoint" TEXT NOT NULL, "p256dh" TEXT NOT NULL, "auth" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT "PushSubscription_pkey" PRIMARY KEY ("id"))`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Badge_serverId_name_key" ON "Badge"("serverId","name")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Sticker_serverId_name_key" ON "Sticker"("serverId","name")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "Sound_serverId_name_key" ON "Sound"("serverId","name")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "StageSpeaker_channelId_userId_key" ON "StageSpeaker"("channelId","userId")`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint")`,
+  `CREATE INDEX IF NOT EXISTS "UserBadge_userId_idx" ON "UserBadge"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "UserBadge_badgeId_idx" ON "UserBadge"("badgeId")`,
+  `CREATE INDEX IF NOT EXISTS "Sticker_serverId_idx" ON "Sticker"("serverId")`,
+  `CREATE INDEX IF NOT EXISTS "Sound_serverId_idx" ON "Sound"("serverId")`,
+  `CREATE INDEX IF NOT EXISTS "StageSpeaker_channelId_idx" ON "StageSpeaker"("channelId")`,
+  `CREATE INDEX IF NOT EXISTS "PushSubscription_userId_idx" ON "PushSubscription"("userId")`,
+  `ALTER TABLE "Badge" DROP CONSTRAINT IF EXISTS "Badge_serverId_fkey"; ALTER TABLE "Badge" ADD CONSTRAINT "Badge_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "Server"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  `ALTER TABLE "UserBadge" DROP CONSTRAINT IF EXISTS "UserBadge_userId_fkey"; ALTER TABLE "UserBadge" ADD CONSTRAINT "UserBadge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  `ALTER TABLE "UserBadge" DROP CONSTRAINT IF EXISTS "UserBadge_badgeId_fkey"; ALTER TABLE "UserBadge" ADD CONSTRAINT "UserBadge_badgeId_fkey" FOREIGN KEY ("badgeId") REFERENCES "Badge"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  `ALTER TABLE "Sticker" DROP CONSTRAINT IF EXISTS "Sticker_serverId_fkey"; ALTER TABLE "Sticker" ADD CONSTRAINT "Sticker_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "Server"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  `ALTER TABLE "Sound" DROP CONSTRAINT IF EXISTS "Sound_serverId_fkey"; ALTER TABLE "Sound" ADD CONSTRAINT "Sound_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "Server"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  `ALTER TABLE "StageSpeaker" DROP CONSTRAINT IF EXISTS "StageSpeaker_channelId_fkey"; ALTER TABLE "StageSpeaker" ADD CONSTRAINT "StageSpeaker_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "Channel"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  `ALTER TABLE "PushSubscription" DROP CONSTRAINT IF EXISTS "PushSubscription_userId_fkey"; ALTER TABLE "PushSubscription" ADD CONSTRAINT "PushSubscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "activityData" JSONB`,
+  `ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "badges" INTEGER`,
+  `ALTER TABLE "Channel" ADD COLUMN IF NOT EXISTS "region" TEXT NOT NULL DEFAULT 'auto'`,
+  `ALTER TABLE "Channel" ADD COLUMN IF NOT EXISTS "stageEnabled" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "isForumPost" BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "tags" JSONB`,
+  `ALTER TABLE "Server" ADD COLUMN IF NOT EXISTS "badges" INTEGER`,
+  `ALTER TABLE "Server" ADD COLUMN IF NOT EXISTS "stickers" INTEGER`,
+  `ALTER TABLE "Server" ADD COLUMN IF NOT EXISTS "sounds" INTEGER`,
+];
+for (const s of stmts) { try { await prisma.$executeRawUnsafe(s); } catch (e) { console.error('STMT FAIL:', e.message, '\n', s.slice(0,80)); } }
+console.log('Tables ensured');
+await prisma.$disconnect();

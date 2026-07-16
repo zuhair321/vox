@@ -9,15 +9,16 @@
 // strict image-only MIME whitelist with a 5MB cap. Chat uploads accept a
 // broader set (images + videos + common documents) up to a higher cap.
 import { Router } from 'express';
-import multer from 'multer';
 import rateLimit from 'express-rate-limit';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import fs from 'node:fs';
+import multer from 'multer';
 import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import * as auth from '../services/auth.service.js';
+import { STORAGE_MODE, presignPutUrl, getPublicUrl } from '../lib/storage.js';
 
 // Rate limit uploads to prevent abuse.
 const uploadLimiter = rateLimit({
@@ -70,11 +71,24 @@ const FILE_MIME_TO_EXT = {
   'application/json': 'json',
 };
 
+// Audio (for the soundboard).
+const AUDIO_MIME_TO_EXT = {
+  'audio/webm': 'webm',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/ogg': 'ogg',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/m4a': 'm4a',
+  'audio/mp4': 'm4a',
+};
+
 // Build a single chat allowlist set for the fileFilter.
 const CHAT_MIME = new Set([
   ...Object.keys(IMAGE_MIME_TO_EXT),
   ...Object.keys(VIDEO_MIME_TO_EXT),
   ...Object.keys(FILE_MIME_TO_EXT),
+  ...Object.keys(AUDIO_MIME_TO_EXT),
 ]);
 
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024; // 5 MB — avatars/banners
@@ -85,6 +99,7 @@ const CHAT_MAX_BYTES = 100 * 1024 * 1024; // 100 MB — chat attachments
 function chatMimeInfo(mimetype) {
   if (IMAGE_MIME_TO_EXT[mimetype]) return { kind: 'image', ext: IMAGE_MIME_TO_EXT[mimetype] };
   if (VIDEO_MIME_TO_EXT[mimetype]) return { kind: 'video', ext: VIDEO_MIME_TO_EXT[mimetype] };
+  if (AUDIO_MIME_TO_EXT[mimetype]) return { kind: 'audio', ext: AUDIO_MIME_TO_EXT[mimetype] };
   if (FILE_MIME_TO_EXT[mimetype]) return { kind: 'file', ext: FILE_MIME_TO_EXT[mimetype] };
   return null; // rejected upstream by the allowlist
 }
@@ -153,18 +168,44 @@ const chatUpload = multer({
 
 export const uploadRouter = Router();
 
+// Roadmap Month 1: presigned PUT so clients can upload directly to S3/R2
+// without the backend ever touching the bytes. Discord's path: client asks
+// for a PUT URL, pushes the file, then sends the S3 key as the attachment.
+uploadRouter.get('/presign/:kind', requireAuth, async (req, res, next) => {
+  try {
+    const kind = req.params.kind;
+    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner', 'sticker', 'sound', 'voice-message'].includes(kind)) {
+      return next(new HttpError(400, 'Invalid upload kind.'));
+    }
+    if (STORAGE_MODE !== 's3') {
+      return next(new HttpError(501, 'Direct uploads require S3/R2 to be configured.'));
+    }
+
+    const filename = String(req.query.filename || `${kind}-${req.user.id}-${Date.now()}`).slice(0, 120);
+    const contentType = String(req.query.contentType || 'application/octet-stream');
+
+    const ext = filename.includes('.') ? filename.split('.').pop() : 'bin';
+    const key = `${kind}/${req.user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    const url = presignPutUrl(key, contentType, 900);
+    if (!url) return next(new HttpError(500, 'Failed to generate presigned URL.'));
+
+    res.json({ url, key, publicUrl: getPublicUrl(key) });
+  } catch (e) { next(e); }
+});
+
 // Single image upload helper shared by avatar/banner. <kind> is the literal
 // filename prefix AND the Prisma field name to update (avatarUrl / bannerUrl).
 async function handleUpload(req, res, next) {
   try {
     if (!req.file) throw new HttpError(400, 'No file received.');
     const kind = req.params.kind;
-    const publicUrl = `/uploads/${req.file.filename}`;
+    const publicUrl = STORAGE_MODE === 's3'
+      ? getPublicUrl(req.file.filename)
+      : `/uploads/${req.file.filename}`;
 
-    if (kind === 'chat') {
+    if (kind === 'chat' || kind === 'sticker' || kind === 'sound' || kind === 'voice-message') {
       const info = chatMimeInfo(req.file.mimetype);
-      // Chat attachments do not update the user profile — return the URL plus
-      // the metadata the client needs to render the attachment.
       return res.json({
         url: publicUrl,
         kind: info?.kind ?? 'file',
@@ -236,12 +277,15 @@ uploadRouter.post(
   uploadLimiter,
   (req, res, next) => {
     const kind = req.params.kind;
-    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner'].includes(kind)) {
+    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner', 'sticker', 'sound', 'voice-message'].includes(kind)) {
       return next(new HttpError(400, 'Invalid upload kind.'));
     }
     // Dispatch to the multer instance whose size cap + MIME filter matches the
-    // kind. avatar/banner → strict image rules + 5MB; chat → broader set + 100MB.
-    const handler = kind === 'chat' ? chatUpload.single('file') : imageUpload.single('file');
+    // kind. avatar/banner → strict image rules + 5MB; chat/sticker/sound/
+    // voice-message → broader set + 100MB.
+    const handler = (kind === 'chat' || kind === 'sticker' || kind === 'sound' || kind === 'voice-message')
+      ? chatUpload.single('file')
+      : imageUpload.single('file');
     return handler(req, res, next);
   },
   handleUpload,

@@ -939,6 +939,23 @@ h1, h2, h3, h4, h5, h6, .title {
   opacity: 0.62;
 }
 
+/* ── inline error ── */
+.vox-login-error {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.08);
+  border: 1px solid rgba(255, 107, 107, 0.25);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.4;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  animation: vox-login-error-in 0.25s ease;
+}
+
+@keyframes vox-login-error-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── footer ── */
 .vox-login-footer {
   display: flex;
@@ -1694,6 +1711,47 @@ button[aria-label="Back"]:hover {
 
 .offline-banner {
   animation: offlineSlideIn 0.2s ease-out;
+}
+
+/* Splash Screen Animations */
+@keyframes pulseInner {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes rotateRing {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes textGlow {
+  0%, 100% {
+    filter: 'drop-shadow(0 0 20px rgba(102,0,204,0.4))';
+  }
+  50% {
+    filter: 'drop-shadow(0 0 30px rgba(102,0,204,0.6)) drop-shadow(0 0 40px rgba(216,74,90,0.3))';
+  }
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.2);
+  }
 }
 
 /* Reduced motion */

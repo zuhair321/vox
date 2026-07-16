@@ -7,7 +7,7 @@ import { prisma } from '../lib/prisma.js';
 export const reportsRouter = Router();
 
 // POST /api/reports — submit a report
-reportsRouter.post('/', requireAuth, async (req, res, next) => {
+reportsRouter.post('/reports', requireAuth, async (req, res, next) => {
   try {
     const { reportedUserId, messageId, serverId, type, reason, details } = req.body || {};
     if (!type || !reason) {
@@ -48,7 +48,7 @@ reportsRouter.post('/', requireAuth, async (req, res, next) => {
 });
 
 // GET /api/reports — list reports (admin only — for server admins)
-reportsRouter.get('/', requireAuth, async (req, res, next) => {
+reportsRouter.get('/reports', requireAuth, async (req, res, next) => {
   try {
     const { serverId, status } = req.query;
 
@@ -62,13 +62,15 @@ reportsRouter.get('/', requireAuth, async (req, res, next) => {
       }
     }
 
-    let query = 'SELECT * FROM "Report" WHERE 1=1';
-    const params = [];
-    if (serverId) { query += ` AND serverId = $${params.length + 1}`; params.push(serverId); }
-    if (status) { query += ` AND status = $${params.length + 1}`; params.push(status); }
-    query += ' ORDER BY createdAt DESC LIMIT 50';
+    const where = {};
+    if (serverId) where.serverId = String(serverId);
+    if (status) where.status = String(status);
 
-    const reports = await prisma.$queryRaw(query, ...params);
+    const reports = await prisma.report.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
     res.json({ reports });
   } catch (e) { next(e); }
 });

@@ -42,9 +42,9 @@ const BanList: React.FC<Props> = ({ serverId }) => {
       {bans.map((ban) => (
         <div key={ban.id} className="vox-setting-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 0', borderBottom: '1px solid var(--rim)' }}>
           <div className="octagon" style={{ width: '28px', height: '28px', background: 'var(--obsidian)', display: 'grid', placeItems: 'center', fontSize: '11px', fontWeight: 700, color: 'var(--ghost-white)', flexShrink: 0, overflow: 'hidden' }}>
-            {ban.user?.avatarUrl
-              ? <img src={ban.user.avatarUrl.startsWith('http') ? ban.user.avatarUrl : `${API_BASE}${ban.user.avatarUrl}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : (ban.user?.username?.slice(0, 1).toUpperCase() || '?')}
+             {ban.user?.avatarUrl
+               ? <img src={ban.user.avatarUrl.startsWith('http') ? ban.user.avatarUrl : `${API_BASE}${ban.user.avatarUrl}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+               : ((ban.user?.username?.slice(0, 1) || '?').toUpperCase())}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: 'var(--ghost-white)', fontSize: '13px' }}>{ban.user?.username || ban.userId}</div>

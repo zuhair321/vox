@@ -5,6 +5,7 @@ import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
 import { getIO } from '../sockets/index.js';
 import { sanitize } from '../middleware/sanitize.js';
+import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 import { normalizeAttachments } from '../lib/attachments.js';
 
 export const dmRouter = Router();
@@ -33,40 +34,40 @@ dmRouter.get('/dms', requireAuth, async (req, res, next) => {
       ...receivedDMs.map(d => d.dmId),
     ])];
 
-    // For each DM, get the other participant and the last message
-    const dms = await Promise.all(allDmIds.map(async (dmId) => {
-      // Extract the other user's ID from the dmId
-      const otherId = dmId.replace(userId, '').replace(/^_+|_+$/g, '');
+    if (allDmIds.length === 0) {
+      return res.json([]);
+    }
 
-      const otherUser = await prisma.user.findUnique({
-        where: { id: otherId },
-        select: {
-          id: true,
-          username: true,
-          displayName: true,
-          avatarUrl: true,
-          status: true,
-          color: true,
-        },
-      });
+    // Batch all DB queries to avoid N+1
+    const otherIds = allDmIds.map(dmId => dmId.replace(userId, '').replace(/^_+|_+$/g, ''));
+    const uniqueOtherIds = [...new Set(otherIds)];
 
-      // Get last message in this DM
-      const lastMessage = await prisma.dmMessage.findFirst({
-        where: { dmId },
+    const [usersMap, lastMessages, unreadCounts] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: uniqueOtherIds } },
+        select: { id: true, username: true, displayName: true, avatarUrl: true, status: true, color: true },
+      }).then(users => Object.fromEntries(users.map(u => [u.id, u]))),
+      prisma.dmMessage.findMany({
+        where: { dmId: { in: allDmIds } },
         orderBy: { createdAt: 'desc' },
-        select: {
-          content: true,
-          createdAt: true,
-          senderId: true,
-          read: true,
-        },
-      });
+        select: { dmId: true, content: true, createdAt: true, senderId: true },
+      }).then(messages => {
+        const map = new Map();
+        for (const m of messages) {
+          if (!map.has(m.dmId)) map.set(m.dmId, m);
+        }
+        return map;
+      }),
+      prisma.dmMessage.groupBy({
+        by: ['dmId'],
+        where: { dmId: { in: allDmIds }, recipientId: userId, read: false },
+        _count: { _all: true },
+      }).then(result => Object.fromEntries(result.map(r => [r.dmId, r._count._all]))),
+    ]);
 
-      // Count unread messages
-      const unreadCount = await prisma.dmMessage.count({
-        where: { dmId, recipientId: userId, read: false },
-      });
-
+    const dms = allDmIds.map(dmId => {
+      const otherUser = usersMap[dmId.replace(userId, '').replace(/^_+|_+$/g, '')];
+      const lastMessage = lastMessages.get(dmId);
       return {
         dmId,
         otherUser,
@@ -75,9 +76,9 @@ dmRouter.get('/dms', requireAuth, async (req, res, next) => {
           createdAt: lastMessage.createdAt,
           senderId: lastMessage.senderId,
         } : null,
-        unreadCount,
+        unreadCount: unreadCounts[dmId] || 0,
       };
-    }));
+    });
 
     // Sort by last message date
     dms.sort((a, b) => {
@@ -166,8 +167,8 @@ dmRouter.post('/dm/:dmId/messages', requireAuth, dmLimiter, async (req, res, nex
     const block = await prisma.block.findFirst({
       where: {
         OR: [
-          { blockerId: req.user.id, blockedId: recipientId },
-          { blockerId: recipientId, blockedId: req.user.id },
+          { userId: req.user.id, blockedId: recipientId },
+          { userId: recipientId, blockedId: req.user.id },
         ],
       },
     });
@@ -194,6 +195,7 @@ dmRouter.post('/dm/:dmId/messages', requireAuth, dmLimiter, async (req, res, nex
       io.to(`user:${recipientId}`).emit('dm:new', { message });
       io.to(`user:${req.user.id}`).emit('dm:new', { message });
     }
+    emitRealtimeEvent('dm:new', dmId, { message });
 
     res.status(201).json({ message });
   } catch (e) { next(e); }
@@ -219,9 +221,10 @@ dmRouter.patch('/dm/:dmId/messages/:messageId', requireAuth, dmLimiter, async (r
 
     const io = getIO();
     if (io) {
-      io.to(`user:${updated.recipientId}`).emit('dm:updated', { message: updated });
       io.to(`user:${updated.senderId}`).emit('dm:updated', { message: updated });
+      io.to(`user:${updated.recipientId}`).emit('dm:updated', { message: updated });
     }
+    emitRealtimeEvent('dm:updated', dmId, { message: updated });
 
     res.json({ ok: true, message: updated });
   } catch (e) { next(e); }
@@ -245,9 +248,10 @@ dmRouter.delete('/dm/:dmId/messages/:messageId', requireAuth, async (req, res, n
 
     const io = getIO();
     if (io) {
-      io.to(`user:${deleted.recipientId}`).emit('dm:deleted', { messageId: deleted.id, dmId: deleted.dmId });
       io.to(`user:${deleted.senderId}`).emit('dm:deleted', { messageId: deleted.id, dmId: deleted.dmId });
+      io.to(`user:${deleted.recipientId}`).emit('dm:deleted', { messageId: deleted.id, dmId: deleted.dmId });
     }
+    emitRealtimeEvent('dm:deleted', dmId, { messageId: deleted.id, dmId: deleted.dmId });
 
     res.json({ ok: true, message: deleted });
   } catch (e) { next(e); }

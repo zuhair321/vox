@@ -26,12 +26,12 @@ interface SocketStore {
   sendMessage: (channelId: string, content: string, parentId?: string, attachments?: Attachment[]) => void;
   editMessage: (channelId: string, messageId: string) => void;
   deleteMessage: (channelId: string, messageId: string) => void;
-  reactToMessage: (channelId: string, messageId: string, emoji: string) => void;
+  reactToMessage: (messageId: string, emoji: string) => void;
   startTyping: (channelId: string) => void;
   stopTyping: (channelId: string) => void;
   sendDM: (recipientId: string, content: string, attachments?: Attachment[]) => void;
-  startDmTyping: (userId: string, dmId: string) => void;
-  stopDmTyping: (userId: string, dmId: string) => void;
+  startDmTyping: (recipientId: string) => void;
+  stopDmTyping: (recipientId: string) => void;
   sendDmRead: (dmId: string) => void;
   updateStatus: (status: string) => void;
 }
@@ -57,16 +57,7 @@ export const useSocketStore = create<SocketStore>((set, get) => {
     });
 
     socket.on('connect_error', () => {
-      const freshToken = useAuthStore.getState().accessToken;
-      if (freshToken) {
-        (socket as any).auth = { token: freshToken };
-      }
-    });
-
-    // Before reconnecting, update the auth token in case it was refreshed
-    // while the socket was disconnected.
-    socket.on('connect_error', () => {
-      const freshToken = localStorage.getItem('vox_token');
+      const freshToken = useAuthStore.getState().accessToken || sessionStorage.getItem('vox_access');
       if (freshToken) {
         (socket as any).auth = { token: freshToken };
       }
@@ -134,55 +125,12 @@ export const useSocketStore = create<SocketStore>((set, get) => {
       }
     });
 
-    socket.on('message:updated', ({ message }) => {
-      useMessageStore.getState().updateMessage(message.channelId, message);
-    });
-
-    socket.on('message:deleted', ({ messageId, channelId }) => {
-      useMessageStore.getState().removeMessage(channelId, messageId);
-    });
-
-    socket.on('presence:update', ({ userId, status }) => {
-      const prev = presenceMap.get(userId);
-      presenceMap.set(userId, status);
-      if (prev !== undefined && prev !== status) {
-        const isJoin = status === 'online';
-        const isLeave = status === 'offline';
-        if (isJoin || isLeave) playSound(isJoin ? 'join' : 'leave');
-      }
-      useServerStore.getState().updateMemberStatus(userId, status);
-    });
-
-    socket.on('dm:new', ({ message }) => {
-      useDMStore.getState().addMessage(message);
-
-      try {
-        const me = useAuthStore.getState().user;
-        const senderId = message.senderId || message.userId;
-        if (senderId && senderId !== me?.id) {
-          playSound('message');
-          useNotificationStore.getState().addNotification({
-            type: 'dm',
-            title: `New message from ${message.sender?.username || 'Unknown'}`,
-            preview: (message.content || '').slice(0, 120),
-            messageId: message.id,
-            userId: senderId,
-          });
-          if (document.hidden) {
-            (window as any).electronAPI?.flashFrame?.();
-          }
-        }
-      } catch {
-        // skip
-      }
-    });
-
-    socket.on('message:updated', ({ message }) => {
-      useMessageStore.getState().updateMessage(message.channelId, message);
-    });
-
-    socket.on('message:deleted', ({ messageId, channelId }) => {
-      useMessageStore.getState().removeMessage(channelId, messageId);
+    // Realtime auto-mod block: notify the user their message was rejected.
+    socket.on('automod:blocked', ({ reason, timedOut }) => {
+      useUiStore.getState().addToast(
+        timedOut ? `Auto-mod blocked your message (${reason}). You were timed out.` : `Auto-mod blocked your message: ${reason}`,
+        'error'
+      );
     });
 
     socket.on('typing:start', ({ username, channelId, kind = 'text' }) => {

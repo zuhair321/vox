@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useProfileStore } from '../../stores/profileStore';
 import { useUiStore } from '../../stores/uiStore';
 import { api } from '../../api/client';
+import { setActivity, type ActivityType } from '../../api/activity';
 import { EMOJI_MAP } from '../../utils/markdown';
 
 const CLEAR_AFTER_OPTIONS = [
@@ -12,6 +13,13 @@ const CLEAR_AFTER_OPTIONS = [
   { label: '4 hours', value: '4hours' },
   { label: 'Today', value: 'today' },
   { label: 'This week', value: 'week' },
+];
+
+const ACTIVITY_TYPES: { label: string; value: ActivityType }[] = [
+  { label: 'Playing', value: 'PLAYING' },
+  { label: 'Listening to', value: 'LISTENING' },
+  { label: 'Watching', value: 'WATCHING' },
+  { label: 'Streaming', value: 'STREAMING' },
 ];
 
 const QUICK_EMOJIS = ['💬', '🎮', '🎵', '📚', '💪', '🎯', '🔥', '💀', '☕', '🦇', '🔮', '⚡'];
@@ -24,6 +32,9 @@ const CustomStatusModal: React.FC = () => {
   const [showEmojiGrid, setShowEmojiGrid] = useState(false);
   const [clearAfter, setClearAfter] = useState('');
   const [saving, setSaving] = useState(false);
+  const [activityType, setActivityType] = useState<ActivityType>('PLAYING');
+  const [activityName, setActivityName] = useState('');
+  const [activityUrl, setActivityUrl] = useState('');
 
   if (!showCustomStatus) return null;
 
@@ -34,6 +45,10 @@ const CustomStatusModal: React.FC = () => {
         method: 'PATCH',
         body: JSON.stringify({ customStatus: text, statusEmoji: emoji }),
       });
+      // Persist rich-presence activity (or clear it when name is empty).
+      try {
+        await setActivity(activityName.trim() ? { type: activityType, name: activityName.trim(), url: activityUrl.trim() || null } : null);
+      } catch { /* non-fatal */ }
       // Update local profile store display
       addToast('⚡ Status updated.', 'success');
       setShowCustomStatus(false);
@@ -190,6 +205,55 @@ const CustomStatusModal: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Activity / Rich Presence */}
+            <div style={{ marginBottom: '20px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '10px',
+                  color: 'var(--shadow)',
+                  marginBottom: '8px',
+                  letterSpacing: '0.2em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                ACTIVITY (RICH PRESENCE)
+              </label>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <select
+                  className="angular-input"
+                  value={activityType}
+                  onChange={(e) => setActivityType(e.target.value as ActivityType)}
+                  style={{ cursor: 'pointer', width: '130px' }}
+                >
+                  {ACTIVITY_TYPES.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  className="angular-input"
+                  placeholder={activityType === 'LISTENING' ? 'Song / artist…' : activityType === 'WATCHING' ? 'Show / video…' : 'Game / app…'}
+                  value={activityName}
+                  onChange={(e) => setActivityName(e.target.value.slice(0, 128))}
+                  maxLength={128}
+                  style={{ flex: 1 }}
+                />
+              </div>
+              {activityType === 'STREAMING' && (
+                <input
+                  type="text"
+                  className="angular-input"
+                  placeholder="Stream URL (optional)"
+                  value={activityUrl}
+                  onChange={(e) => setActivityUrl(e.target.value)}
+                />
+              )}
+              <div style={{ fontSize: '10px', color: 'var(--shadow)', marginTop: '4px' }}>
+                Leave the name empty to clear your activity.
+              </div>
             </div>
 
             {/* Save button */}

@@ -1,0 +1,1 @@
+-- Migration will be recreated for SQLite

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
+import { presenceSnapshot } from '../lib/redis.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..', '..');
@@ -96,3 +97,20 @@ router.post('/notifications/register', requireAuth, express.json(), (req, res) =
 });
 
 export const clientRouter = router;
+
+/**
+ * GET /api/presence?ids=userA,userB
+ * Resolves online/offline from the Redis presence set (roadmap Month 1:
+ * presence is Redis-only, not Postgres). Returns { online: { userId: bool } }.
+ */
+router.get('/presence', requireAuth, async (req, res) => {
+  try {
+    const raw = String(req.query.ids || '');
+    const ids = raw.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 200);
+    if (ids.length === 0) return res.json({ online: {} });
+    const snapshot = await presenceSnapshot(ids);
+    return res.json({ online: snapshot });
+  } catch (e) {
+    return res.status(500).json({ online: {} });
+  }
+});

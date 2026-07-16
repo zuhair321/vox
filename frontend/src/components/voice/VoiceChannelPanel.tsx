@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useSocketStore } from '../../stores/socketStore';
 import { useServerStore } from '../../stores/serverStore';
@@ -29,6 +29,7 @@ const VoiceChannelPanel: React.FC = () => {
   const socket = useSocketStore();
   const { selectedServer, selectedChannel } = useServerStore();
   const { addToast } = useUiStore();
+  const voiceActivityCleanupRef = useRef<(() => void) | null>(null);
   const [screenQuality, setScreenQuality] = useState<ScreenQuality>(
     () => (localStorage.getItem('vox_screen_quality') as ScreenQuality) || 'balanced'
   );
@@ -52,6 +53,18 @@ const VoiceChannelPanel: React.FC = () => {
       voice.setJoinInProgress(true);
       const stream = await getMicrophoneStream();
       voice.setLocalStream(stream);
+      
+      // Set up voice activity detection for local stream
+      const cleanup = setupVoiceActivityDetection(
+        stream,
+        () => voice.setLocalSpeaking(true),
+        () => voice.setLocalSpeaking(false),
+        (amplitude) => voice.setUserAmplitude('local', amplitude)
+      );
+      
+      // Store cleanup function to be called when leaving
+      voiceActivityCleanupRef.current = cleanup;
+      
       voice.setChannel(channelId, serverId);
       voice.setJoinedAt(Date.now());
       console.log('[Voice] Joined channel', channelId);
@@ -76,6 +89,12 @@ const VoiceChannelPanel: React.FC = () => {
 
   // Leave voice channel
   const leaveChannel = useCallback(() => {
+    // Clean up voice activity detection
+    if (voiceActivityCleanupRef.current) {
+      voiceActivityCleanupRef.current();
+      voiceActivityCleanupRef.current = null;
+    }
+    
     socket.socket?.emit('voice:leave');
     voice.clearChannel();
   }, [voice, socket]);
@@ -435,7 +454,12 @@ const VoiceChannelPanel: React.FC = () => {
       {/* Avatar + visualizer */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
         {voice.localStream && (
-          <AudioVisualizer active={!!voice.localStream} width={36} height={36} />
+          <AudioVisualizer 
+            active={voice.localSpeaking} 
+            amplitude={voice.voiceUsers.find(u => u.socketId === 'local')?.amplitude || 0} 
+            width={36} 
+            height={36} 
+          />
         )}
       </div>
 

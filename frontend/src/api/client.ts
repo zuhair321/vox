@@ -33,6 +33,15 @@ async function tryRefresh(): Promise<boolean> {
       }
       const data = await res.json();
       if (data?.tokens?.access) {
+        // Persist the refreshed tokens so subsequent requests use the new
+        // access token (the backend prefers the Authorization header over the
+        // cookie, so a stale header would otherwise 401 immediately).
+        try {
+          sessionStorage.setItem('vox_access', data.tokens.access);
+          if (data.tokens.refresh) sessionStorage.setItem('vox_refresh', data.tokens.refresh);
+        } catch {
+          /* ignore */
+        }
         console.log('[Auth] Token refreshed successfully');
         return true;
       }
@@ -61,9 +70,10 @@ async function getLogout(): Promise<() => void> {
   return logoutFn;
 }
 
-export async function api(path: string, options: RequestInit = {}, _retry = false) {
+export async function api<T = any>(path: string, options: RequestInit = {}, _retry = false): Promise<T> {
   const { skipAuth = false, headers: customHeaders, ...rest } = options as any;
   let res: Response;
+  let data: any;
   try {
     res = await fetch(API_BASE + path, {
       ...rest,
@@ -103,8 +113,7 @@ export async function api(path: string, options: RequestInit = {}, _retry = fals
         (await import('../stores/notificationStore')).useNotificationStore.getState().addNotification({
           type: 'error',
           title: 'Session Expired',
-          message: 'Your session has expired. Please log in again.',
-          duration: 5000,
+          messageId: 'Your session has expired. Please log in again.',
         });
         throw new Error('Session expired. Please log in again.');
       }
@@ -126,8 +135,7 @@ export async function api(path: string, options: RequestInit = {}, _retry = fals
     (await import('../stores/notificationStore')).useNotificationStore.getState().addNotification({
       type: 'error',
       title: 'Session Expired',
-      message: 'Your session has expired. Please log in again.',
-      duration: 5000,
+      messageId: 'Your session has expired. Please log in again.',
     });
     throw new Error('Session expired. Please log in again.');
   }
@@ -142,7 +150,6 @@ export async function api(path: string, options: RequestInit = {}, _retry = fals
     throw err;
   }
 
-  let data: any;
   try {
     data = await res.json();
   } catch {

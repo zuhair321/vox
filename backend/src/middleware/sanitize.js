@@ -25,5 +25,6 @@ export function sanitize(input) {
   if (input == null) return '';
   const str = String(input);
   if (!str) return '';
+  if (!/[<>&"']/.test(str)) return str.trim();
   return sanitizeHtml(str, STRIP_OPTIONS).trim();
 }

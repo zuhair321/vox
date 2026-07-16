@@ -3,6 +3,7 @@ import { deliverWebhooks } from '../services/webhook.service.js';
 import { sanitize } from '../middleware/sanitize.js';
 import { normalizeAttachments } from '../lib/attachments.js';
 import { isRateLimited } from '../lib/redis.js';
+import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 import { getState } from '../services/chat.service.js';
 
 const voiceChannelBySocket = new Map();
@@ -55,7 +56,7 @@ function handleVoiceLeave(io, socket) {
   }
 
   if (serverId && user) {
-    io.to(`server:${serverId}`).emit('voice:member-update', {
+    emitRealtimeEvent('voice:member-update', channelId, {
       channelId,
       action: 'leave',
       user,
@@ -78,12 +79,15 @@ export function registerHandlers(io, socket) {
     // getState() is cached so this is fast even on every connect.
     (async () => {
       const state = await getState(userId).catch(() => ({}));
-      const serverIds = (state.memberServers || []).map((s) => s.serverId);
+      const serverIds = Array.from(new Set([
+        ...(state.channels || []).map((c) => c.serverId).filter(Boolean),
+        ...(state.members || []).map((m) => m.serverId).filter(Boolean),
+      ]));
       socket.data.serverIds = serverIds;
       for (const serverId of serverIds) socket.join(`server:${serverId}`);
       // Broadcast to every socket in every server this user is in
       for (const serverId of serverIds) {
-        io.to(`server:${serverId}`).emit('presence:update', { userId, status: 'online' });
+        emitRealtimeEvent('presence:update', null, { userId, status: 'online' });
       }
     })();
   }
@@ -156,7 +160,7 @@ export function registerHandlers(io, socket) {
       username: user.username,
       avatarUrl,
     });
-    io.to(`server:${serverId}`).emit('voice:member-update', {
+    emitRealtimeEvent('voice:member-update', channelId, {
       channelId,
       action: 'join',
       user,
@@ -170,7 +174,7 @@ export function registerHandlers(io, socket) {
   socket.on('voice:offer', ({ to, offer }) => {
     const user = getSocketUser(socket);
     if (!user || !to || !offer) return;
-    io.to(to).emit('voice:offer', {
+    emitRealtimeEvent('voice:offer', to, {
       from: socket.id,
       fromUser: user,
       offer,
@@ -179,19 +183,19 @@ export function registerHandlers(io, socket) {
 
   socket.on('voice:answer', ({ to, answer }) => {
     if (!to || !answer) return;
-    io.to(to).emit('voice:answer', { from: socket.id, answer });
+    emitRealtimeEvent('voice:answer', to, { from: socket.id, answer });
   });
 
   socket.on('voice:ice-candidate', ({ to, candidate }) => {
     if (!to || !candidate) return;
-    io.to(to).emit('voice:ice-candidate', { from: socket.id, candidate });
+    emitRealtimeEvent('voice:ice-candidate', to, { from: socket.id, candidate });
   });
 
   socket.on('voice:mute', ({ muted }) => {
     const channelId = voiceChannelBySocket.get(socket.id);
     const user = getSocketUser(socket);
     if (!channelId || !user) return;
-    io.to(`voice:${channelId}`).emit('voice:user-muted', {
+    emitRealtimeEvent('voice:user-muted', channelId, {
       socketId: socket.id,
       userId: user.id,
       muted: Boolean(muted),
@@ -202,7 +206,7 @@ export function registerHandlers(io, socket) {
     const channelId = voiceChannelBySocket.get(socket.id);
     const user = getSocketUser(socket);
     if (!channelId || !user) return;
-    io.to(`voice:${channelId}`).emit('voice:user-deafened', {
+    emitRealtimeEvent('voice:user-deafened', channelId, {
       socketId: socket.id,
       userId: user.id,
       deafened: Boolean(deafened),
@@ -226,7 +230,7 @@ export function registerHandlers(io, socket) {
     if (!channelId || !user) return;
     const enabled = Boolean(screen);
     screenSharingBySocket.set(socket.id, enabled);
-    io.to(`voice:${channelId}`).emit('voice:screen', {
+    emitRealtimeEvent('voice:screen', channelId, {
       socketId: socket.id,
       userId: user.id,
       username: user.username,
@@ -241,7 +245,7 @@ export function registerHandlers(io, socket) {
     const sharerId = to;
     const sharer = voiceUserBySocket.get(sharerId);
     if (!sharer || screenSharingBySocket.get(sharerId) !== true) return;
-    io.to(sharerId).emit('voice:screen-request', {
+    emitRealtimeEvent('voice:screen-request', sharerId, {
       from: socket.id,
       fromUser: getSocketUser(socket),
     });
@@ -267,7 +271,7 @@ export function registerHandlers(io, socket) {
     const channelId = voiceChannelBySocket.get(socket.id);
     const user = getSocketUser(socket);
     if (!channelId || !user) return;
-    io.to(`voice:${channelId}`).emit('voice:user-video', {
+    emitRealtimeEvent('voice:user-video', channelId, {
       socketId: socket.id,
       userId: user.id,
       video: Boolean(video),
@@ -277,7 +281,7 @@ export function registerHandlers(io, socket) {
   // Screen share emoji reactions
   socket.on('screen:reaction', ({ emoji, x, y, channelId }) => {
     if (!userId || !emoji || !channelId) return;
-    io.to(`voice:${channelId}`).emit('screen:reaction', {
+    emitRealtimeEvent('screen:reaction', channelId, {
       userId,
       emoji,
       x: Number(x) || 0,
@@ -287,7 +291,7 @@ export function registerHandlers(io, socket) {
 
   socket.on('message:send', async ({ channelId, content, parentId, attachments, fuseTime }) => {
     if (!userId) return;
-    if (isRateLimited(userId, 'message:send')) return;
+    if (await isRateLimited(userId, 'message:send')) return;
     try {
       const atts = normalizeAttachments(attachments);
       const base = {
@@ -306,7 +310,7 @@ export function registerHandlers(io, socket) {
       try {
         message = await prisma.message.create({
           data: { ...base, userId },
-          include: { author: true, reactions: true, parentMessage: true },
+          include: { author: true },
         });
       } catch (createErr) {
         const code = createErr?.code || createErr?.constructor?.name;
@@ -317,10 +321,10 @@ export function registerHandlers(io, socket) {
             userId: null,
             authorOverride: socket.data.user?.username || 'Guest',
           },
-          include: { author: true, reactions: true, parentMessage: true },
+          include: { author: true },
         });
       }
-      io.to(`channel:${channelId}`).emit('message:new', { message });
+      emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
 
       // Deliver to registered outgoing webhooks (non-blocking)
       deliverWebhooks(channelId, message).catch(err => {
@@ -358,7 +362,7 @@ export function registerHandlers(io, socket) {
         include: { author: true, reactions: true, parentMessage: true }
       });
       const channelId = message.channelId;
-      io.to(`channel:${channelId}`).emit('message:updated', { message });
+      emitRealtimeEvent('message:updated', channelId, { message });
 
       // Audit log when a moderator edits someone else's message.
       if (isModerator && !isOwner && existing.channel?.serverId) {
@@ -402,7 +406,7 @@ export function registerHandlers(io, socket) {
         data: { deleted: true, body: '' }
       });
       const channelId = message.channelId;
-      io.to(`channel:${channelId}`).emit('message:deleted', { messageId, channelId });
+      emitRealtimeEvent('message:deleted', channelId, { messageId, channelId });
 
       // Audit log when a moderator deletes someone else's message.
       if (isModerator && !isOwner && existing.channel?.serverId) {
@@ -421,7 +425,7 @@ export function registerHandlers(io, socket) {
 
   socket.on('message:react', async ({ messageId, emoji }) => {
     if (!userId) return;
-    if (isRateLimited(userId, 'message:react')) return;
+    if (await isRateLimited(userId, 'message:react')) return;
     try {
       const existing = await prisma.reaction.findUnique({
         where: { messageId_userId_emoji: { messageId, userId, emoji } }
@@ -438,13 +442,13 @@ export function registerHandlers(io, socket) {
         include: { author: true, reactions: true, parentMessage: true }
       });
       const channelId = message.channelId;
-      io.to(`channel:${channelId}`).emit('message:updated', { message });
+      emitRealtimeEvent('message:updated', channelId, { message });
     } catch (e) { console.error('Error reacting:', e); }
   });
 
-  socket.on('typing:start', ({ channelId }) => {
+  socket.on('typing:start', async ({ channelId }) => {
     if (!userId) return;
-    if (isRateLimited(userId, 'typing:start')) return;
+    if (await isRateLimited(userId, 'typing:start')) return;
     const username = socket.data.user.username;
     socket.to(`channel:${channelId}`).emit('typing:start', { userId, username, channelId });
   });
@@ -460,7 +464,7 @@ export function registerHandlers(io, socket) {
       socket.emit('dm:error', { error: 'Not authenticated' });
       return;
     }
-    if (isRateLimited(userId, 'dm:send')) {
+    if (await isRateLimited(userId, 'dm:send')) {
       if (typeof ack === 'function') ack({ error: 'You are sending messages too fast.' });
       socket.emit('dm:error', { error: 'You are sending messages too fast.' });
       return;
@@ -483,8 +487,8 @@ export function registerHandlers(io, socket) {
       const block = await prisma.block.findFirst({
         where: {
           OR: [
-            { blockerId: userId, blockedId: recipient },
-            { blockerId: recipient, blockedId: userId },
+            { userId, blockedId: recipient },
+            { userId: recipient, blockedId: userId },
           ],
         },
       });
@@ -513,7 +517,11 @@ export function registerHandlers(io, socket) {
         },
         include: { sender: true, recipient: true }
       });
+      // Deliver to the recipient's personal room so they get the message live
+      // even when offline from Redis/bridge and without joining the dm room.
       io.to(`user:${recipient}`).emit('dm:new', { message });
+      io.to(`user:${userId}`).emit('dm:new', { message });
+      emitRealtimeEvent('dm:new', dmId, { message });
       socket.emit('dm:new', { message });
       if (typeof ack === 'function') ack({ ok: true });
     } catch (e) {
@@ -531,9 +539,9 @@ export function registerHandlers(io, socket) {
     socket.leave(`dm:${dmId}`);
   });
 
-  socket.on('dm:typing:start', ({ recipientId }) => {
+  socket.on('dm:typing:start', async ({ recipientId }) => {
     if (!userId) return;
-    if (isRateLimited(userId, 'dm:typing:start')) return;
+    if (await isRateLimited(userId, 'dm:typing:start')) return;
     const username = socket.data.user?.username;
     const dmId = [userId, recipientId].sort().join('_');
     socket.to(`user:${recipientId}`).emit('dm:typing:start', { userId, username, dmId });
@@ -555,6 +563,7 @@ export function registerHandlers(io, socket) {
       const otherId = dmId.replace(userId, '').replace(/^_+|_+$/g, '');
       if (otherId) {
         io.to(`user:${otherId}`).emit('dm:read', { dmId, by: userId });
+        emitRealtimeEvent('dm:read', dmId, { dmId, by: userId });
       }
     } catch (e) { console.error('Error marking DM read:', e); }
   });
@@ -573,7 +582,7 @@ export function registerHandlers(io, socket) {
       const serverIds = socket.data.serverIds || [];
       const lowercase = normalized.toLowerCase();
       for (const serverId of serverIds) {
-        io.to(`server:${serverId}`).emit('presence:update', { userId, status: lowercase });
+        emitRealtimeEvent('presence:update', null, { userId, status: lowercase });
       }
     } catch (e) { console.error('Error updating status:', e); }
   });
@@ -589,7 +598,7 @@ export function registerHandlers(io, socket) {
         // Scope to all server rooms this user was in
         const serverIds = socket.data.serverIds || [];
         for (const serverId of serverIds) {
-          io.to(`server:${serverId}`).emit('presence:update', { userId, status: 'offline' });
+          emitRealtimeEvent('presence:update', null, { userId, status: 'offline' });
         }
       } catch (e) { console.error('Error on disconnect:', e); }
     }

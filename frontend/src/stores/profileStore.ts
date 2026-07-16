@@ -42,25 +42,17 @@ interface ProfileStore {
 import { api } from '../api/client';
 
 export const useProfileStore = create<ProfileStore>((set, get) => ({
-  displayName: 'Zuhair',
-  username: 'founder_zuhair',
-  bio: 'Founder channel open. Building VOX from the dark matter layer upward.',
+  displayName: '',
+  username: '',
+  bio: '',
   status: '',
   userStatus: 'online',
   avatarUrl: null,
   bannerUrl: null,
   auraType: 'none',
-  badges: [
-    { id: 'founder', label: 'FOUNDER' },
-    { id: 'alpha', label: 'ALPHA' },
-    { id: 'void', label: 'VOID' },
-  ],
-  connections: [
-    { id: 'riot', platform: 'Riot', username: 'zuhair#VOX', color: '#ff4655', verified: true },
-    { id: 'spotify', platform: 'Spotify', username: 'zuhair.wav', color: '#1db954', verified: true },
-    { id: 'steam', platform: 'Steam', username: 'DarkMatterFounder', color: '#6b8ba4', verified: false },
-  ],
-  memberSince: 'June 2026',
+  badges: [],
+  connections: [],
+  memberSince: '',
   orbsBalance: 0,
   hasTurbo: true,
   updateStatus: (status) => set({ status }),
