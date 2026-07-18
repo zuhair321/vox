@@ -198,6 +198,9 @@ model Channel {
   archiveConfig ChannelArchiveConfig?
   polls       Poll[]
   pinNotifications PinNotification[]
+  scheduledMessages   ScheduledMessage[]
+  stageSpeakers       StageSpeaker[]
+  announcementFollows AnnouncementFollow[]
 
   @@index([serverId])
   @@index([categoryId])
