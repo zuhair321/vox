@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import type { ToastMessage } from '../../stores/uiStore';
 
@@ -34,7 +34,7 @@ interface ToastProps {
   onDismiss: () => void;
 }
 
-const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
+const Toast = forwardRef<HTMLDivElement, ToastProps>(({ toast, onDismiss }, ref) => {
   const [hovered, setHovered] = useState(false);
   const [progress, setProgress] = useState(100);
   const type = toast.type || 'info';
@@ -86,6 +86,7 @@ const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onDismiss}
+      ref={ref}
       className={`angular-cut toast-item ${variantClass} ${type === 'mention' ? 'toast-pulse' : ''}`}
       style={{
         backgroundColor: 'var(--obsidian)',
@@ -173,6 +174,6 @@ const Toast: React.FC<ToastProps> = ({ toast, onDismiss }) => {
       )}
     </motion.div>
   );
-};
+});
 
 export default Toast;

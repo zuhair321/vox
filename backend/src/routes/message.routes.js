@@ -77,7 +77,7 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
       throw new HttpError(400, 'Message body or attachment is required.');
     }
 
-    // Slowmode enforcement + write budget + mute/automod checks.
+    // Write budget + mute/automod checks.
     const channel = req.channel || await prisma.channel.findUnique({ where: { id: channelId } });
     const budget = await perChannelWriteBudget(channelId);
     if (!budget.ok) {
@@ -85,26 +85,6 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
         error: 'This channel is sending too fast. Please slow down.',
         retryAfterMs: budget.retryAfterMs,
       });
-    }
-
-    if (channel?.slowmode > 0) {
-      const slowmodeKey = `slowmode:${channelId}:${req.user.id}`;
-      const redis = await getCache();
-      if (redis) {
-        const lastSent = await redis.get(slowmodeKey);
-        if (lastSent) {
-          const elapsed = (Date.now() - parseInt(lastSent, 10)) / 1000;
-          const remaining = Math.ceil(channel.slowmode - elapsed);
-          if (remaining > 0) {
-            return res.status(429).json({
-              error: `Slowmode is active. You can send another message in ${remaining}s.`,
-              retryAfter: remaining,
-            });
-          }
-        }
-        // Set/refresh the slowmode key
-        await redis.set(slowmodeKey, Date.now().toString(), { EX: channel.slowmode + 5 });
-      }
     }
 
     if (channel?.serverId) {
@@ -145,7 +125,6 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
       body: content.slice(0, 2000),
       parentId: req.body?.parentId || null,
       attachments: attachments.length ? attachments : undefined,
-      fuseTime: req.body?.fuseTime || null,
     };
 
     let message;
@@ -168,6 +147,8 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
     }
 
     emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
+    const io = getIO();
+    io.to(`channel:${channelId}`).emit('message:new', { message });
 
     invalidateChannelRecentCache(channelId).catch(() => {});
 
@@ -193,6 +174,8 @@ messageRouter.post('/messages', requireAuth, messageLimiter, async (req, res, ne
     const message = await createMessage({ channelId, author: req.user.username, body: sanitizedBody, user: req.user, attachments });
     const mapped = mapMessage(message);
     emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
+    const io = getIO();
+    io.to(`channel:${channelId}`).emit('message:new', { message });
     res.status(201).json(mapped);
   } catch (e) { next(e); }
 });
@@ -250,6 +233,7 @@ messageRouter.post('/messages/:id/reactions', requireAuth, reactionLimiter, asyn
 
     const io = getIO();
     emitRealtimeEvent('message:reactions', message.channelId, mapped);
+    io.to(`channel:${message.channelId}`).emit('message:reactions', mapped);
     res.json(mapped);
   } catch (e) { next(e); }
 });
@@ -297,6 +281,7 @@ messageRouter.patch('/messages/:id', requireAuth, async (req, res, next) => {
 
     const io = getIO();
     emitRealtimeEvent('message:updated', updated.channelId, { message: updated });
+    io.to(`channel:${updated.channelId}`).emit('message:updated', { message: updated });
 
     // Audit log: moderator editing someone else's message.
     if (isModerator && !isAuthor && existing.channel?.serverId) {
@@ -347,11 +332,12 @@ messageRouter.delete('/messages/:id', requireAuth, async (req, res, next) => {
 
     await prisma.message.update({
       where: { id: messageId },
-      data: { deleted: true, body: '' },
+      data: { deleted: true, body: '', attachments: null },
     });
 
     const io = getIO();
     emitRealtimeEvent('message:deleted', existing.channelId, { messageId, channelId: existing.channelId });
+    io.to(`channel:${existing.channelId}`).emit('message:deleted', { messageId, channelId: existing.channelId });
 
     // Audit log: moderator deletion.
     if (isModerator && !isAuthor && existing.channel?.serverId) {
@@ -402,6 +388,20 @@ messageRouter.post('/messages/:id/pin', requireAuth, async (req, res, next) => {
 
     const io = getIO();
     emitRealtimeEvent('message:pinned', updated.channelId, {
+      message: {
+        id: updated.id,
+        channelId: updated.channelId,
+        body: updated.body,
+        author: updated.author?.displayName ?? updated.authorOverride ?? 'Guest',
+        avatarUrl: updated.author?.avatarUrl ?? null,
+        createdAt: updated.createdAt.toISOString(),
+        pinned: updated.pinned,
+      },
+      pinned: updated.pinned,
+      channelId: updated.channelId,
+      by: req.user.username,
+    });
+    io.to(`channel:${updated.channelId}`).emit('message:pinned', {
       message: {
         id: updated.id,
         channelId: updated.channelId,

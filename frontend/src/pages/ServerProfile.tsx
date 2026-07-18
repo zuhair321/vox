@@ -5,6 +5,7 @@ import { useServerStore } from '../stores/serverStore';
 import { useUiStore } from '../stores/uiStore';
 import { API_BASE } from '../api/client';
 import { uploadServerIcon, uploadServerBanner } from '../api/uploads';
+import ServerLogo from '../components/ui/ServerLogo';
 
 const ServerProfile: React.FC = () => {
   const { serverId } = useParams<{ serverId: string }>();
@@ -275,47 +276,21 @@ const ServerProfile: React.FC = () => {
               width: '88px',
               height: '88px',
               flexShrink: 0,
-              overflow: 'hidden',
-              clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
               border: `4px solid ${bannerUrl ? 'var(--abyss)' : 'rgba(255,255,255,0.08)'}`,
-              background: iconUrl
-                ? 'var(--obsidian)'
-                : (() => {
-                    const name = server.name || '';
-                    let hash = 0;
-                    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-                    const h = Math.abs(hash) % 360;
-                    return `linear-gradient(135deg, hsl(${h},40%,14%), hsl(${(h+50)%360},35%,9%))`;
-                  })(),
               cursor: canManage ? 'pointer' : 'default',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               position: 'relative',
               zIndex: 2,
               boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+              overflow: 'hidden',
             }}
             whileHover={canManage ? { scale: 1.06 } : {}}
             onClick={() => canManage && iconInputRef.current?.click()}
           >
-            {iconUrl ? (
-              <img
-                src={iconUrl}
-                alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : (
-              <span style={{
-                color: 'rgba(255,255,255,0.85)',
-                fontWeight: 800,
-                fontSize: '36px',
-                fontFamily: "'Cinzel Decorative', serif",
-                textShadow: '0 2px 6px rgba(0,0,0,0.7)',
-                lineHeight: 1,
-              }}>
-                {server.name[0]?.toUpperCase()}
-              </span>
-            )}
+            <ServerLogo
+              src={iconUrl}
+              name={server.name}
+              size={88}
+            />
 
             {/* Camera overlay */}
             {canManage && (
@@ -332,6 +307,7 @@ const ServerProfile: React.FC = () => {
                   opacity: 0,
                   transition: 'opacity 0.2s',
                   cursor: 'pointer',
+                  clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
                 onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}

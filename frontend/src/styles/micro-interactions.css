@@ -117,10 +117,10 @@
 }
 
 .attachment-image-wrap img {
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, opacity 0.25s ease;
 }
 
-.attachment-image-wrap:hover img {
+.attachment-image-wrap.loaded:hover img {
   transform: scale(1.03);
 }
 

@@ -22,9 +22,11 @@ interface Token {
     | 'channel_link' | 'emoji' | 'br';
   content: string;
   lang?: string;
+  emojiUrl?: string;
+  animated?: boolean;
 }
 
-function tokenize(text: string): Token[] {
+function tokenize(text: string, emojiResolver?: (name: string) => string | null): Token[] {
   const tokens: Token[] = [];
   let remaining = text;
 
@@ -103,8 +105,23 @@ function tokenize(text: string): Token[] {
 
     // ── Emoji: :name: ────────────────────────────────────────
     const emojiMatch = remaining.match(/^:([a-z_]+):/);
-    if (emojiMatch && EMOJI_MAP[emojiMatch[1]]) {
-      tokens.push({ type: 'emoji', content: EMOJI_MAP[emojiMatch[1]] });
+    if (emojiMatch) {
+      const name = emojiMatch[1];
+      // Custom server emoji (may be an animated gif) takes priority.
+      const customUrl = emojiResolver ? emojiResolver(name) : null;
+      if (customUrl) {
+        tokens.push({
+          type: 'emoji',
+          content: name,
+          emojiUrl: customUrl,
+          animated: /\.gif(\?|$)/i.test(customUrl),
+        });
+      } else if (EMOJI_MAP[name]) {
+        tokens.push({ type: 'emoji', content: EMOJI_MAP[name] });
+      } else {
+        // Unknown shortcode — keep the literal text.
+        tokens.push({ type: 'text', content: emojiMatch[0] });
+      }
       remaining = remaining.slice(emojiMatch[0].length);
       continue;
     }
@@ -259,6 +276,24 @@ function renderToken(token: Token, key: string): React.ReactNode {
       );
 
     case 'emoji':
+      if (token.emojiUrl) {
+        return (
+          <img
+            key={key}
+            src={token.emojiUrl}
+            alt={token.content}
+            title={`:${token.content}:`}
+            className={`vox-custom-emoji${token.animated ? ' animated' : ''}`}
+            style={{
+              width: '1.4em',
+              height: '1.4em',
+              verticalAlign: '-0.3em',
+              objectFit: 'contain',
+              margin: '0 1px',
+            }}
+          />
+        );
+      }
       return (
         <span key={key} style={{ fontSize: '1.2em' }} role="img" aria-label="emoji">
           {token.content}
@@ -318,9 +353,12 @@ function CodeBlockWithCopy({ code, lang }: { code: string; lang?: string }) {
   );
 }
 
-export function parseMarkdown(text: string): React.ReactNode[] {
+export function parseMarkdown(
+  text: string,
+  emojiResolver?: (name: string) => string | null,
+): React.ReactNode[] {
   if (!text) return [];
-  const tokens = tokenize(text);
+  const tokens = tokenize(text, emojiResolver);
   return tokens.map((token, i) => renderToken(token, `md-${i}`));
 }
 

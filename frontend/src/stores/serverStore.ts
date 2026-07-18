@@ -91,8 +91,6 @@ export const useServerStore = create<ServerStore>((set, get) => ({
     set({ loading: true });
     try {
       const servers = await fetchServers();
-      // Keep selectedServer in sync: if we already have one, replace its data
-      // with the freshly fetched copy (so icon/banner updates are visible immediately).
       const currentId = get().selectedServer?.id;
       const updated = currentId
         ? servers.find((s: any) => s.id === currentId) || get().selectedServer
@@ -103,8 +101,9 @@ export const useServerStore = create<ServerStore>((set, get) => ({
         selectedServer: updated,
         selectedChannel: updated?.channels?.[0] || get().selectedChannel,
       });
-    } catch (e) {
+    } catch (e: any) {
       set({ loading: false });
+      console.error('[ServerStore] fetchServers failed:', e?.message || e);
     }
   },
 

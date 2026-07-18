@@ -1,21 +1,36 @@
-// Backend origin. Defaults to the local dev backend (port 4000, matching
-// backend/.env) but can be overridden at build time with VITE_API_BASE so the
-// same bundle can target a remote/tunnelled backend without code changes.
-export const API_BASE =
-  (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:4000';
+// Backend origin resolution order (Option 1 — hosted SaaS EXE):
+//   1. Runtime injection from the packaged app (window.__VOX_CONFIG.apiBase),
+//      loaded by Electron from app-config.json / VOX_API_BASE env.
+//   2. Build-time VITE_API_BASE (web/Railway deployments).
+//   3. Local dev backend default (port 4000).
+// A single built bundle therefore works for both the local-SQLite desktop app
+// and a hosted backend — the user never configures anything.
+function resolveApiBase(): string {
+  try {
+    const injected = (window as any).__VOX_CONFIG?.apiBase;
+    if (injected && typeof injected === 'string' && injected.length) return injected;
+  } catch { /* ignore */ }
+  return (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:4000';
+}
+
+export const API_BASE = resolveApiBase();
+export function getApiBase(): string {
+  return API_BASE;
+}
 
 export function getToken() {
-  try {
-    return sessionStorage.getItem('vox_access') || null;
-  } catch {
-    return null;
-  }
+  // Intentionally returns null. Auth is carried by the HttpOnly `vox_access`
+  // cookie (sent automatically via `credentials: 'include'`), so tokens are
+  // never exposed to JavaScript. This prevents an XSS bug from stealing a
+  // live access/refresh token. The backend accepts the cookie in
+  // middleware/auth.js (req.cookies.vox_access).
+  return null;
 }
 
 // ── Automatic token refresh ───────────────────────────────────────
-// When a request gets 401, we try to refresh the access token using the
-// stored refresh token. Only one refresh runs at a time; concurrent 401s
-// queue behind the same promise to avoid stampeding the refresh endpoint.
+// When a request gets 401, we hit /api/auth/refresh. The refresh token also
+// lives in an HttpOnly cookie, so no token is ever read from or written to
+// JS-reachable storage (sessionStorage/localStorage).
 let refreshPromise: Promise<boolean> | null = null;
 
 async function tryRefresh(): Promise<boolean> {
@@ -26,27 +41,16 @@ async function tryRefresh(): Promise<boolean> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: '{}',
       });
       if (!res.ok) {
         console.warn(`[Auth] Token refresh failed with status ${res.status}:`, await res.text().catch(() => ''));
         return false;
       }
-      const data = await res.json();
-      if (data?.tokens?.access) {
-        // Persist the refreshed tokens so subsequent requests use the new
-        // access token (the backend prefers the Authorization header over the
-        // cookie, so a stale header would otherwise 401 immediately).
-        try {
-          sessionStorage.setItem('vox_access', data.tokens.access);
-          if (data.tokens.refresh) sessionStorage.setItem('vox_refresh', data.tokens.refresh);
-        } catch {
-          /* ignore */
-        }
-        console.log('[Auth] Token refreshed successfully');
-        return true;
-      }
-      console.warn('[Auth] Refresh response missing access token');
-      return false;
+      // New tokens arrive as HttpOnly cookies in the Set-Cookie response;
+      // nothing to persist client-side.
+      console.log('[Auth] Token refreshed successfully');
+      return true;
     } catch (err) {
       console.error('[Auth] Token refresh failed:', err instanceof Error ? err.message : String(err));
       return false;
@@ -72,22 +76,49 @@ async function getLogout(): Promise<() => void> {
 
 export async function api<T = any>(path: string, options: RequestInit = {}, _retry = false): Promise<T> {
   const { skipAuth = false, headers: customHeaders, ...rest } = options as any;
-  let res: Response;
+  let res: Response | null = null;
   let data: any;
-  try {
-    res = await fetch(API_BASE + path, {
-      ...rest,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(customHeaders || {}),
-        ...(!skipAuth && getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {}),
-      },
-      credentials: 'include',
-    });
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
+
+  // ── Resilient fetch with retry ───────────────────────────────
+  // In the desktop app the renderer can fire requests (servers, friends,
+  // messages) before the backend has finished booting, or while it is
+  // briefly restarting. A single failed fetch would otherwise surface as a
+  // permanent "Failed to load messages" / empty-channel state. Retry
+  // transient network failures (incl. CORS errors that are really a
+  // refused connection) a few times before giving up.
+  const maxAttempts = 4;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      res = await fetch(API_BASE + path, {
+        ...rest,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(customHeaders || {}),
+          ...(!skipAuth && getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {}),
+        },
+        credentials: 'include',
+      });
+      lastErr = null;
+      break;
+    } catch (err) {
+      lastErr = err;
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.warn(`[API] Network error on ${path} (attempt ${attempt}/${maxAttempts}):`, errorMsg);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+        continue;
+      }
+    }
+  }
+  if (lastErr) {
+    const errorMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
     console.error(`[API] Network error on ${path}:`, errorMsg);
     throw new Error(`Network error: ${errorMsg}`);
+  }
+
+  if (!res) {
+    throw new Error('Network error: request failed before response.');
   }
 
   if (res.status === 401 && !_retry) {

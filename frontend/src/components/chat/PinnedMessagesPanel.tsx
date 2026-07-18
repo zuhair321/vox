@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Pin } from 'lucide-react';
 import { API_BASE } from '../../api/client';
 import { useUiStore } from '../../stores/uiStore';
+import { useServerStore } from '../../stores/serverStore';
 import RichText from '../chat/RichText';
 
 interface Props {
@@ -13,6 +14,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { addToast } = useUiStore();
+  const { selectedServer } = useServerStore();
   const token = localStorage.getItem('vox_token');
 
   useEffect(() => {
@@ -104,7 +106,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
               </button>
             </div>
             <div style={{ color: 'var(--ghost-white)', fontSize: '13px', lineHeight: 1.4 }}>
-              <RichText text={msg.body} />
+              <RichText text={msg.body} serverId={selectedServer?.id} />
             </div>
           </div>
         ))}

@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { API_BASE } from '../../api/client';
 import ImageLightbox from '../ui/ImageLightbox';
+import VoiceNotePlayer from './VoiceNotePlayer';
 import type { Attachment } from '../../types';
 
 function resolveUrl(url: string) {
@@ -18,17 +19,28 @@ function formatSize(bytes?: number) {
 
 interface AttachmentListProps {
   attachments?: Attachment[];
-  onImageClick?: (images: { url: string; name: string }[], index: number) => void;
 }
 
-const AttachmentList: React.FC<AttachmentListProps> = ({ attachments, onImageClick }) => {
+const AttachmentList: React.FC<AttachmentListProps> = ({ attachments }) => {
+  // Track per-image load state so thumbnails fade in smoothly instead of popping.
+  const [loadedMap, setLoadedMap] = useState<Record<number, boolean>>({});
+  const markLoaded = useCallback((i: number) => {
+    setLoadedMap((m) => (m[i] ? m : { ...m, [i]: true }));
+  }, []);
+
+  // Discord-style: a small collection of image URLs for the full-screen viewer.
+  const allImages = attachments?.filter((a) => a.kind === 'image') || [];
   const [lightboxImages, setLightboxImages] = useState<{ url: string; name: string }[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [showLightbox, setShowLightbox] = useState(false);
 
-  const allImages = attachments?.filter((a) => a.kind === 'image') || [];
-
-  const openLightbox = useCallback((index: number) => {
+  const openLightbox = useCallback((index: number, video?: Attachment) => {
+    if (video) {
+      setLightboxImages([{ url: resolveUrl(video.url), name: video.name || 'video' }]);
+      setLightboxIndex(0);
+      setShowLightbox(true);
+      return;
+    }
     const images = allImages.map((a) => ({ url: resolveUrl(a.url), name: a.name || 'image' }));
     setLightboxImages(images);
     setLightboxIndex(index);
@@ -53,47 +65,105 @@ const AttachmentList: React.FC<AttachmentListProps> = ({ attachments, onImageCli
 
         if (a.kind === 'image') {
           const imgIndex = allImages.findIndex((img) => img.url === a.url);
+          const isGif = /\.gif(\?|$)/i.test(fullUrl);
+          const loaded = loadedMap[i];
           return (
             <div
               key={`${a.url}-${i}`}
-              className="attachment-image-wrap"
-              style={{ display: 'block', marginTop: '6px', width: '100%', maxWidth: '100%', cursor: 'zoom-in' }}
+              className={`attachment-image-wrap${loaded ? ' loaded' : ''}`}
+              style={{
+                display: 'block',
+                marginTop: '6px',
+                width: '100%',
+                maxWidth: '440px',
+                cursor: 'zoom-in',
+                borderRadius: '8px',
+                background: loaded ? 'transparent' : 'rgba(255,255,255,0.04)',
+                minHeight: loaded ? undefined : 120,
+                transition: 'background 0.2s ease',
+              }}
               onClick={() => openLightbox(imgIndex)}
             >
               <img
                 src={fullUrl}
                 alt={a.name}
                 loading="lazy"
+                onLoad={() => markLoaded(i)}
                 style={{
-                  width: 'auto',
-                  maxWidth: '100%',
-                  maxHeight: '320px',
+                  width: '100%',
+                  maxWidth: '440px',
+                  maxHeight: '350px',
                   height: 'auto',
                   borderRadius: '8px',
                   display: 'block',
                   objectFit: 'contain',
                   border: '1px solid rgba(255,255,255,0.08)',
+                  opacity: loaded ? 1 : 0,
+                  transform: loaded ? 'none' : 'scale(0.98)',
+                  transition: 'opacity 0.25s ease, transform 0.25s ease',
+                  // GIFs must keep animating — never let a filter freeze them.
+                  filter: 'none',
                 }}
               />
+              {isGif && loaded && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    bottom: 8,
+                    right: 8,
+                    fontSize: 10,
+                    letterSpacing: '0.08em',
+                    fontFamily: "'Share Tech Mono', monospace",
+                    color: 'var(--ghost-white)',
+                    background: 'rgba(0,0,0,0.55)',
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  GIF
+                </span>
+              )}
             </div>
           );
         }
 
         if (a.kind === 'video') {
           return (
-            <video
+            <div
               key={`${a.url}-${i}`}
-              controls
-              src={fullUrl}
               style={{
-                width: 'min(480px, 100%)',
-                maxWidth: '100%',
-                maxHeight: '320px',
-                borderRadius: '8px',
                 marginTop: '6px',
-                display: 'block',
-                background: '#000',
+                width: '100%',
+                maxWidth: '440px',
+                cursor: 'zoom-in',
+                borderRadius: '8px',
               }}
+              onClick={() => openLightbox(-1, a)}
+            >
+              <video
+                controls
+                src={fullUrl}
+                style={{
+                  width: '100%',
+                  maxWidth: '440px',
+                  maxHeight: '350px',
+                  borderRadius: '8px',
+                  display: 'block',
+                  background: '#000',
+                }}
+              />
+            </div>
+          );
+        }
+
+        if (a.kind === 'audio') {
+          return (
+            <VoiceNotePlayer
+              key={`${a.url}-${i}`}
+              url={a.url}
+              name={a.name}
+              duration={(a as any).duration}
             />
           );
         }

@@ -1,0 +1,58 @@
+{
+  "appId": "com.vox.desktop",
+  "productName": "VOX",
+  "asar": true,
+  "asarUnpack": [
+    "frontend/dist/**/*.node"
+  ],
+  "directories": {
+    "output": "./dist-hosted",
+    "buildResources": "build-resources"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "zuhair321",
+    "repo": "vox",
+    "releaseType": "release"
+  },
+  "files": [
+    "electron-main.js",
+    "preload.js",
+    "frontend/dist/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "frontend/dist/app-config.json",
+      "to": "app-config.json"
+    }
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "icon": "build-resources/icon.ico"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "VOX",
+    "installerIcon": "build-resources/icon.ico",
+    "uninstallerIcon": "build-resources/icon.ico",
+    "installerHeaderIcon": "build-resources/icon.ico",
+    "runAfterFinish": true
+  },
+  "mac": {
+    "target": "dmg",
+    "icon": "build-resources/icon.ico"
+  },
+  "linux": {
+    "target": "AppImage",
+    "icon": "build-resources/icon.ico"
+  }
+}

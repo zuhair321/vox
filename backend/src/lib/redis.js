@@ -46,20 +46,38 @@ async function getCache() {
     cacheClient.on('error', (err) => {
       if (cacheFailed) return;
       cacheFailed = true;
-      console.warn('[redis/cache] failed, cache disabled for this session');
+      // Only warn once to reduce spam
+      if (!global.__redisCacheWarned) {
+        console.warn('[redis/cache] failed, cache disabled for this session');
+        global.__redisCacheWarned = true;
+      }
     });
-    cacheClient.on('reconnecting', () => console.log('[redis/cache] reconnecting...'));
+    cacheClient.on('reconnecting', () => {
+      // Only log once to reduce spam
+      if (!global.__redisCacheReconnecting) {
+        console.log('[redis/cache] reconnecting...');
+        global.__redisCacheReconnecting = true;
+      }
+    });
     cacheClient.on('end', () => {
       if (cacheFailed) return;
       cacheFailed = true;
-      console.warn('[redis/cache] connection ended, cache disabled for this session');
+      // Only warn once to reduce spam
+      if (!global.__redisCacheEnded) {
+        console.warn('[redis/cache] connection ended, cache disabled for this session');
+        global.__redisCacheEnded = true;
+      }
     });
     await cacheClient.connect();
     console.log('[redis] cache connected:', REDIS_URL);
     return cacheClient;
   } catch (err) {
     cacheFailed = true;
-    console.warn('[redis] cache connection failed, running without cache:', err.message);
+    // Only warn once to reduce spam
+    if (!global.__redisCacheFailed) {
+      console.warn('[redis] cache connection failed, running without cache:', err.message);
+      global.__redisCacheFailed = true;
+    }
     cacheClient = null;
     return null;
   }
@@ -75,29 +93,49 @@ async function getPubSub() {
     publisher.on('error', (err) => {
       if (pubSubFailed) return;
       pubSubFailed = true;
-      console.warn('[redis/publisher] failed, falling back to single-process mode');
+      // Only warn once to reduce spam
+      if (!global.__redisPubSubWarned) {
+        console.warn('[redis/publisher] failed, falling back to single-process mode');
+        global.__redisPubSubWarned = true;
+      }
     });
     publisher.on('end', () => {
       if (pubSubFailed) return;
       pubSubFailed = true;
-      console.warn('[redis/publisher] connection ended, falling back to single-process mode');
+      // Only warn once to reduce spam
+      if (!global.__redisPubSubEnded) {
+        console.warn('[redis/publisher] connection ended, falling back to single-process mode');
+        global.__redisPubSubEnded = true;
+      }
     });
     subscriber.on('error', (err) => {
       if (pubSubFailed) return;
       pubSubFailed = true;
-      console.warn('[redis/subscriber] failed, falling back to single-process mode');
+      // Only warn once to reduce spam
+      if (!global.__redisSubWarned) {
+        console.warn('[redis/subscriber] failed, falling back to single-process mode');
+        global.__redisSubWarned = true;
+      }
     });
     subscriber.on('end', () => {
       if (pubSubFailed) return;
       pubSubFailed = true;
-      console.warn('[redis/subscriber] connection ended, falling back to single-process mode');
+      // Only warn once to reduce spam
+      if (!global.__redisSubEnded) {
+        console.warn('[redis/subscriber] connection ended, falling back to single-process mode');
+        global.__redisSubEnded = true;
+      }
     });
     await Promise.all([publisher.connect(), subscriber.connect()]);
     console.log('[redis] pub/sub connected:', REDIS_URL);
     return { publisher, subscriber };
   } catch (err) {
     pubSubFailed = true;
-    console.warn('[redis] pub/sub connection failed:', err.message);
+    // Only warn once to reduce spam
+    if (!global.__redisPubSubFailed) {
+      console.warn('[redis] pub/sub connection failed:', err.message);
+      global.__redisPubSubFailed = true;
+    }
     return { publisher: null, subscriber: null };
   }
 }
@@ -213,29 +251,23 @@ export async function redisHealthCheck() {
 
 // ── Rate limiter (Redis-backed sliding window) ─────────────────
 // Returns true if the request should be rate-limited.
+// Optimized: 3 Redis commands in 1 roundtrip (zCount, zAdd, pExpire)
+// instead of the previous 5 roundtrips (4 in MULTI + 1 cleanup).
 export async function isRateLimited(userId, event, max, windowMs) {
   const client = await getCache();
   if (!client) return false; // graceful fallback
 
   const key = `vox:ratelimit:${userId}:${event}`;
   const now = Date.now();
-  const windowStart = now - windowMs;
 
   try {
     const multi = client.multi();
-    multi.zRemRangeByScore(key, 0, windowStart);
-    multi.zCard(key);
+    multi.zCount(key, now - windowMs, now);
     multi.zAdd(key, { score: now, value: `${now}:${Math.random()}` });
     multi.pExpire(key, windowMs);
-
-    const results = await multi.exec();
-    const count = results[1]; // zCard result
-
-    // If already at or over limit, remove the entry we just added
+    const [count] = await multi.exec();
     if (count >= max) {
-      const cleanup = client.multi();
-      cleanup.zRemRangeByScore(key, now, now);
-      await cleanup.exec();
+      client.zRemRangeByScore(key, now, now).catch(() => {});
       return true;
     }
     return false;
@@ -253,20 +285,14 @@ export async function perChannelWriteBudget(channelId, max = 30, windowMs = 60_0
   if (!client) return { ok: true }; // graceful: no Redis → no budget
   const key = `vox:channel-budget:${channelId}`;
   const now = Date.now();
-  const windowStart = now - windowMs;
   try {
     const multi = client.multi();
-    multi.zRemRangeByScore(key, 0, windowStart);
-    multi.zCard(key);
+    multi.zCount(key, now - windowMs, now);
     multi.zAdd(key, { score: now, value: `${now}:${Math.random()}` });
     multi.pExpire(key, windowMs);
-    const results = await multi.exec();
-    const count = results[1];
-    if (count > max) {
-      // Roll back the token we just added so we don't over-count.
-      const cleanup = client.multi();
-      cleanup.zRemRangeByScore(key, now, now);
-      await cleanup.exec();
+    const [count] = await multi.exec();
+    if (count >= max) {
+      client.zRemRangeByScore(key, now, now).catch(() => {});
       return { ok: false, retryAfterMs: windowMs };
     }
     return { ok: true };

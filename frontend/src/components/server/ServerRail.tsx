@@ -7,6 +7,8 @@ import { useContextMenu, MenuItem } from '../../hooks/useContextMenu';
 import ContextMenu from '../ui/ContextMenu';
 import { leaveServer } from '../../api/discover';
 import { API_BASE } from '../../api/client';
+import ServerLogo from '../ui/ServerLogo';
+import VoxLogo from '../ui/VoxLogo';
 
 const ServerRail: React.FC = () => {
   const { servers, selectedServer, setSelectedServer, removeServer } = useServerStore();
@@ -111,13 +113,27 @@ const ServerRail: React.FC = () => {
   };
 
   return (
-    <div className="server-rail">
+    <div className="server-rail" style={{ position: 'relative' }}>
+      {/* Ambient glow line */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '1px',
+        background: 'linear-gradient(90deg, transparent, var(--chaos), transparent)',
+        opacity: 0.2,
+        animation: 'railGlow 4s ease-in-out infinite',
+      }} />
+
       <button
         className={`server-icon octagon ripple-container ${!selectedServer ? 'active' : ''}`}
         onClick={() => {
           setSelectedServer(null);
           navigate('/friends');
         }}
+        title="VOX — Home"
+        aria-label="Home"
         style={{
           width: '48px', height: '48px',
           backgroundColor: !selectedServer ? 'var(--obsidian)' : 'var(--dark-matter)',
@@ -126,13 +142,15 @@ const ServerRail: React.FC = () => {
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.2s',
-          fontSize: '24px'
+          fontSize: '24px',
+          boxShadow: !selectedServer ? '0 0 12px var(--chaos-glow)' : 'none',
+          padding: 0,
         }}
       >
-        🦇
+        <VoxLogo size={36} />
       </button>
 
-      <div style={{ width: '32px', height: '2px', backgroundColor: 'var(--rim)' }}></div>
+      <div style={{ width: '32px', height: '2px', backgroundColor: 'var(--rim)', opacity: 0.5 }}></div>
 
       {servers.length === 0 && (
         <div className="vox-empty-state" style={{ padding: '16px 8px' }}>
@@ -190,25 +208,10 @@ const ServerRail: React.FC = () => {
               fontSize: '18px',
               position: 'relative',
               overflow: 'hidden',
+              padding: 0,
             }}
           >
-            {/* Server icon image (supports GIFs) */}
-            {iconUrl && (
-              <img
-                src={iconUrl}
-                alt={server.name}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  position: 'absolute',
-                  inset: 0,
-                }}
-              />
-            )}
-            
-            {/* Fallback initials */}
-            {!iconUrl && server.name.substring(0, 2).toUpperCase()}
+            <ServerLogo src={iconUrl} name={server.name} size={48} />
 
             {/* Boost badge */}
             {boostLevel > 0 && (

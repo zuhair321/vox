@@ -11,6 +11,8 @@ import { useUiStore } from '../stores/uiStore';
 const SESSION_KEYS = [
   'vox_notifications',
   'vox_onboarding_done',
+  'vox_access',
+  'vox_refresh',
 ];
 
 export function logout() {

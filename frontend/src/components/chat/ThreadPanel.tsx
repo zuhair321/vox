@@ -13,22 +13,21 @@ import { API_BASE } from '../../api/client';
 
 const ThreadPanel: React.FC = () => {
   const { threadMessageId, setThreadMessageId } = useUiStore();
-  const { selectedChannel } = useServerStore();
+  const { selectedChannel, selectedServer } = useServerStore();
   const { messages, setMessages, addMessage } = useMessageStore();
+  const threadServerId = selectedServer?.id ?? selectedChannel?.serverId;
   const [replyText, setReplyText] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  if (!threadMessageId || !selectedChannel) return null;
-
-  const threadKey = `thread-${threadMessageId}`;
-  const threadMessages = messages[threadKey] || [];
-
-  // The parent message — find it in the current channel's messages.
-  const channelMsgs = messages[selectedChannel.id] || [];
-  const parentMsg = channelMsgs.find((m) => m.id === threadMessageId);
+  const threadKey = threadMessageId ? `thread-${threadMessageId}` : '';
+  const threadMessages = threadKey ? messages[threadKey] || [] : [];
+  const channelMsgs = selectedChannel ? messages[selectedChannel.id] || [] : [];
+  const parentMsg = threadMessageId
+    ? channelMsgs.find((m) => m.id === threadMessageId)
+    : undefined;
 
   useEffect(() => {
-    if (!threadMessageId) return;
+    if (!threadMessageId || !selectedChannel) return;
     let alive = true;
     fetchMessages(selectedChannel.id)
       .then((loaded: any[]) => {
@@ -45,7 +44,7 @@ const ThreadPanel: React.FC = () => {
         if (alive) setMessages(threadKey, []);
       });
     return () => { alive = false; };
-  }, [threadMessageId, threadKey, setMessages, selectedChannel.id]);
+  }, [threadMessageId, threadKey, setMessages, selectedChannel]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -53,10 +52,19 @@ const ThreadPanel: React.FC = () => {
     }
   }, [threadMessages.length]);
 
+  // Hooks must run on every render (Rules of Hooks). Guard the actual render
+  // output below instead of returning early before the hooks above — returning
+  // early here previously caused "Rendered more hooks than during the previous
+  // render" (React #310 / internal-server crash) when the thread panel opened.
+  if (!threadMessageId || !selectedChannel) return null;
+
   const handleSend = async () => {
     if (!replyText.trim() || !selectedChannel) return;
     try {
-      await sendMessageHTTP(selectedChannel.id, replyText, threadMessageId);
+      const data = await sendMessageHTTP(selectedChannel.id, replyText, threadMessageId);
+      if (data?.message) {
+        useMessageStore.getState().addMessage(threadKey, data.message);
+      }
       setReplyText('');
     } catch {
       // Error handled in sendMessageHTTP
@@ -161,7 +169,7 @@ const ThreadPanel: React.FC = () => {
                 </span>
               </div>
               <div style={{ color: 'var(--ash)', fontSize: '13px', lineHeight: 1.5, wordBreak: 'break-word' }}>
-                <RichText text={parentMsg.body} />
+                <RichText text={parentMsg.body} serverId={threadServerId} />
               </div>
             </div>
           )}

@@ -26,6 +26,20 @@
   --cut-corner-all: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
 }
 
+@keyframes vox-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes vox-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive shrink for voice-note waveform on narrow bubbles */
+@media (max-width: 520px) {
+  .vox-voice-note { width: 100% !important; }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -207,10 +221,77 @@ h1, h2, h3, h4, h5, h6, .title {
   clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
 }
 
+.server-logo {
+  clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%);
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s ease;
+}
+
+.server-logo img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  position: absolute;
+  inset: 0;
+}
+
+.server-logo:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 20px var(--chaos-glow), 0 4px 12px rgba(0,0,0,0.4);
+  z-index: 10;
+}
+
 /* Animations */
 @keyframes materialize {
   from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
   to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+/* ── Animated VOX logo ─────────────────────────────── */
+.vox-logo {
+  animation: vox-logo-breathe 2.8s ease-in-out infinite;
+}
+.vox-logo-halo {
+  animation: vox-logo-halo 2.8s ease-in-out infinite;
+}
+.vox-logo-ring {
+  animation: vox-logo-spin 5.5s linear infinite;
+}
+.vox-logo-core {
+  animation: vox-logo-corepulse 2.8s ease-in-out infinite;
+}
+.vox-logo-v {
+  animation: vox-logo-vpulse 1.8s ease-in-out infinite;
+}
+.vox-logo-spark {
+  animation: vox-logo-spark 1.1s ease-in-out infinite;
+}
+
+@keyframes vox-logo-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes vox-logo-breathe {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(216, 74, 90, 0.5)); }
+  50% { filter: drop-shadow(0 0 16px rgba(216, 74, 90, 0.95)); }
+}
+@keyframes vox-logo-halo {
+  0%, 100% { opacity: 0.55; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes vox-logo-corepulse {
+  0%, 100% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+@keyframes vox-logo-vpulse {
+  0%, 100% { opacity: 0.9; stroke-width: 8; }
+  50% { opacity: 1; stroke-width: 10; filter: brightness(1.25); }
+}
+@keyframes vox-logo-spark {
+  0%, 100% { opacity: 0.4; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vox-logo, .vox-logo-ring, .vox-logo-core, .vox-logo-v, .vox-logo-spark, .vox-logo-halo { animation: none; }
 }
 
 @keyframes shimmer {
@@ -285,6 +366,30 @@ h1, h2, h3, h4, h5, h6, .title {
   background: #000000;
   overflow: hidden;
   min-width: 0;
+  position: relative;
+}
+
+.app-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(216, 74, 90, 0.04), transparent),
+    radial-gradient(circle at 20% 80%, rgba(59, 10, 18, 0.03), transparent 40%);
+  z-index: 0;
+  animation: appBgPulse 8s ease-in-out infinite;
+}
+
+@keyframes appBgPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Ensure children stack above the ambient bg */
+.app-container > * {
+  position: relative;
+  z-index: 1;
 }
 
 .server-rail {
@@ -357,6 +462,31 @@ h1, h2, h3, h4, h5, h6, .title {
     linear-gradient(90deg, rgba(216, 74, 90, 0.04), transparent),
     var(--obsidian);
   border-top: 1px solid rgba(216, 74, 90, 0.1);
+}
+
+/* Pending friend-request count badge (Discord-style) */
+.friends-tab {
+  position: relative;
+}
+
+.pending-count-badge {
+  position: absolute;
+  top: -2px;
+  right: -16px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--chaos);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 0 8px var(--chaos-glow);
+  pointer-events: none;
 }
 
 .vox-user-profile {
@@ -854,7 +984,7 @@ h1, h2, h3, h4, h5, h6, .title {
 
 .vox-login-input-wrap {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 20px minmax(0, 1fr) 24px;
   align-items: center;
   gap: 8px;
   height: 48px;
@@ -874,6 +1004,29 @@ h1, h2, h3, h4, h5, h6, .title {
     rgba(5, 2, 2, 0.9);
   border-color: rgba(216, 74, 90, 0.4);
   box-shadow: 0 0 22px rgba(216, 74, 90, 0.1), inset 0 0 12px rgba(216, 74, 90, 0.03);
+}
+
+.vox-login-eye {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: rgba(140, 149, 163, 0.6);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.vox-login-eye:hover {
+  color: var(--ghost-white);
+}
+
+.vox-login-eye:focus-visible {
+  color: var(--chaos);
 }
 
 .vox-login-input-wrap input {
@@ -949,6 +1102,62 @@ h1, h2, h3, h4, h5, h6, .title {
   line-height: 1.4;
   clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   animation: vox-login-error-in 0.25s ease;
+}
+
+/* ── remember me ── */
+.vox-login-remember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.vox-login-remember input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(216, 74, 90, 0.35);
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  flex-shrink: 0;
+}
+
+.vox-login-remember input[type="checkbox"]:checked {
+  background: rgba(216, 74, 90, 0.25);
+  border-color: rgba(216, 74, 90, 0.7);
+  box-shadow: 0 0 10px rgba(216, 74, 90, 0.15);
+}
+
+.vox-login-remember input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--chaos);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.vox-login-remember input[type="checkbox"]:focus-visible {
+  outline: none;
+  border-color: var(--chaos);
+  box-shadow: 0 0 0 2px rgba(216, 74, 90, 0.2);
+}
+
+.vox-login-remember label {
+  color: rgba(140, 149, 163, 0.7);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  user-select: none;
 }
 
 @keyframes vox-login-error-in {
@@ -1358,6 +1567,21 @@ h1, h2, h3, h4, h5, h6, .title {
   height: auto;
 }
 
+.vox-custom-emoji {
+  display: inline-block;
+  vertical-align: -0.3em;
+}
+
+.vox-custom-emoji.animated {
+  animation: vox-emoji-pop 0.3s ease;
+}
+
+@keyframes vox-emoji-pop {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
 .message-row:hover {
   background: rgba(255, 255, 255, 0.015);
   border-left: 2px solid rgba(102, 0, 204, 0.2);
@@ -1477,6 +1701,11 @@ h1, h2, h3, h4, h5, h6, .title {
 }
 
 @keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes vox-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
@@ -1769,7 +1998,180 @@ button[aria-label="Back"]:hover {
   .angular-input::placeholder,
   .send-button,
   .reaction-pill,
-  .octagon {
+  .octagon,
+  .server-logo {
     transition: none !important;
   }
+}
+
+/* ── ServerRail ambient glow ── */
+@keyframes railGlow {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.35; }
+}
+
+/* ── Sidebar banner shimmer ── */
+@keyframes bannerShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.sidebar-banner-shimmer::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+  background-size: 200% 100%;
+  animation: bannerShimmer 8s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Main content entrance ── */
+@keyframes contentFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.main-content-enter {
+  animation: contentFadeIn 0.25s ease-out;
+}
+
+/* ── Top bar subtle shine ── */
+@keyframes topBarShine {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.top-bar-shine {
+  background: linear-gradient(90deg, transparent, rgba(216,74,90,0.06), transparent);
+  background-size: 200% 100%;
+  animation: topBarShine 6s linear infinite;
+}
+
+/* ── Update Modal ── */
+.update-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.update-panel {
+  width: min(420px, calc(100vw - 32px));
+  background:
+    linear-gradient(145deg, rgba(216, 74, 90, 0.04), transparent 22%),
+    linear-gradient(180deg, rgba(12, 10, 10, 0.98), rgba(5, 3, 3, 0.96));
+  border: 1px solid rgba(216, 74, 90, 0.15);
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+  padding: 28px 24px;
+  position: relative;
+}
+
+.update-title {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ghost-white);
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
+}
+
+.update-version {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: rgba(216, 74, 90, 0.8);
+  letter-spacing: 0.12em;
+  margin: 0 0 18px;
+}
+
+.update-desc {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  color: var(--ash);
+  line-height: 1.6;
+  margin: 0 0 18px;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.update-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(216, 74, 90, 0.1);
+  margin: 12px 0;
+  position: relative;
+}
+
+.update-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--void-purple), var(--chaos));
+  transition: width 0.2s ease;
+  box-shadow: 0 0 10px rgba(216, 74, 90, 0.4);
+}
+
+.update-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  border: 1px solid var(--rim);
+  background: transparent;
+  color: var(--ghost-white);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: all 0.2s ease;
+}
+
+.update-btn:hover:not(:disabled) {
+  border-color: var(--chaos);
+  box-shadow: 0 0 14px rgba(216, 74, 90, 0.25);
+}
+
+.update-btn.primary {
+  background: linear-gradient(135deg, var(--void-purple), var(--chaos));
+  border: none;
+  box-shadow: 0 0 18px rgba(216, 74, 90, 0.25);
+}
+
+.update-btn:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.update-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: var(--shadow);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.update-close:hover {
+  color: var(--ghost-white);
+}
+
+.message-input-wrapper {
+  position: relative;
+  overflow: hidden;
 }

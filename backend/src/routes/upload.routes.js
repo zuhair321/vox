@@ -174,7 +174,7 @@ export const uploadRouter = Router();
 uploadRouter.get('/presign/:kind', requireAuth, async (req, res, next) => {
   try {
     const kind = req.params.kind;
-    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner', 'sticker', 'sound', 'voice-message'].includes(kind)) {
+    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner', 'sound', 'voice-message'].includes(kind)) {
       return next(new HttpError(400, 'Invalid upload kind.'));
     }
     if (STORAGE_MODE !== 's3') {
@@ -204,7 +204,7 @@ async function handleUpload(req, res, next) {
       ? getPublicUrl(req.file.filename)
       : `/uploads/${req.file.filename}`;
 
-    if (kind === 'chat' || kind === 'sticker' || kind === 'sound' || kind === 'voice-message') {
+    if (kind === 'chat' || kind === 'sound' || kind === 'voice-message') {
       const info = chatMimeInfo(req.file.mimetype);
       return res.json({
         url: publicUrl,
@@ -277,13 +277,13 @@ uploadRouter.post(
   uploadLimiter,
   (req, res, next) => {
     const kind = req.params.kind;
-    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner', 'sticker', 'sound', 'voice-message'].includes(kind)) {
+    if (!['avatar', 'banner', 'chat', 'server-icon', 'server-banner', 'sound', 'voice-message'].includes(kind)) {
       return next(new HttpError(400, 'Invalid upload kind.'));
     }
     // Dispatch to the multer instance whose size cap + MIME filter matches the
-    // kind. avatar/banner → strict image rules + 5MB; chat/sticker/sound/
+    // kind. avatar/banner → strict image rules + 5MB; chat/sound/
     // voice-message → broader set + 100MB.
-    const handler = (kind === 'chat' || kind === 'sticker' || kind === 'sound' || kind === 'voice-message')
+    const handler = (kind === 'chat' || kind === 'sound' || kind === 'voice-message')
       ? chatUpload.single('file')
       : imageUpload.single('file');
     return handler(req, res, next);

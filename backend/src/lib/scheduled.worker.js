@@ -5,11 +5,11 @@
 import { prisma } from '../lib/prisma.js';
 import { deliverScheduledMessage } from '../routes/scheduled.routes.js';
 
-const POLL_INTERVAL_MS = 15 * 1000; // every 15s
+const POLL_INTERVAL_MS = 15 * 1000;
 let timer = null;
 
 export function startScheduledWorker() {
-  if (timer) return; // idempotent
+  if (timer) return;
   console.log('[scheduled] worker started (interval ' + POLL_INTERVAL_MS + 'ms)');
   timer = setInterval(() => {
     runOnce().catch((e) => console.warn('[scheduled] worker tick failed:', e?.message));

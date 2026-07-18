@@ -1,7 +1,7 @@
 import { API_BASE, getToken } from './client';
 import type { Attachment, AttachmentKind } from '../types';
 
-export type UploadKind = 'avatar' | 'banner' | 'chat' | 'server-icon' | 'server-banner' | 'sticker' | 'sound';
+export type UploadKind = 'avatar' | 'banner' | 'chat' | 'server-icon' | 'server-banner' | 'sound';
 
 export interface ChatUploadResponse {
   url: string;
@@ -61,5 +61,4 @@ export async function uploadChatAttachment(file: File): Promise<Attachment> {
 
 export interface AssetUploadResponse { url: string; kind: string; name: string; size: number; mime: string; }
 
-export const uploadSticker = (file: File) => uploadMedia('sticker', file) as Promise<AssetUploadResponse>;
 export const uploadSound = (file: File) => uploadMedia('sound', file) as Promise<AssetUploadResponse>;

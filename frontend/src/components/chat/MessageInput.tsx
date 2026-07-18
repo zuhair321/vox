@@ -8,15 +8,13 @@ import { API_BASE } from '../../api/client';
 import { sendMessageHTTP } from '../../api/messages';
 import { uploadChatAttachment } from '../../api/uploads';
 import { sendDMHTTP } from '../../api/dm';
-import { scheduleMessage } from '../../api/scheduled';
 import { useUiStore } from '../../stores/uiStore';
+import { useEmojiStore } from '../../stores/emojiStore';
 import EmojiPicker from '../ui/EmojiPicker';
-import StickerPicker from './StickerPicker';
-import type { Sticker } from '../../api/stickers';
-import CreatePollModal from './CreatePollModal';
 import { SlashCommandMenu, COMMANDS, type SlashCommand } from './SlashCommandMenu';
 import type { Attachment } from '../../types';
 import { playMessageSend, playError } from '../../utils/sounds';
+import { useVoiceRecorder, type VoiceRecording } from '../../hooks/useVoiceRecorder';
 
 interface PendingAttachment {
   id: string;
@@ -33,38 +31,47 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function toLocalInput(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo(({ channelId, dmId }) => {
   const [content, setContent] = useState('');
   const [pending, setPending] = useState<PendingAttachment[]>([]);
-  const [fuseTime, setFuseTime] = useState<string>(''); // ISO string for future reveal
-  const [showFuseMenu, setShowFuseMenu] = useState(false);
-  const [scheduleTime, setScheduleTime] = useState<string>(''); // ISO string for scheduled send
-  const [showScheduleMenu, setShowScheduleMenu] = useState(false);
   const [busy, setBusy] = useState(false);
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [stickerOpen, setStickerOpen] = useState(false);
-  const [slowmodeCooldown, setSlowmodeCooldown] = useState(0); // seconds remaining
-  const [showPollModal, setShowPollModal] = useState(false);
   const { sendDM, startTyping, stopTyping, startDmTyping, stopDmTyping } = useSocketStore();
   const { addToast } = useUiStore();
   const { selectedServer } = useServerStore();
   const { replyingTo, setReplyingTo } = useMessageStore();
+  const { loadServerEmojis, byServer } = useEmojiStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Slowmode countdown timer
+  // Keep the custom (animated) emoji registry fresh for the active server.
   useEffect(() => {
-    if (slowmodeCooldown <= 0) return;
-    const timer = setInterval(() => {
-      setSlowmodeCooldown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [slowmodeCooldown > 0]);
+    if (selectedServer?.id) loadServerEmojis(selectedServer.id);
+  }, [selectedServer?.id, loadServerEmojis]);
+
+  const voice = useVoiceRecorder();
+
+  // Build the custom (animated) emoji list for the active server.
+  const serverEmojis = useMemo(() => {
+    const map = selectedServer?.id ? byServer[selectedServer.id] : undefined;
+    if (!map) return [];
+    return Object.entries(map).map(([name, url]) => ({ name, url }));
+  }, [selectedServer?.id, byServer]);
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  // Exposes the active recorder so the global Vox shortcut can toggle it.
+  useEffect(() => {
+    (window as any).__voxVoiceToggle = async () => {
+      if (voice.recording) {
+        const rec = await voice.stop();
+        if (rec) await handleVoiceRecording(rec, true);
+      } else {
+        await startRecording();
+      }
+    };
+    return () => {
+      delete (window as any).__voxVoiceToggle;
+    };
+  }, [voice, voice.recording]);
 
   const memberNames = useMemo(() => {
     const names: string[] = [];
@@ -145,7 +152,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     .filter((p) => p.status === 'done' && p.attachment)
     .map((p) => p.attachment!) as Attachment[];
 
-  const canSend = !busy && slowmodeCooldown === 0 && content.length <= 2000 && (content.trim().length > 0 || readyAttachments.length > 0);
+  const canSend = !busy && content.length <= 2000 && (content.trim().length > 0 || readyAttachments.length > 0);
 
   const charCountColor = content.length >= 2000 ? 'var(--blood)' : content.length >= 1900 ? 'var(--gold)' : 'var(--ash)';
 
@@ -217,6 +224,68 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
 
   const clearDone = () => setPending((prev) => prev.filter((p) => p.status !== 'done'));
 
+  const startRecording = async () => {
+    if (busy) return;
+    setRecordingError(null);
+    const ok = await voice.start();
+    if (!ok) setRecordingError(voice.error || 'Could not start recording.');
+  };
+
+  const stopRecording = async (autoSend = false) => {
+    const rec = await voice.stop();
+    if (rec) await handleVoiceRecording(rec, autoSend);
+  };
+
+  const handleVoiceRecording = async (rec: VoiceRecording, autoSend = false) => {
+    if (!rec.blob || rec.blob.size === 0) return;
+    const ext = rec.mime.includes('mp4') ? 'm4a' : rec.mime.includes('mpeg') ? 'mp3' : rec.mime.includes('ogg') ? 'ogg' : 'webm';
+    const file = new File([rec.blob], `voice-note.${ext}`, { type: rec.mime || 'audio/webm' });
+    const entry: PendingAttachment = {
+      id: `voice-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: `Voice note (${Math.round(rec.duration)}s)`,
+      status: 'uploading',
+    };
+    setPending((prev) => [...prev, entry]);
+    try {
+      const attachment = await uploadChatAttachment(file);
+      setPending((prev) =>
+        prev.map((p) =>
+          p.id === entry.id
+            ? { ...p, status: 'done', attachment: { ...attachment, name: `Voice note (${Math.round(rec.duration)}s)` } }
+            : p,
+        ),
+      );
+      if (autoSend) {
+        // Voice notes usually send immediately, with no text body required.
+        const onErr = (err: any) => {
+          playError();
+          addToast(err?.message || 'Failed to send voice note.', 'error');
+        };
+        if (channelId) {
+          sendMessageHTTP(channelId, '', replyingTo?.id, [{ ...attachment, name: `Voice note (${Math.round(rec.duration)}s)` }])
+            .then((data) => { if (data?.message) useMessageStore.getState().addMessage(channelId, data.message); playMessageSend(); })
+            .catch(onErr);
+          stopTyping(channelId);
+        } else if (dmId) {
+          const rid = resolveRecipientId();
+          if (rid) stopDmTyping(rid);
+          sendDM(rid, '', [{ ...attachment, name: `Voice note (${Math.round(rec.duration)}s)` }]);
+          playMessageSend();
+        }
+        setContent('');
+        clearDone();
+        if (replyingTo) setReplyingTo(null);
+      }
+    } catch (e: any) {
+      setPending((prev) =>
+        prev.map((p) =>
+          p.id === entry.id ? { ...p, status: 'error', error: e?.message || 'Upload failed' } : p,
+        ),
+      );
+      addToast('Failed to upload voice note.', 'error');
+    }
+  };
+
   // Listen for drag-drop file upload events from MessageArea
   useEffect(() => {
     const handler = (e: Event) => {
@@ -231,10 +300,6 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
 
   const handleSlashCommand = async (cmd: SlashCommand) => {
     if (cmd.handleInParent) {
-      // Let parent handle this command (e.g., poll opens modal)
-      if (cmd.id === 'poll' && channelId) {
-        setShowPollModal(true);
-      }
       setContent('');
       return;
     }
@@ -291,12 +356,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
 
     const onError = (err: any) => {
       playError();
-      if (err?.status === 429 && err?.retryAfter) {
-        // Slowmode cooldown
-        const secs = Math.ceil(err.retryAfter);
-        setSlowmodeCooldown(secs);
-        addToast(`Slowmode is active. You can send in ${secs}s.`, 'warning', { duration: secs * 1000 });
-      } else if (err?.rateLimited) {
+      if (err?.rateLimited) {
         addToast(err.message || "You're doing that too fast. Slow down!", 'warning', { duration: 5000 });
       } else {
         addToast(err?.message || 'Message failed to send.', 'error');
@@ -304,18 +364,14 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     };
 
     if (channelId) {
-      if (scheduleTime) {
-        scheduleMessage({ channelId, body: text, scheduledAt: scheduleTime })
-          .then(() => {
-            playMessageSend();
-            addToast('Message scheduled for ' + new Date(scheduleTime).toLocaleString(), 'success');
-          })
-          .catch(onError);
-      } else {
-        sendMessageHTTP(channelId, text, replyingTo?.id, attachments, fuseTime || undefined)
-          .then(() => playMessageSend())
-          .catch(onError);
-      }
+      sendMessageHTTP(channelId, text, replyingTo?.id, attachments)
+        .then((data) => {
+          if (data?.message) {
+            useMessageStore.getState().addMessage(channelId, data.message);
+          }
+          playMessageSend();
+        })
+        .catch(onError);
       stopTyping(channelId);
     } else if (dmId) {
       const rid = resolveRecipientId();
@@ -343,7 +399,6 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
             }
             playMessageSend();
             setContent('');
-            setFuseTime('');
             clearDone();
             if (replyingTo) setReplyingTo(null);
           })
@@ -353,31 +408,8 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     }
 
     setContent('');
-    setFuseTime('');
-    setScheduleTime('');
     clearDone();
     if (replyingTo) setReplyingTo(null);
-  };
-
-  const sendSticker = (sticker: Sticker) => {
-    const att = [{ url: sticker.url, kind: 'image', name: sticker.name, size: 0, mime: 'image/png' }] as any;
-    const onError = (err: any) => {
-      playError();
-      addToast(err?.message || 'Failed to send sticker.', 'error');
-    };
-    if (channelId) {
-      sendMessageHTTP(channelId, '', replyingTo?.id, att).then(() => playMessageSend()).catch(onError);
-      if (replyingTo) setReplyingTo(null);
-    } else if (dmId) {
-      const { connected } = useSocketStore.getState();
-      if (connected) {
-        const rid = resolveRecipientId();
-        if (rid) { sendDM(rid, '', att); playMessageSend(); }
-      } else {
-        sendDMHTTP(dmId, '', att).then(() => playMessageSend()).catch(onError);
-      }
-    }
-    setStickerOpen(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -423,7 +455,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
   };
 
   return (
-    <div className="message-input-wrapper" style={{ position: 'relative' }}>
+    <div className="message-input-wrapper" style={{ position: 'relative', overflow: 'visible' }}>
       {replyingTo && (
         <div
           style={{
@@ -493,13 +525,77 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         />
       )}
 
-      <EmojiPicker open={emojiOpen} onClose={() => setEmojiOpen(false)} onSelect={insertEmoji} />
+      {voice.recording && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '8px 12px',
+            marginBottom: '6px',
+            background: 'var(--obsidian)',
+            border: '1px solid var(--blood, #c0392b)',
+            borderRadius: '8px',
+          }}
+        >
+          <span style={{ fontSize: '10px', color: '#ff6b6b', animation: 'vox-pulse 1.2s infinite' }}>🔴</span>
+          <span style={{ color: 'var(--ghost-white)' }}>Recording…</span>
+          <span style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--ash)' }}>
+            {Math.floor(voice.elapsed / 60)}:{String(Math.floor(voice.elapsed % 60)).padStart(2, '0')}
+          </span>
+          <div style={{ flex: 1, height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: `${Math.min(100, (voice.elapsed / 300) * 100)}%`,
+                background: 'var(--blood, #c0392b)',
+                transition: 'width 0.2s linear',
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => voice.cancel()}
+            title="Discard recording"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--ash)',
+              cursor: 'pointer',
+              fontSize: '16px',
+            }}
+            aria-label="Discard recording"
+          >
+            ✕
+          </button>
+          <button
+            type="button"
+            onClick={() => stopRecording(true)}
+            style={{
+              background: 'var(--phantom)',
+              color: 'var(--shadow)',
+              border: '1px solid var(--rim)',
+              borderRadius: '4px',
+              padding: '4px 10px',
+              cursor: 'pointer',
+              fontFamily: "'Bebas Neue', sans-serif",
+              letterSpacing: '0.05em',
+            }}
+          >
+            SEND
+          </button>
+        </div>
+      )}
 
-      <StickerPicker
-        open={stickerOpen}
-        serverId={selectedServer?.id}
-        onClose={() => setStickerOpen(false)}
-        onSelect={sendSticker}
+      {recordingError && (
+        <div style={{ padding: '4px 12px', color: '#ff6b6b', fontSize: 12 }}>{recordingError}</div>
+      )}
+
+      <EmojiPicker
+        open={emojiOpen}
+        onClose={() => setEmojiOpen(false)}
+        onSelect={insertEmoji}
+        serverEmojis={serverEmojis}
       />
 
       {pending.length > 0 && (
@@ -561,40 +657,18 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         </div>
       )}
 
-      <input
-        ref={inputRef}
-        type="text"
-        className="angular-input"
-        placeholder={channelId ? 'Message #channel' : 'Send a direct message...'}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        onKeyDown={handleKeyDown}
-        aria-label={channelId ? `Message #${selectedServer?.name || 'channel'}` : 'Send a direct message'}
-        style={{ paddingRight: '172px' }}
-      />
-
-      <button
-        type="button"
-        onClick={() => { setStickerOpen((v) => !v); setEmojiOpen(false); }}
-        className="input-action-btn"
-        title="Pick a sticker"
-        aria-label="Pick a sticker"
-        aria-expanded={stickerOpen}
-        style={{
-          position: 'absolute',
-          right: '152px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: stickerOpen ? 'var(--chaos)' : 'var(--ash, #8a93a3)',
-          fontSize: '18px',
-          padding: 0,
-        }}
-      >
-        🏷️
-      </button>
+      <div style={{ position: 'relative' }}>
+        <input
+          ref={inputRef}
+          type="text"
+          className="angular-input"
+          placeholder={channelId ? 'Message #channel' : 'Send a direct message...'}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onKeyDown={handleKeyDown}
+          aria-label={channelId ? `Message #${selectedServer?.name || 'channel'}` : 'Send a direct message'}
+          style={{ paddingRight: '96px' }}
+        />
 
       <button
         type="button"
@@ -605,7 +679,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         aria-expanded={emojiOpen}
         style={{
           position: 'absolute',
-          right: '128px',
+          right: '80px',
           top: '50%',
           transform: 'translateY(-50%)',
           background: 'none',
@@ -619,29 +693,28 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         😊
       </button>
 
-      {channelId && (
-        <button
-          type="button"
-          onClick={() => setShowPollModal(true)}
-          className="input-action-btn"
-          title="Create a poll"
-          aria-label="Create a poll"
-          style={{
-            position: 'absolute',
-            right: '104px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--ash, #8a93a3)',
-            fontSize: '16px',
-            padding: 0,
-          }}
-        >
-          📊
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => (voice.recording ? stopRecording() : startRecording())}
+        className="input-action-btn"
+        title={voice.recording ? 'Stop recording' : 'Record a voice note (Vox shortcut)'}
+        aria-label={voice.recording ? 'Stop recording' : 'Record a voice note'}
+        style={{
+          position: 'absolute',
+          right: '56px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          background: voice.recording ? 'var(--blood, #c0392b)' : 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: voice.recording ? '#fff' : 'var(--ash, #8a93a3)',
+          fontSize: '18px',
+          padding: 0,
+          animation: voice.recording ? 'vox-pulse 1.2s infinite' : 'none',
+        }}
+      >
+        🎤
+      </button>
 
       <button
         type="button"
@@ -652,7 +725,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         aria-label="Attach a file"
         style={{
           position: 'absolute',
-          right: '40px',
+          right: '32px',
           top: '50%',
           transform: 'translateY(-50%)',
           background: 'none',
@@ -691,26 +764,6 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         </div>
       )}
 
-      {/* Slowmode indicator */}
-      {slowmodeCooldown > 0 && (
-        <div
-          style={{
-            position: 'absolute',
-            left: '8px',
-            top: '-20px',
-            fontSize: '11px',
-            color: 'var(--chaos)',
-            fontFamily: "'Share Tech Mono', monospace",
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
-        >
-          <span style={{ animation: 'pulse 1s infinite' }}>⏱</span>
-          {slowmodeCooldown}s
-        </div>
-      )}
-
       <button
         type="button"
         className="send-button"
@@ -740,174 +793,8 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
       >
         ➤
       </button>
-
-      {/* Scheduled send button + menu */}
-      {channelId && (
-        <div style={{ position: 'absolute', right: '66px', top: '50%', transform: 'translateY(-50%)' }}>
-          <button
-            type="button"
-            onClick={() => setShowScheduleMenu((v) => !v)}
-            title={scheduleTime ? `Scheduled for ${new Date(scheduleTime).toLocaleString()}` : 'Schedule send'}
-            style={{
-              width: '24px',
-              height: '24px',
-              border: 'none',
-              background: scheduleTime ? 'rgba(114,137,218,0.2)' : 'transparent',
-              color: scheduleTime ? '#7289da' : 'var(--shadow)',
-              cursor: 'pointer',
-              borderRadius: '4px',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s',
-            }}
-          >
-            🕒
-          </button>
-          {showScheduleMenu && (
-            <div style={{
-              position: 'absolute',
-              bottom: '100%',
-              right: 0,
-              marginBottom: '6px',
-              background: 'var(--dark-matter)',
-              border: '1px solid var(--rim)',
-              borderRadius: '8px',
-              padding: '8px',
-              minWidth: '180px',
-              zIndex: 50,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-            }}>
-              <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px' }}>
-                SCHEDULE SEND
-              </div>
-              {[
-                { label: 'No schedule', value: '' },
-                { label: '⏱ In 1 hour', value: new Date(Date.now() + 3600000).toISOString() },
-                { label: '🌙 Tomorrow', value: new Date(Date.now() + 86400000).toISOString() },
-                { label: '📅 In 1 week', value: new Date(Date.now() + 604800000).toISOString() },
-              ].map((opt) => (
-                <button
-                  key={opt.label}
-                  type="button"
-                  onClick={() => { setScheduleTime(opt.value); setShowScheduleMenu(false); }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    padding: '4px 8px',
-                    background: scheduleTime === opt.value ? 'rgba(114,137,218,0.12)' : 'transparent',
-                    border: 'none',
-                    borderRadius: '4px',
-                    color: scheduleTime === opt.value ? '#7289da' : 'var(--ghost-white)',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    textAlign: 'left',
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-              <label style={{ display: 'block', fontSize: '11px', color: 'var(--shadow)', marginTop: '6px', marginBottom: '4px' }}>
-                Custom time
-              </label>
-              <input
-                type="datetime-local"
-                value={scheduleTime ? toLocalInput(new Date(scheduleTime)) : ''}
-                onChange={(e) => setScheduleTime(e.target.value ? new Date(e.target.value).toISOString() : '')}
-                style={{
-                  width: '100%',
-                  background: 'var(--obsidian)',
-                  border: '1px solid var(--rim)',
-                  color: 'var(--ghost-white)',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  padding: '3px 4px',
-                }}
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Fuse timer button */}
-      <div style={{ position: 'absolute', right: '40px', top: '50%', transform: 'translateY(-50%)' }}>
-        <button
-          type="button"
-          onClick={() => setShowFuseMenu(v => !v)}
-          title={fuseTime ? `Reveals at ${new Date(fuseTime).toLocaleString()}` : 'Set fuse timer'}
-          style={{
-            width: '24px',
-            height: '24px',
-            border: 'none',
-            background: fuseTime ? 'rgba(255,209,102,0.15)' : 'transparent',
-            color: fuseTime ? '#d9c98d' : 'var(--shadow)',
-            cursor: 'pointer',
-            borderRadius: '4px',
-            fontSize: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.15s',
-          }}
-        >
-          💣
-        </button>
-        {showFuseMenu && (
-          <div style={{
-            position: 'absolute',
-            bottom: '100%',
-            right: 0,
-            marginBottom: '6px',
-            background: 'var(--dark-matter)',
-            border: '1px solid var(--rim)',
-            borderRadius: '8px',
-            padding: '8px',
-            minWidth: '160px',
-            zIndex: 50,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-          }}>
-            <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px' }}>
-              TIME CAPSULE
-            </div>
-            {[
-              { label: 'No fuse', value: '' },
-              { label: '⏱ 1 minute', value: new Date(Date.now() + 60000).toISOString() },
-              { label: '⏱ 5 minutes', value: new Date(Date.now() + 300000).toISOString() },
-              { label: '⏱ 1 hour', value: new Date(Date.now() + 3600000).toISOString() },
-              { label: '🌙 Tomorrow', value: new Date(Date.now() + 86400000).toISOString() },
-              { label: '📅 Next week', value: new Date(Date.now() + 604800000).toISOString() },
-            ].map(opt => (
-              <button
-                key={opt.label}
-                type="button"
-                onClick={() => { setFuseTime(opt.value); setShowFuseMenu(false); }}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '4px 8px',
-                  background: fuseTime === opt.value ? 'rgba(255,209,102,0.1)' : 'transparent',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: fuseTime === opt.value ? '#d9c98d' : 'var(--ghost-white)',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  textAlign: 'left',
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
-      {showPollModal && channelId && (
-        <CreatePollModal
-          channelId={channelId}
-          onCreated={() => setShowPollModal(false)}
-        />
-      )}
     </div>
   );
 });

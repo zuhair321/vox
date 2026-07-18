@@ -13,17 +13,6 @@ export interface SlashCommand {
 
 const COMMANDS: SlashCommand[] = [
   {
-    id: 'poll',
-    name: 'Create Poll',
-    description: 'Start a poll for the channel',
-    icon: '📊',
-    action: async () => {
-      // Parent component handles opening the poll modal
-      return '';
-    },
-    handleInParent: true, // Parent component opens poll modal
-  },
-  {
     id: 'giphy',
     name: 'Giphy',
     description: 'Search and send a GIF',
@@ -201,7 +190,7 @@ const COMMANDS: SlashCommand[] = [
 ];
 
 interface Props {
-  query: string; // text after /, e.g. "poll"
+  query: string; // text after /, e.g. "roll"
   onSelect: (command: SlashCommand, args?: Record<string, string>) => void;
   onClose: () => void;
 }

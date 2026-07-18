@@ -371,6 +371,11 @@ const FriendsPage: React.FC = () => {
                 }}
               >
                 {tab}
+                {tab === 'PENDING' && incoming.length > 0 && (
+                  <span className="pending-count-badge" aria-label={`${incoming.length} pending friend requests`}>
+                    {incoming.length}
+                  </span>
+                )}
               </span>
             ))}
             <button 

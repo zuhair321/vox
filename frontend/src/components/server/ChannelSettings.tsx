@@ -6,7 +6,7 @@ import { useUiStore } from '../../stores/uiStore';
 import { api, API_BASE } from '../../api/client';
 import { getArchiveConfig, setArchiveConfig, getArchivedMessages, type ArchiveConfig } from '../../api/archives';
 import { fetchVoiceRegions, setChannelRegion, type VoiceRegion } from '../../api/regions';
-import { Trash2, AlertTriangle, Hash, Volume2, Eye, Clock, Type, Archive, Globe } from 'lucide-react';
+import { Trash2, AlertTriangle, Hash, Volume2, Eye, Type, Archive, Globe } from 'lucide-react';
 
 interface ChannelSettingsProps {
   channelId: string;
@@ -41,7 +41,6 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
   const [name, setName] = useState(channel?.name || '');
   const [topic, setTopic] = useState(channel?.topic || '');
   const [nsfw, setNsfw] = useState(channel?.nsfw || false);
-  const [slowmode, setSlowmode] = useState(channel?.slowmode || 0);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [saving, setSaving] = useState(false);
@@ -102,7 +101,6 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
       if (name !== channel.name) data.name = name;
       if (topic !== (channel.topic || '')) data.topic = topic;
       if (nsfw !== (channel.nsfw || false)) data.nsfw = nsfw;
-      if (slowmode !== (channel.slowmode || 0)) data.slowmode = slowmode;
 
       if (Object.keys(data).length === 0) {
         addToast('No changes to save.', 'info');
@@ -288,37 +286,6 @@ const ChannelSettings: React.FC<ChannelSettingsProps> = ({ channelId, onClose })
                     transition: 'left 0.2s',
                   }} />
                 </button>
-              </div>
-
-              {/* Slowmode */}
-              <div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--ash)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>
-                  <Clock size={12} /> SLOWMODE
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px' }}>
-                  {SLOWMODE_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => canManage && setSlowmode(opt.value)}
-                      disabled={!canManage}
-                      style={{
-                        padding: '6px',
-                        background: slowmode === opt.value ? 'rgba(216,74,90,0.15)' : 'var(--dark-matter)',
-                        border: slowmode === opt.value ? '1px solid rgba(216,74,90,0.4)' : '1px solid var(--rim)',
-                        borderRadius: '4px',
-                        color: slowmode === opt.value ? 'var(--chaos)' : 'var(--ash)',
-                        cursor: canManage ? 'pointer' : 'not-allowed',
-                        fontSize: '10px',
-                        fontFamily: "'Share Tech Mono', monospace",
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--shadow)', marginTop: '4px' }}>
-                  {slowmode > 0 ? `Members can send one message every ${slowmode >= 60 ? `${slowmode / 60}m` : `${slowmode}s`}` : 'No rate limit'}
-                </div>
               </div>
 
               {/* Voice Region (voice/stage channels only) */}

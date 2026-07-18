@@ -9,11 +9,10 @@ export const sendMessageHTTP = (
   content: string,
   parentId?: string,
   attachments?: Attachment[],
-  fuseTime?: string,
 ) =>
   api(`/api/channels/${channelId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content, parentId, channelId, attachments, fuseTime })
+    body: JSON.stringify({ content, parentId, channelId, attachments })
   });
 
 // Read receipts

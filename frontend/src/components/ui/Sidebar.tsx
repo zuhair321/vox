@@ -10,10 +10,10 @@ import { useProfileStore } from '../../stores/profileStore';
 import { useContextMenu, MenuItem } from '../../hooks/useContextMenu';
 import ContextMenu from '../ui/ContextMenu';
 import StatusPicker from '../ui/StatusPicker';
-import NotificationBell from './NotificationBell';
 import VoiceTimer from '../voice/VoiceTimer';
 import { getMicrophoneStream } from '../../utils/webrtc';
 import ChannelSettings from '../server/ChannelSettings';
+import ServerLogo from './ServerLogo';
 
 function resolveMediaUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -322,6 +322,7 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
     <div className="sidebar" style={{ display: 'flex', flexDirection: 'column' }}>
       {/* Server Banner + Name Header */}
       <div
+        className="sidebar-banner-shimmer"
         style={{
           height: '68px',
           display: 'flex',
@@ -335,6 +336,7 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
           overflow: 'hidden',
           zIndex: 10,
           flexShrink: 0,
+          transition: 'all 0.3s ease',
         }}
         onClick={() => navigate(`/server-profile/${selectedServer.id}`)}
         title="View server profile"
@@ -366,37 +368,19 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
         )}
 
         {/* Server Icon — prominent octagon with glow */}
-        <div
+        <ServerLogo
+          src={selectedServer.icon ? `${API_BASE}${selectedServer.icon}` : null}
+          name={selectedServer.name}
+          size={46}
           style={{
             position: 'relative',
             zIndex: 2,
-            width: '46px',
-            height: '46px',
-            overflow: 'hidden',
-            flexShrink: 0,
-            clipPath: 'polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%)',
             border: bannerUrl ? '2px solid rgba(255,255,255,0.25)' : '2px solid rgba(255,255,255,0.12)',
             boxShadow: bannerUrl
               ? '0 0 16px rgba(255,255,255,0.15), 0 2px 8px rgba(0,0,0,0.5)'
               : '0 0 12px rgba(216,74,90,0.2), 0 2px 8px rgba(0,0,0,0.4)',
-            background: selectedServer.icon ? 'var(--obsidian)' : 'rgba(255,255,255,0.05)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
           }}
-        >
-          {selectedServer.icon ? (
-            <img
-              src={`${API_BASE}${selectedServer.icon}`}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          ) : (
-            <span style={{ color: 'rgba(255,255,255,0.9)', fontWeight: 800, fontSize: '18px', lineHeight: 1, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>
-              {selectedServer.name[0]?.toUpperCase()}
-            </span>
-          )}
-        </div>
+        />
 
         {/* Server name + hint */}
         <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 2 }}>
@@ -562,7 +546,6 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
         <button type="button" className="vox-panel-icon ripple-container" onClick={onOpenThemes} aria-label="Switch theme" title="Switch theme">
           <Palette size={16} />
         </button>
-        <NotificationBell />
         <button type="button" className="vox-panel-icon ripple-container" onClick={() => navigate('/settings')} aria-label="Settings">
           <Settings size={17} />
         </button>

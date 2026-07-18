@@ -53,6 +53,21 @@ const TitleBar: React.FC = () => {
           z-index: 10000;
           position: relative;
         }
+        .vox-titlebar::after {
+          content: '';
+          position: absolute;
+          bottom: -1px;
+          left: 0;
+          right: 0;
+          height: 1px;
+          background: linear-gradient(90deg, transparent, var(--chaos), transparent);
+          opacity: 0.3;
+          animation: titlebarGlow 3s ease-in-out infinite;
+        }
+        @keyframes titlebarGlow {
+          0%, 100% { opacity: 0.2; }
+          50% { opacity: 0.6; }
+        }
         .vox-titlebar-title {
           font-family: 'Bebas Neue', sans-serif;
           font-size: 14px;
@@ -62,6 +77,7 @@ const TitleBar: React.FC = () => {
           left: 50%;
           transform: translateX(-50%);
           pointer-events: none;
+          text-shadow: 0 0 8px rgba(216, 74, 90, 0.3);
         }
         .mac-ctrl {
           width: 12px;
@@ -70,11 +86,11 @@ const TitleBar: React.FC = () => {
           border: none;
           cursor: pointer;
           background: var(--phantom);
-          transition: background 0.15s;
+          transition: all 0.15s;
         }
-        .vox-titlebar:hover .mac-ctrl.close { background: #ff5f56; }
-        .vox-titlebar:hover .mac-ctrl.min { background: #ffbd2e; }
-        .vox-titlebar:hover .mac-ctrl.max { background: #27c93f; }
+        .vox-titlebar:hover .mac-ctrl.close { background: #ff5f56; box-shadow: 0 0 6px rgba(255,95,86,0.4); }
+        .vox-titlebar:hover .mac-ctrl.min { background: #ffbd2e; box-shadow: 0 0 6px rgba(255,189,46,0.4); }
+        .vox-titlebar:hover .mac-ctrl.max { background: #27c93f; box-shadow: 0 0 6px rgba(39,201,63,0.4); }
         .mac-ctrl.close:hover { filter: brightness(0.8); }
         .mac-ctrl.min:hover { filter: brightness(0.8); }
         .mac-ctrl.max:hover { filter: brightness(0.8); }
@@ -90,7 +106,7 @@ const TitleBar: React.FC = () => {
           justify-content: center;
           cursor: pointer;
           font-family: monospace;
-          transition: background 0.15s;
+          transition: all 0.15s;
         }
         .win-ctrl:hover { background: var(--rim); }
         .win-ctrl.close:hover { background: var(--blood); color: white; }

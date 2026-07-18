@@ -5,7 +5,7 @@ import { PrismaClient } from '@prisma/client';
 const globalForPrisma = globalThis;
 
 if (!process.env.DATABASE_URL) {
-  console.log('[DB] No DATABASE_URL set — SQLite file will be created automatically.');
+  console.log('[DB] No DATABASE_URL set — the database client will not connect until one is provided.');
 }
 
 let prismaInstance = null;
@@ -16,7 +16,7 @@ let replicaConnectPromise = null;
 
 async function createPrismaClient() {
   if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL is not set. Set DATABASE_URL to point to a SQLite file.');
+    throw new Error('DATABASE_URL is not set. Point it at a Postgres (recommended) or SQLite database.');
   }
 
   const client = new PrismaClient({
@@ -30,7 +30,7 @@ async function createPrismaClient() {
   );
 
   await Promise.race([connectPromise, timeoutPromise]);
-  console.log('[DB] SQLite connected');
+  console.log('[DB] database connected');
   return client;
 }
 
@@ -45,7 +45,7 @@ async function getPrisma() {
   try {
     prismaInstance = await connectPromise;
   } catch (error) {
-    console.error('[DB] SQLite connection failed:', error.message);
+    console.error('[DB] database connection failed:', error.message);
     console.error('[DB] VOX will retry when a database operation is requested.');
     prismaInstance = null;
   }

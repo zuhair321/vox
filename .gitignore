@@ -81,3 +81,33 @@ backend/prisma/generated/
 *.bak
 nul
 backend/nul
+
+# Secrets / tokens — never commit
+token.txt
+*.token
+.env.local
+
+# Local DB artifacts (not source)
+backend/prisma/vox.db
+backend/prisma/vox.db-shm
+backend/prisma/vox.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Local debug / one-off scripts
+backend/check-*.mjs
+backend/scan-*.cjs
+backend/test-*.mjs
+backend/reset-password.mjs
+backend/check-account.mjs
+backend/check-cors.mjs
+backend/check-password.mjs
+backend/check-users.mjs
+frontend/check-react.cjs
+frontend/eslint.roh.tmp.mjs
+buildfailed.txt
+dist-hosted/
+
+# Build output (regenerable)
+dist2/

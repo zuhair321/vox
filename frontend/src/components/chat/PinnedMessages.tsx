@@ -19,8 +19,9 @@ interface PinnedMsg {
 
 const PinnedMessages: React.FC = () => {
   const { showPinnedPanel, setShowPinnedPanel } = useUiStore();
-  const { selectedChannel } = useServerStore();
+  const { selectedChannel, selectedServer } = useServerStore();
   const { deleteMessage } = useSocketStore();
+  const serverId = selectedServer?.id ?? selectedChannel?.serverId;
   const [pinned, setPinned] = useState<PinnedMsg[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -211,7 +212,7 @@ const PinnedMessages: React.FC = () => {
                       wordBreak: 'break-word',
                     }}
                   >
-                    <RichText text={msg.body} />
+                    <RichText text={msg.body} serverId={serverId} />
                   </div>
 
                   {/* Actions */}

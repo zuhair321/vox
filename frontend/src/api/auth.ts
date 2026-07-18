@@ -59,7 +59,7 @@ export async function refreshToken(refreshTokenValue: string): Promise<AuthRespo
   } as any);
 }
 
-export async function logout(refreshTokenValue: string): Promise<void> {
+export async function logout(refreshTokenValue?: string): Promise<void> {
   await api('/api/auth/logout', {
     method: 'POST',
     body: JSON.stringify({ refreshToken: refreshTokenValue }),

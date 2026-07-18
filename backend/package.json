@@ -1,7 +1,7 @@
 {
   "name": "vox-backend",
   "version": "0.2.0",
-  "description": "VOX backend — Express + Prisma (SQLite) + JWT + 2FA + Socket.io",
+  "description": "VOX backend — Express + Prisma (PostgreSQL) + JWT + 2FA + Socket.io",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -13,7 +13,12 @@
     "cluster:logs": "pm2 logs vox-backend",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:push": "prisma db push",
     "prisma:seed": "node seed.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "loadtest": "k6 run ../loadtest/load-test.js",
     "prisma:studio": "prisma studio",
     "verify:routes": "node scripts/verify-routes.mjs",
     "db:setup": "prisma migrate dev --name init && prisma db seed",
@@ -29,7 +34,6 @@
     "@prisma/client": "^6.19.3",
     "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^3.0.3",
-    "better-sqlite3": "^12.11.1",
     "cheerio": "^1.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
@@ -41,6 +45,7 @@
     "multer": "^2.2.0",
     "node-fetch": "^3.3.2",
     "otplib": "^13.4.1",
+    "pg": "^8.13.1",
     "qrcode": "^1.5.4",
     "redis": "^4.6.12",
     "resend": "^6.16.0",
@@ -50,6 +55,9 @@
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^4.4.3"
   },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.11.1"
+  },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",
     "@types/cookie-parser": "^1.4.9",
@@ -57,6 +65,7 @@
     "@types/qrcode": "^1.5.5",
     "pm2": "^7.0.3",
     "prisma": "^6.19.3",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "vitest": "^2.1.8"
   }
 }

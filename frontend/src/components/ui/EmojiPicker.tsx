@@ -16,6 +16,7 @@ const CATEGORIES = [
   { id: 'symbols', icon: '❤️', label: 'Symbols' },
   { id: 'flags', icon: '🚩', label: 'Flags' },
   { id: 'vox', icon: '🦇', label: 'VOX Custom' },
+  { id: 'server', icon: '🖼️', label: 'Server Emojis' },
 ];
 
 // Expanded emoji sets per category
@@ -103,9 +104,15 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSelect: (emoji: string) => void;
+  serverEmojis?: { name: string; url: string }[];
 }
 
-const EmojiPicker: React.FC<Props> = ({ open, onClose, onSelect }) => {
+interface ServerEmoji {
+  name: string;
+  url: string;
+}
+
+const EmojiPicker: React.FC<Props> = ({ open, onClose, onSelect, serverEmojis = [] }) => {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('frequent');
   const [tooltip, setTooltip] = useState<{ emoji: string; name: string; x: number; y: number } | null>(null);
@@ -121,11 +128,18 @@ const EmojiPicker: React.FC<Props> = ({ open, onClose, onSelect }) => {
 
   const recentEmojis = useMemo(() => getRecent(), [open]);
 
+  const showServer = category === 'server';
+  const serverList: ServerEmoji[] = useMemo(
+    () => (showServer ? serverEmojis : []),
+    [showServer, serverEmojis],
+  );
+
   const allEmojis = useMemo(() => {
     if (category === 'frequent') return recentEmojis;
     if (category === 'vox') return EMOJI_SETS.vox;
+    if (category === 'server') return serverEmojis.map((e) => e.name);
     return EMOJI_SETS[category] || [];
-  }, [category, recentEmojis]);
+  }, [category, recentEmojis, serverEmojis]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allEmojis;
@@ -136,6 +150,13 @@ const EmojiPicker: React.FC<Props> = ({ open, onClose, onSelect }) => {
   const handleSelect = (emoji: string) => {
     addRecent(emoji);
     onSelect(emoji);
+    onClose();
+  };
+
+  // Custom server emoji → insert the :name: shortcode so it renders animated.
+  const handleServerSelect = (emoji: ServerEmoji) => {
+    addRecent(emoji.name);
+    onSelect(`:${emoji.name}:`);
     onClose();
   };
 
@@ -165,6 +186,27 @@ const EmojiPicker: React.FC<Props> = ({ open, onClose, onSelect }) => {
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              background: 'none',
+              border: 'none',
+              color: 'var(--ash)',
+              fontSize: 18,
+              cursor: 'pointer',
+              zIndex: 10,
+              padding: 4,
+              lineHeight: 1,
+            }}
+            aria-label="Close emoji picker"
+          >
+            ✕
+          </button>
+
           {/* Search */}
           <div style={{ padding: '8px 8px 0' }}>
             <input
@@ -188,7 +230,7 @@ const EmojiPicker: React.FC<Props> = ({ open, onClose, onSelect }) => {
               borderBottom: '1px solid var(--rim)',
             }}
           >
-            {CATEGORIES.map((cat) => (
+            {CATEGORIES.filter((cat) => cat.id !== 'server' || serverEmojis.length > 0).map((cat) => (
               <button
                 key={cat.id}
                 type="button"
@@ -239,45 +281,90 @@ const EmojiPicker: React.FC<Props> = ({ open, onClose, onSelect }) => {
                 No emojis found.
               </div>
             )}
-            {filtered.map((emoji, i) => (
-              <button
-                key={`${emoji}-${i}`}
-                type="button"
-                onClick={() => handleSelect(emoji)}
-                onMouseEnter={(e) => {
-                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  setTooltip({ emoji, name: emoji, x: rect.left + rect.width / 2, y: rect.top - 4 });
-                }}
-                onMouseLeave={(e: any) => {
-                  setTooltip(null);
-                  (e.currentTarget as HTMLElement).style.transform = '';
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                }}
-                style={{
-                  fontSize: '22px',
-                  width: '100%',
-                  aspectRatio: '1',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  transition: 'background 0.1s, transform 0.1s',
-                }}
-                onMouseDownCapture={(e) => {
-                  (e.currentTarget as HTMLElement).style.transform = 'scale(1.2)';
-                  (e.currentTarget as HTMLElement).style.background = 'var(--phantom)';
-                }}
-                onMouseUpCapture={(e) => {
-                  (e.currentTarget as HTMLElement).style.transform = '';
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
-                }}
-
-              >
-                {emoji}
-              </button>
-            ))}
+            {showServer
+              ? serverList.map((emoji) => (
+                  <button
+                    key={emoji.name}
+                    type="button"
+                    onClick={() => handleServerSelect(emoji)}
+                    onMouseEnter={(e) => {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setTooltip({ emoji: '', name: `:${emoji.name}:`, x: rect.left + rect.width / 2, y: rect.top - 4 });
+                    }}
+                    onMouseLeave={() => setTooltip(null)}
+                    title={`:${emoji.name}:`}
+                    style={{
+                      width: '100%',
+                      aspectRatio: '1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'background 0.1s, transform 0.1s',
+                      padding: 2,
+                    }}
+                    onMouseDownCapture={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = 'scale(1.2)';
+                      (e.currentTarget as HTMLElement).style.background = 'var(--phantom)';
+                    }}
+                    onMouseUpCapture={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = '';
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                  >
+                    <img
+                      src={emoji.url}
+                      alt={emoji.name}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        borderRadius: 4,
+                        pointerEvents: 'none',
+                      }}
+                    />
+                  </button>
+                ))
+              : filtered.map((emoji, i) => (
+                  <button
+                    key={`${emoji}-${i}`}
+                    type="button"
+                    onClick={() => handleSelect(emoji)}
+                    onMouseEnter={(e) => {
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      setTooltip({ emoji, name: emoji, x: rect.left + rect.width / 2, y: rect.top - 4 });
+                    }}
+                    onMouseLeave={(e: any) => {
+                      setTooltip(null);
+                      (e.currentTarget as HTMLElement).style.transform = '';
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                    style={{
+                      fontSize: '22px',
+                      width: '100%',
+                      aspectRatio: '1',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'background 0.1s, transform 0.1s',
+                    }}
+                    onMouseDownCapture={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = 'scale(1.2)';
+                      (e.currentTarget as HTMLElement).style.background = 'var(--phantom)';
+                    }}
+                    onMouseUpCapture={(e) => {
+                      (e.currentTarget as HTMLElement).style.transform = '';
+                      (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
           </div>
         </motion.div>
       )}

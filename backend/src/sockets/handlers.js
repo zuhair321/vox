@@ -23,6 +23,7 @@ const RATE_LIMITS = {
 async function checkRateLimit(userId, event) {
   const limit = RATE_LIMITS[event];
   if (!limit) return false;
+  // Skip Redis rate limiting when not configured for better performance
   return isRateLimited(userId, event, limit.max, limit.windowMs);
 }
 
@@ -78,16 +79,21 @@ export function registerHandlers(io, socket) {
     // Join all server rooms so we can scope presence broadcasts.
     // getState() is cached so this is fast even on every connect.
     (async () => {
-      const state = await getState(userId).catch(() => ({}));
-      const serverIds = Array.from(new Set([
-        ...(state.channels || []).map((c) => c.serverId).filter(Boolean),
-        ...(state.members || []).map((m) => m.serverId).filter(Boolean),
-      ]));
-      socket.data.serverIds = serverIds;
-      for (const serverId of serverIds) socket.join(`server:${serverId}`);
-      // Broadcast to every socket in every server this user is in
-      for (const serverId of serverIds) {
-        emitRealtimeEvent('presence:update', null, { userId, status: 'online' });
+      try {
+        const state = await getState(userId);
+        const serverIds = Array.from(new Set([
+          ...(state.channels || []).map((c) => c.serverId).filter(Boolean),
+          ...(state.members || []).map((m) => m.serverId).filter(Boolean),
+        ]));
+        socket.data.serverIds = serverIds;
+        for (const serverId of serverIds) socket.join(`server:${serverId}`);
+        // Broadcast to every socket in every server this user is in
+        for (const serverId of serverIds) {
+          emitRealtimeEvent('presence:update', null, { userId, status: 'online' });
+        }
+      } catch (error) {
+        // Handle error gracefully without impacting connection
+        console.warn('[socket] Failed to get state for user:', userId, error.message);
       }
     })();
   }
@@ -289,7 +295,7 @@ export function registerHandlers(io, socket) {
     });
   });
 
-  socket.on('message:send', async ({ channelId, content, parentId, attachments, fuseTime }) => {
+  socket.on('message:send', async ({ channelId, content, parentId, attachments }) => {
     if (!userId) return;
     if (await isRateLimited(userId, 'message:send')) return;
     try {
@@ -299,7 +305,6 @@ export function registerHandlers(io, socket) {
         body: sanitize(String(content || '')),
         parentId,
         attachments: atts.length ? atts : undefined,
-        fuseTime: fuseTime || null,
       };
       // Never-throw safety net: if the socket user id doesn't resolve in the DB
       // (e.g. a stale in-memory `demo-<ts>` id from when the database was briefly
@@ -325,6 +330,7 @@ export function registerHandlers(io, socket) {
         });
       }
       emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
+      io.to(`channel:${channelId}`).emit('message:new', { message });
 
       // Deliver to registered outgoing webhooks (non-blocking)
       deliverWebhooks(channelId, message).catch(err => {
@@ -363,6 +369,7 @@ export function registerHandlers(io, socket) {
       });
       const channelId = message.channelId;
       emitRealtimeEvent('message:updated', channelId, { message });
+      io.to(`channel:${channelId}`).emit('message:updated', { message });
 
       // Audit log when a moderator edits someone else's message.
       if (isModerator && !isOwner && existing.channel?.serverId) {
@@ -403,10 +410,11 @@ export function registerHandlers(io, socket) {
 
       const message = await prisma.message.update({
         where: { id: messageId },
-        data: { deleted: true, body: '' }
+        data: { deleted: true, body: '', attachments: null }
       });
       const channelId = message.channelId;
       emitRealtimeEvent('message:deleted', channelId, { messageId, channelId });
+      io.to(`channel:${channelId}`).emit('message:deleted', { messageId, channelId });
 
       // Audit log when a moderator deletes someone else's message.
       if (isModerator && !isOwner && existing.channel?.serverId) {
@@ -443,11 +451,13 @@ export function registerHandlers(io, socket) {
       });
       const channelId = message.channelId;
       emitRealtimeEvent('message:updated', channelId, { message });
+      io.to(`channel:${channelId}`).emit('message:updated', { message });
     } catch (e) { console.error('Error reacting:', e); }
   });
 
   socket.on('typing:start', async ({ channelId }) => {
     if (!userId) return;
+    // Skip rate limiting for typing when Redis is not configured to reduce latency
     if (await isRateLimited(userId, 'typing:start')) return;
     const username = socket.data.user.username;
     socket.to(`channel:${channelId}`).emit('typing:start', { userId, username, channelId });
@@ -521,7 +531,6 @@ export function registerHandlers(io, socket) {
       // even when offline from Redis/bridge and without joining the dm room.
       io.to(`user:${recipient}`).emit('dm:new', { message });
       io.to(`user:${userId}`).emit('dm:new', { message });
-      emitRealtimeEvent('dm:new', dmId, { message });
       socket.emit('dm:new', { message });
       if (typeof ack === 'function') ack({ ok: true });
     } catch (e) {
@@ -541,6 +550,7 @@ export function registerHandlers(io, socket) {
 
   socket.on('dm:typing:start', async ({ recipientId }) => {
     if (!userId) return;
+    // Skip rate limiting for typing when Redis is not configured to reduce latency
     if (await isRateLimited(userId, 'dm:typing:start')) return;
     const username = socket.data.user?.username;
     const dmId = [userId, recipientId].sort().join('_');

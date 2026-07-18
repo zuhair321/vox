@@ -17,7 +17,7 @@
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import jwt from 'jsonwebtoken';
-import { env } from '../lib/env.js';
+import { env, isAllowedOrigin } from '../lib/env.js';
 import { getState } from '../services/chat.service.js';
 import { mapChannel, mapMessage, mapMember } from '../lib/mappers.js';
 import { registerHandlers } from './handlers.js';
@@ -28,7 +28,7 @@ let io = null;
 export async function initSockets(server) {
   io = new Server(server, {
     cors: {
-      origin: env.corsOrigins,
+      origin: (origin, cb) => cb(null, !origin || isAllowedOrigin(origin)),
       methods: ['GET', 'POST'],
       credentials: true,
     },

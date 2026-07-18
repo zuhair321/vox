@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Shield, Zap } from 'lucide-react';
+import { LogIn, Shield, Zap, Eye, EyeOff } from 'lucide-react';
 import { useUiStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 
 const LoginDummy: React.FC = () => {
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
   const { addToast } = useUiStore();
   const { login, isLoading } = useAuthStore();
@@ -17,8 +19,9 @@ const LoginDummy: React.FC = () => {
     setError('');
 
     try {
-      const result = await login(emailOrUsername.trim(), password);
+      const result = await login(emailOrUsername.trim(), password, rememberMe);
       if (result.twoFactorRequired) {
+        sessionStorage.setItem('vox_remember_me_2fa', rememberMe ? '1' : '0');
         navigate('/2fa');
         return;
       }
@@ -104,14 +107,33 @@ const LoginDummy: React.FC = () => {
               <Zap size={16} aria-hidden="true" />
               <input
                 id="vox-login-password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
                 autoComplete="off"
                 placeholder="enter passcode"
               />
+              <button
+                type="button"
+                className="vox-login-eye"
+                onClick={() => setShowPassword(v => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}
+              </button>
             </div>
+          </div>
+
+          <div className="vox-login-remember">
+            <input
+              type="checkbox"
+              id="vox-remember-me"
+              checked={rememberMe}
+              onChange={e => setRememberMe(e.target.checked)}
+            />
+            <label htmlFor="vox-remember-me">Remember me</label>
           </div>
 
           {error && (

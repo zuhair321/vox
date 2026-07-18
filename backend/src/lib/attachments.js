@@ -1,6 +1,6 @@
 // Shared attachment normalization used by channel messages, DMs, and socket handlers.
 
-export const ALLOWED_ATTACHMENT_KINDS = new Set(['image', 'video', 'file']);
+export const ALLOWED_ATTACHMENT_KINDS = new Set(['image', 'video', 'audio', 'file']);
 
 export function normalizeAttachments(raw) {
   if (!Array.isArray(raw)) return [];

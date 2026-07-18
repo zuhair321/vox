@@ -7,6 +7,23 @@ export interface ElectronWindowControls {
   isMaximized: () => Promise<boolean>;
 }
 
+export interface UpdaterState {
+  available: boolean;
+  version: string | null;
+  releaseNotes: string | null;
+  downloaded: boolean;
+  progress: number;
+  error: string | null;
+}
+
+export interface ElectronUpdaterAPI {
+  check: () => Promise<{ status: string; error?: string }>;
+  download: () => Promise<{ status: string; error?: string }>;
+  quitAndInstall: () => Promise<void>;
+  getState: () => Promise<UpdaterState>;
+  onState: (callback: (state: UpdaterState) => void) => () => void;
+}
+
 export interface ElectronAPI {
   notify: (title: string, body: string) => void;
   flashFrame: () => void;
@@ -21,6 +38,7 @@ export interface ElectronAPI {
     onRequest: (handler: () => void) => () => void;
     capture?: (sourceId: string) => Promise<any>;
   };
+  updater: ElectronUpdaterAPI;
 }
 
 declare global {

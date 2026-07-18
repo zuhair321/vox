@@ -1,4 +1,14 @@
-﻿-- CreateTable
+﻿node.exe : warn The configuration property `package.json#prisma` is deprecated and will be removed in Prisma 7. Please 
+migrate to a Prisma config file (e.g., `prisma.config.ts`).
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warn The config...ma.config.ts`).:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+For more information, see: https://pris.ly/prisma-config
+
+-- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "email" TEXT NOT NULL,
@@ -134,7 +144,6 @@ CREATE TABLE "Message" (
     "pinned" BOOLEAN NOT NULL DEFAULT false,
     "isForumPost" BOOLEAN NOT NULL DEFAULT false,
     "tags" JSONB,
-    "fuseTime" DATETIME,
     CONSTRAINT "Message_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "Message_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Message_parentId_fkey" FOREIGN KEY ("parentId") REFERENCES "Message" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -176,6 +185,9 @@ CREATE TABLE "ServerMember" (
     "nick" TEXT,
     "joinedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "mutedUntil" DATETIME,
+    "deafened" BOOLEAN NOT NULL DEFAULT false,
+    "timeoutUntil" DATETIME,
+    "customPowers" JSONB,
     CONSTRAINT "ServerMember_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "Server" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "ServerMember_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -217,38 +229,6 @@ CREATE TABLE "AuditLog" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AuditLog_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "Server" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "AuditLog_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE "Poll" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "channelId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "question" TEXT NOT NULL,
-    "ended" BOOLEAN NOT NULL DEFAULT false,
-    "maxVotes" INTEGER NOT NULL DEFAULT 1,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "expiresAt" DATETIME,
-    CONSTRAINT "Poll_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "Poll_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE "PollOption" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "pollId" TEXT NOT NULL,
-    "text" TEXT NOT NULL,
-    CONSTRAINT "PollOption_pollId_fkey" FOREIGN KEY ("pollId") REFERENCES "Poll" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE "PollVote" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "optionId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "PollVote_optionId_fkey" FOREIGN KEY ("optionId") REFERENCES "PollOption" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "PollVote_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -416,20 +396,6 @@ CREATE TABLE "UserNote" (
 );
 
 -- CreateTable
-CREATE TABLE "ScheduledMessage" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "channelId" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "body" TEXT NOT NULL,
-    "attachments" JSONB,
-    "scheduledAt" DATETIME NOT NULL,
-    "sent" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "ScheduledMessage_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
-    CONSTRAINT "ScheduledMessage_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
 CREATE TABLE "ServerTemplate" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
@@ -517,17 +483,6 @@ CREATE TABLE "UserBadge" (
     "assignedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "UserBadge_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "UserBadge_badgeId_fkey" FOREIGN KEY ("badgeId") REFERENCES "Badge" ("id") ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- CreateTable
-CREATE TABLE "Sticker" (
-    "id" TEXT NOT NULL PRIMARY KEY,
-    "name" TEXT NOT NULL,
-    "url" TEXT NOT NULL,
-    "serverId" TEXT,
-    "type" TEXT NOT NULL DEFAULT 'PNG',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "Sticker_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "Server" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -622,11 +577,131 @@ CREATE TABLE "Feedback" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- CreateTable
+CREATE TABLE "ChannelPermission" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "channelId" TEXT NOT NULL,
+    "roleId" TEXT,
+    "userId" TEXT,
+    "allow" BIGINT NOT NULL DEFAULT 0,
+    "deny" BIGINT NOT NULL DEFAULT 0,
+    CONSTRAINT "ChannelPermission_channelId_fkey" FOREIGN KEY ("channelId") REFERENCES "Channel" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "ModerationLog" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "serverId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "targetId" TEXT NOT NULL,
+    "targetType" TEXT NOT NULL DEFAULT 'user',
+    "moderatorId" TEXT NOT NULL,
+    "reason" TEXT,
+    "duration" INTEGER,
+    "evidence" JSONB,
+    "appealed" BOOLEAN NOT NULL DEFAULT false,
+    "appealReason" TEXT,
+    "appealStatus" TEXT NOT NULL DEFAULT 'NONE',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "expiresAt" DATETIME,
+    CONSTRAINT "ModerationLog_moderatorId_fkey" FOREIGN KEY ("moderatorId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "AutoModRule" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "serverId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "triggerType" TEXT NOT NULL,
+    "triggerConfig" JSONB NOT NULL,
+    "exemptRoles" JSONB NOT NULL,
+    "exemptChannels" JSONB NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "AutoModAction" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "ruleId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "config" JSONB,
+    "order" INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT "AutoModAction_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "AutoModRule" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "Appeal" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "moderationLogId" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "evidence" JSONB,
+    "stage" TEXT NOT NULL DEFAULT 'SUBMITTED',
+    "reviewerId" TEXT,
+    "reviewNotes" TEXT,
+    "reviewedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "Appeal_moderationLogId_fkey" FOREIGN KEY ("moderationLogId") REFERENCES "ModerationLog" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Appeal_reviewerId_fkey" FOREIGN KEY ("reviewerId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "AppealMessage" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "appealId" TEXT NOT NULL,
+    "authorId" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "AppealMessage_appealId_fkey" FOREIGN KEY ("appealId") REFERENCES "Appeal" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "AppealMessage_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "CustomPower" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "serverId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "icon" TEXT,
+    "grants" JSONB NOT NULL,
+    "grantableBy" JSONB NOT NULL,
+    "maxHolders" INTEGER,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "ModerationWebhook" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "serverId" TEXT NOT NULL,
+    "url" TEXT NOT NULL,
+    "secret" TEXT NOT NULL,
+    "events" JSONB NOT NULL,
+    "active" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "ModerationConfig" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "serverId" TEXT NOT NULL,
+    "escalationRules" JSONB NOT NULL,
+    "quarantineEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "quarantineAction" TEXT NOT NULL DEFAULT 'DELETE_MESSAGE',
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ModerationConfig_serverId_fkey" FOREIGN KEY ("serverId") REFERENCES "Server" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
+
+-- CreateIndex
+CREATE INDEX "Server_ownerId_idx" ON "Server"("ownerId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "AutomodConfig_serverId_key" ON "AutomodConfig"("serverId");
@@ -638,6 +713,15 @@ CREATE INDEX "Strike_serverId_userId_idx" ON "Strike"("serverId", "userId");
 CREATE UNIQUE INDEX "ServerWidget_serverId_key" ON "ServerWidget"("serverId");
 
 -- CreateIndex
+CREATE INDEX "Channel_serverId_idx" ON "Channel"("serverId");
+
+-- CreateIndex
+CREATE INDEX "Channel_categoryId_idx" ON "Channel"("categoryId");
+
+-- CreateIndex
+CREATE INDEX "Channel_serverId_createdAt_idx" ON "Channel"("serverId", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "Message_channelId_createdAt_idx" ON "Message"("channelId", "createdAt");
 
 -- CreateIndex
@@ -645,6 +729,9 @@ CREATE INDEX "Message_userId_idx" ON "Message"("userId");
 
 -- CreateIndex
 CREATE INDEX "Message_parentId_idx" ON "Message"("parentId");
+
+-- CreateIndex
+CREATE INDEX "Message_channelId_deleted_createdAt_idx" ON "Message"("channelId", "deleted", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "DmMessage_dmId_createdAt_idx" ON "DmMessage"("dmId", "createdAt");
@@ -674,13 +761,19 @@ CREATE UNIQUE INDEX "ServerMember_serverId_userId_key" ON "ServerMember"("server
 CREATE UNIQUE INDEX "Invite_code_key" ON "Invite"("code");
 
 -- CreateIndex
+CREATE INDEX "Invite_serverId_idx" ON "Invite"("serverId");
+
+-- CreateIndex
+CREATE INDEX "Invite_creatorId_idx" ON "Invite"("creatorId");
+
+-- CreateIndex
+CREATE INDEX "ServerBan_serverId_idx" ON "ServerBan"("serverId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ServerBan_serverId_userId_key" ON "ServerBan"("serverId", "userId");
 
 -- CreateIndex
 CREATE INDEX "AuditLog_serverId_createdAt_idx" ON "AuditLog"("serverId", "createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "PollVote_optionId_userId_key" ON "PollVote"("optionId", "userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Permission_channelId_role_key" ON "Permission"("channelId", "role");
@@ -710,10 +803,43 @@ CREATE UNIQUE INDEX "Block_userId_blockedId_key" ON "Block"("userId", "blockedId
 CREATE UNIQUE INDEX "Webhook_token_key" ON "Webhook"("token");
 
 -- CreateIndex
+CREATE INDEX "Webhook_serverId_idx" ON "Webhook"("serverId");
+
+-- CreateIndex
+CREATE INDEX "Webhook_channelId_idx" ON "Webhook"("channelId");
+
+-- CreateIndex
+CREATE INDEX "CustomEmoji_serverId_idx" ON "CustomEmoji"("serverId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "CustomEmoji_serverId_name_key" ON "CustomEmoji"("serverId", "name");
 
 -- CreateIndex
+CREATE INDEX "Report_reporterId_idx" ON "Report"("reporterId");
+
+-- CreateIndex
+CREATE INDEX "Report_reportedUserId_idx" ON "Report"("reportedUserId");
+
+-- CreateIndex
+CREATE INDEX "Report_serverId_idx" ON "Report"("serverId");
+
+-- CreateIndex
+CREATE INDEX "Report_status_idx" ON "Report"("status");
+
+-- CreateIndex
+CREATE INDEX "Report_messageId_idx" ON "Report"("messageId");
+
+-- CreateIndex
+CREATE INDEX "ServerRole_serverId_idx" ON "ServerRole"("serverId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ServerRole_serverId_name_key" ON "ServerRole"("serverId", "name");
+
+-- CreateIndex
+CREATE INDEX "ServerMemberRole_serverMemberId_idx" ON "ServerMemberRole"("serverMemberId");
+
+-- CreateIndex
+CREATE INDEX "ServerMemberRole_roleId_idx" ON "ServerMemberRole"("roleId");
 
 -- CreateIndex
 CREATE INDEX "MessageRead_messageId_idx" ON "MessageRead"("messageId");
@@ -726,9 +852,6 @@ CREATE UNIQUE INDEX "MessageRead_messageId_userId_key" ON "MessageRead"("message
 
 -- CreateIndex
 CREATE UNIQUE INDEX "UserNote_userId_targetId_key" ON "UserNote"("userId", "targetId");
-
--- CreateIndex
-CREATE INDEX "ScheduledMessage_scheduledAt_sent_idx" ON "ScheduledMessage"("scheduledAt", "sent");
 
 -- CreateIndex
 CREATE INDEX "ServerTemplate_ownerId_idx" ON "ServerTemplate"("ownerId");
@@ -752,10 +875,19 @@ CREATE INDEX "ServerStats_serverId_date_idx" ON "ServerStats"("serverId", "date"
 CREATE UNIQUE INDEX "ServerStats_serverId_date_key" ON "ServerStats"("serverId", "date");
 
 -- CreateIndex
+CREATE INDEX "Badge_serverId_idx" ON "Badge"("serverId");
+
+-- CreateIndex
+CREATE INDEX "UserBadge_userId_idx" ON "UserBadge"("userId");
+
+-- CreateIndex
+CREATE INDEX "UserBadge_badgeId_idx" ON "UserBadge"("badgeId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "UserBadge_userId_badgeId_key" ON "UserBadge"("userId", "badgeId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Sticker_serverId_name_key" ON "Sticker"("serverId", "name");
+CREATE INDEX "Sound_serverId_idx" ON "Sound"("serverId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Sound_serverId_name_key" ON "Sound"("serverId", "name");
@@ -798,4 +930,19 @@ CREATE INDEX "Feedback_createdAt_idx" ON "Feedback"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "Feedback_rating_idx" ON "Feedback"("rating");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelPermission_channelId_roleId_key" ON "ChannelPermission"("channelId", "roleId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ChannelPermission_channelId_userId_key" ON "ChannelPermission"("channelId", "userId");
+
+-- CreateIndex
+CREATE INDEX "ModerationLog_serverId_targetId_idx" ON "ModerationLog"("serverId", "targetId");
+
+-- CreateIndex
+CREATE INDEX "ModerationLog_serverId_createdAt_idx" ON "ModerationLog"("serverId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ModerationConfig_serverId_key" ON "ModerationConfig"("serverId");
 

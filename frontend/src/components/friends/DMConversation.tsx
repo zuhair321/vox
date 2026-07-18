@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
@@ -7,11 +8,19 @@ import { useSocketStore } from '../../stores/socketStore';
 import MessageInput from '../chat/MessageInput';
 import AttachmentList from '../chat/AttachmentList';
 import ConfirmDialog from '../settings/ConfirmDialog';
+import ContextMenu from '../ui/ContextMenu';
 import { useUiStore } from '../../stores/uiStore';
 import { fetchDMMessages } from '../../api/dm';
 import { api, API_BASE } from '../../api/client';
 import { format } from 'date-fns';
 import StatusDot from '../void/StatusDot';
+
+const IconEdit = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+);
+const IconDelete = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+);
 
 function resolveMediaUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
@@ -76,6 +85,9 @@ const DMConversation: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [popover, setPopover] = useState<{ msgId: string; x: number; y: number } | null>(null);
+  const popoverRef = useRef<HTMLButtonElement | null>(null);
 
   const saveEdit = async (msgId: string) => {
     if (!editValue.trim() || !dmId) return;
@@ -102,6 +114,24 @@ const DMConversation: React.FC = () => {
       addToast(e?.message || 'Delete failed', 'error');
     }
   };
+
+  // Close the hover action popover on outside click / Escape.
+  useEffect(() => {
+    if (!popover) return;
+    const onPointer = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-vox-context-menu]')) return;
+      if (popoverRef.current && popoverRef.current.contains(target)) return;
+      setPopover(null);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPopover(null); };
+    window.addEventListener('mousedown', onPointer, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onPointer, true);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [popover]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -149,8 +179,40 @@ const DMConversation: React.FC = () => {
             try { myId = JSON.parse(localStorage.getItem('vox_user') || '{}')?.id || ''; } catch {}
             const isOwn = msg.senderId === myId;
             const senderAvatar = resolveMediaUrl(msg.sender?.avatarUrl);
+            const menuOpen = popover?.msgId === msg.id;
             return (
-            <div key={msg.id} className={`dm-message-row dm-message-animate`} style={{ display: 'flex', gap: '16px', animationDelay: `${Math.min(idx * 30, 300)}ms`, flexDirection: isOwn ? 'row-reverse' : 'row' }}>
+            <div key={msg.id} className={`dm-message-row dm-message-animate`} style={{ display: 'flex', gap: '16px', animationDelay: `${Math.min(idx * 30, 300)}ms`, flexDirection: isOwn ? 'row-reverse' : 'row', position: 'relative' }}
+              onMouseEnter={() => setHoveredId(msg.id)}
+              onMouseLeave={() => setHoveredId((cur) => (cur === msg.id ? null : cur))}
+            >
+              {/* Discord-style hover action chevron */}
+              {!msg.deleted && hoveredId === msg.id && editingId !== msg.id && (
+                <button
+                  type="button"
+                  ref={menuOpen ? popoverRef : undefined}
+                  title="More"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (popover?.msgId === msg.id) { setPopover(null); return; }
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                    const MENU_W = 200;
+                    setPopover({ msgId: msg.id, x: Math.max(8, rect.right - MENU_W), y: rect.bottom + 8 });
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: '-10px',
+                    left: '12px',
+                    width: '28px', height: '28px', border: '1px solid var(--rim)', background: 'var(--dark-matter)',
+                    color: 'var(--ash)', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', borderRadius: '6px', fontSize: '14px', zIndex: 20,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLElement).style.color = 'var(--ghost-white)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--dark-matter)'; (e.currentTarget as HTMLElement).style.color = 'var(--ash)'; }}
+                >
+                  ⋯
+                </button>
+              )}
               <div className="octagon" style={{ width: '32px', height: '32px', backgroundColor: isOwn ? 'var(--accent)' : 'var(--chaos)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {senderAvatar ? (
                   <img src={senderAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -192,15 +254,23 @@ const DMConversation: React.FC = () => {
                         Empty message
                       </div>
                     )}
-                    {isOwn && !msg.deleted && msg.content && (
-                      <div style={{ display: 'flex', gap: '6px', marginTop: '4px', justifyContent: isOwn ? 'flex-end' : 'flex-start' }}>
-                        <button type="button" onClick={() => { setEditingId(msg.id); setEditValue(msg.content || ''); }} style={{ padding: '4px 10px', fontSize: '11px', background: 'var(--obsidian)', color: 'var(--ash)', border: '1px solid var(--rim)', cursor: 'pointer', fontFamily: "'Share Tech Mono', monospace" }}>EDIT</button>
-                        <button type="button" onClick={() => setDeletingId(msg.id)} style={{ padding: '4px 10px', fontSize: '11px', background: 'var(--crimson)', color: 'white', border: '1px solid var(--crimson)', cursor: 'pointer', fontFamily: "'Share Tech Mono', monospace" }}>DELETE</button>
-                      </div>
-                    )}
                   </>
                 )}
                 <AttachmentList attachments={msg.attachments} />
+                {menuOpen && popover && createPortal(
+                  <ContextMenu
+                    x={popover.x}
+                    y={popover.y}
+                    items={[
+                      ...(isOwn
+                        ? [{ id: 'edit', label: 'Edit Message', icon: <IconEdit />, onClick: () => { setEditingId(msg.id); setEditValue(msg.content || ''); setPopover(null); } }]
+                        : []),
+                      { id: 'delete', label: 'Delete Message', icon: <IconDelete />, danger: true, onClick: () => { setDeletingId(msg.id); setPopover(null); } },
+                    ]}
+                    onClose={() => setPopover(null)}
+                  />,
+                  document.body
+                )}
               </div>
             </div>
             );

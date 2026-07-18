@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Shield, Zap, User, Mail } from 'lucide-react';
+import { LogIn, Shield, Zap, User, Mail, Eye, EyeOff } from 'lucide-react';
 import { useUiStore } from '../stores/uiStore';
 import { useAuthStore } from '../stores/authStore';
 
@@ -8,6 +8,7 @@ const RegisterPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { addToast } = useUiStore();
@@ -134,13 +135,22 @@ const RegisterPage: React.FC = () => {
               <Zap size={16} aria-hidden="true" />
               <input
                 id="vox-reg-password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="off"
                 placeholder="min 8 characters"
               />
+              <button
+                type="button"
+                className="vox-login-eye"
+                onClick={() => setShowPassword(v => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}
+              </button>
             </div>
           </div>
 

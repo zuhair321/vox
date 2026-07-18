@@ -17,9 +17,9 @@ import {
 } from './tokens.js';
 import jwt from 'jsonwebtoken';
 
-const { authenticator } = otplib;
-
-// Palette used to assign a deterministic-ish avatar color to new users.
+// otplib v13 exposes a functional API (generateSecret / generateURI / verify)
+// rather than the legacy `authenticator` instance.
+const { generateSecret, generateURI, verify: verifyTotp } = otplib;
 const AVATAR_COLORS = [
   '#5865f2', '#eb459e', '#3ba55c', '#faa61a',
   '#9b59b6', '#1abc9c', '#e67e22', '#e74c3c',
@@ -197,6 +197,15 @@ async function resolveLocation(ipAddress) {
 }
 
 // ── Login (branches on 2FA) ──────────────────────────────────
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+// Returns a generic error for both "no account" and "wrong password" so an
+// attacker cannot enumerate which emails/usernames are registered.
+function throwAuthFailure() {
+  throw new HttpError(401, 'Invalid email/username or password.');
+}
+
 export async function login({ emailOrUsername, password }, deviceContext = {}) {
   const identifier = String(emailOrUsername || '').trim().toLowerCase();
   if (!identifier || !password) {
@@ -207,42 +216,55 @@ export async function login({ emailOrUsername, password }, deviceContext = {}) {
     where: { OR: [{ email: identifier }, { username: identifier }] },
   });
 
-  if (!user) {
-    throw new HttpError(404, 'No account found with that email or username. Please register first.');
+  // Enforce an active lockout (manual admin ban or brute-force lock) BEFORE any
+  // password work, so a locked account is rejected immediately and uniformly.
+  if (user?.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+    const mins = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
+    throw new HttpError(423, `Account temporarily locked. Try again in ${mins} minute(s).`);
   }
 
-  if (await bcrypt.compare(String(password), user.passwordHash)) {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { loginAttempts: 0, lastLoginAt: new Date() },
-    });
+  // Always run a dummy bcrypt compare so timing doesn't reveal account existence.
+  const dummyHash =
+    '$2a$10$0000000000000000000000000000000000000000000000000000';
+  const passwordOk = user
+    ? await bcrypt.compare(String(password), user.passwordHash)
+    : await bcrypt.compare(String(password), dummyHash);
 
-    if (user.twoFactorEnabled) {
-      const tempToken = jwtTemp(user, '5m');
-      // Store device context for use after 2FA completion
-      pendingTwoFactorContext.set(user.id, {
-        deviceInfo: deviceContext.deviceInfo,
-        ipAddress: deviceContext.ipAddress,
-        userAgent: deviceContext.userAgent,
-      });
-      return { twoFactorRequired: true, tempToken };
+  if (!user || !passwordOk) {
+    if (user) {
+      const attempts = (user.loginAttempts || 0) + 1;
+      const data = { loginAttempts: attempts };
+      // Lock the account once the threshold is reached.
+      if (attempts >= MAX_LOGIN_ATTEMPTS) {
+        data.lockedUntil = new Date(Date.now() + LOCKOUT_DURATION_MS);
+      }
+      await prisma.user.update({ where: { id: user.id }, data }).catch(() => {});
     }
-
-    const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
-    
-    // Record login history and detect new logins
-    const loginAlert = await recordLoginHistory(user.id, deviceContext);
-    
-    return { user: publicUser(user), tokens, loginAlert };
+    throwAuthFailure();
   }
 
-  // Wrong password — increment attempts
-  const attempts = (user.loginAttempts || 0) + 1;
   await prisma.user.update({
     where: { id: user.id },
-    data: { loginAttempts: attempts },
+    data: { loginAttempts: 0, lastLoginAt: new Date() },
   });
-  throw new HttpError(401, 'Incorrect password. Please try again.');
+
+  if (user.twoFactorEnabled) {
+    const tempToken = jwtTemp(user, '5m');
+    // Store device context for use after 2FA completion
+    pendingTwoFactorContext.set(user.id, {
+      deviceInfo: deviceContext.deviceInfo,
+      ipAddress: deviceContext.ipAddress,
+      userAgent: deviceContext.userAgent,
+    });
+    return { twoFactorRequired: true, tempToken };
+  }
+
+  const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
+
+  // Record login history and detect new logins
+  const loginAlert = await recordLoginHistory(user.id, deviceContext);
+
+  return { user: publicUser(user), tokens, loginAlert };
 }
 
 // ── 2FA setup ────────────────────────────────────────────────
@@ -250,13 +272,13 @@ export async function beginTwoFactorSetup(userId) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new HttpError(404, 'User not found.');
 
-  const secret = authenticator.generateSecret();
+  const secret = generateSecret();
   await prisma.user.update({
     where: { id: userId },
     data: { twoFactorSecret: encrypt(secret) },
   });
 
-  const otpauth = authenticator.keyuri(user.username, env.twoFactor.appName, secret);
+  const otpauth = generateURI({ secret, label: user.username, issuer: env.twoFactor.appName });
   const { default: QRCode } = await import('qrcode');
   const qr = await QRCode.toDataURL(otpauth);
 
@@ -270,8 +292,8 @@ export async function confirmTwoFactorSetup(userId, code) {
   }
 
   const secret = decrypt(user.twoFactorSecret);
-  const ok = authenticator.verify({ token: String(code || '').trim(), secret });
-  if (!ok) throw new HttpError(400, 'Invalid 2FA code.');
+  const ok = await verifyTotp({ token: String(code || '').trim(), secret });
+  if (!ok?.valid) throw new HttpError(400, 'Invalid 2FA code.');
 
   await prisma.user.update({
     where: { id: userId },
@@ -295,8 +317,8 @@ export async function completeTwoFactorLogin(tempToken, code) {
   }
 
   const secret = decrypt(user.twoFactorSecret);
-  const ok = authenticator.verify({ token: String(code || '').trim(), secret });
-  if (!ok) throw new HttpError(400, 'Invalid 2FA code.');
+  const ok = await verifyTotp({ token: String(code || '').trim(), secret });
+  if (!ok?.valid) throw new HttpError(400, 'Invalid 2FA code.');
 
   const deviceContext = pendingTwoFactorContext.get(user.id) || {};
   pendingTwoFactorContext.delete(user.id);

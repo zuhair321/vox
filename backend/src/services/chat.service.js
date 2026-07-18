@@ -50,7 +50,11 @@ let fallbackMessages = [
 
 function useFallback(error) {
   if (databaseAvailable) {
-    console.warn('[vox] database unavailable; using in-memory demo state:', error.message);
+    // Only warn once to reduce spam
+    if (!global.__voxFallbackWarned) {
+      console.warn('[vox] database unavailable; using in-memory demo state:', error.message);
+      global.__voxFallbackWarned = true;
+    }
   }
   databaseAvailable = false;
 }
@@ -147,6 +151,7 @@ export async function getRecentMessages(limit = 50, userId = null) {
   if (!databaseAvailable) return fallbackMessages.slice(-limit);
 
   return prismaReplica.message.findMany({
+    where: { deleted: false },
     take: Math.min(limit, 100),
     orderBy: { createdAt: 'asc' },
     include: MESSAGE_INCLUDE,
@@ -161,7 +166,7 @@ export async function getRecentMessagesForChannel(channelId, limit = 50) {
   if (cached) return cached;
 
   const messages = await prismaReplica.message.findMany({
-    where: { channelId },
+    where: { channelId, deleted: false },
     take: Math.min(limit, 100),
     orderBy: { createdAt: 'asc' },
     include: MESSAGE_INCLUDE,
@@ -186,7 +191,7 @@ export async function getMessagesBefore(cursorId, limit = 50) {
 
   return prismaReplica.message.findMany({
     take: safeLimit,
-    where: { channelId: cursorMsg.channelId, createdAt: { lt: cursorMsg.createdAt } },
+    where: { channelId: cursorMsg.channelId, deleted: false, createdAt: { lt: cursorMsg.createdAt } },
     orderBy: { createdAt: 'asc' },
     include: MESSAGE_INCLUDE,
   });

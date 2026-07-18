@@ -59,8 +59,9 @@ export const useFriendStore = create<FriendStore>((set, get) => ({
       const blocked = data.filter(r => r.status === 'blocked').map(r => r.userId === myId ? r.friend : r.user);
 
       set({ friends, incoming, outgoing, blocked, loading: false });
-    } catch (e) {
+    } catch (e: any) {
       set({ loading: false });
+      console.error('[FriendStore] fetchFriends failed:', e?.message || e);
     }
   },
 

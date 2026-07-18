@@ -33,7 +33,10 @@ const SECTIONS: { title: string; items: ShortcutDef[] }[] = [
   },
   {
     title: 'Voice',
-    items: [{ keys: ['`'], desc: 'Push to talk' }],
+    items: [
+      { keys: ['`'], desc: 'Push to talk' },
+      { keys: ['Ctrl', 'Shift', 'R'], desc: 'Toggle voice note recording' },
+    ],
   },
   {
     title: 'Other',

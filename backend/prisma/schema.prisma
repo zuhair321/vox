@@ -1,11 +1,24 @@
-// Prisma Schema for VOX Backend — SQLite
+// Prisma Schema for VOX Backend — PostgreSQL (production) / SQLite (dev)
+//
+// The provider is "postgresql" for production. To run locally with zero setup,
+// you can switch the provider to "sqlite" and set
+// DATABASE_URL="file:./vox.db" (see backend/.env.example). The schema is written
+// to be compatible with both engines: it avoids SQLite-only constructs
+// (no String[] scalar lists) so the same models map cleanly to Postgres.
+//
+// Migrating:
+//   1. Set provider = "postgresql" (already the default) and DATABASE_URL to your
+//      Postgres connection string.
+//   2. npx prisma migrate dev --name init   (creates the DB + migration)
+//      or  npx prisma db push                (no migration history, quick start)
+//   3. For production: npx prisma migrate deploy
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -51,12 +64,9 @@ model User {
   blocks          Block[]         @relation("BlockUser")
   blockedBy       Block[]         @relation("BlockedUser")
   reports         Report[]        @relation("ReportReporter")
-  polls           Poll[]
-  pollVotes       PollVote[]
   reportedBy      Report[]        @relation("ReportedUser")
   userNotes       UserNote[]      @relation("UserNoteAuthor")
   notesAbout      UserNote[]      @relation("UserNoteTarget")
-  scheduledMsgs   ScheduledMessage[]
   templates       ServerTemplate[]
   apiKeys         ApiKey[]
   pinnerPins      PinNotification[] @relation("PinPinner")
@@ -72,6 +82,9 @@ model User {
   voiceSettings   Json?   // { quality, region, noiseSuppression, echoCancellation, autoGain }
   notificationSettings NotificationSettings[]
   integrations      Integration[]
+  moderationLogs    ModerationLog[] @relation("ModerationLogModerator")
+  appealReviews     Appeal[] @relation("AppealReviewer")
+  appealMessages    AppealMessage[]
 }
 
 // ─── Server ──────────────────────────────────────────────────────
@@ -114,9 +127,9 @@ model Server {
   widgets    ServerWidget[]
   stats      ServerStats[]
   badges     Badge[]
-  stickers   Sticker[]
   sounds     Sound[]
   automodConfig AutomodConfig?
+  moderationConfig ModerationConfig?
   strikes    Strike[]
 
   @@index([ownerId])
@@ -194,10 +207,12 @@ model Channel {
   category    Category?    @relation(fields: [categoryId], references: [id])
   messages    Message[]
   permissions Permission[]
+  channelPermissions ChannelPermission[]
   webhooks    Webhook[]
   archiveConfig ChannelArchiveConfig?
-  polls       Poll[]
   pinNotifications PinNotification[]
+  stageSpeakers StageSpeaker[]
+  announcementFollows AnnouncementFollow[]
 
   @@index([serverId])
   @@index([categoryId])
@@ -222,7 +237,6 @@ model Message {
   pinned         Boolean  @default(false)
   isForumPost    Boolean  @default(false)
   tags           Json?
-  fuseTime       DateTime?
 
   channel        Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
   author         User?      @relation("MessageAuthor", fields: [userId], references: [id])
@@ -277,13 +291,17 @@ model Friend {
 // ─── ServerMember ────────────────────────────────────────────────
 
 model ServerMember {
-  id       String   @id @default(uuid())
-  serverId String
-  userId   String
-  role     String   @default("MEMBER")
-  nick     String?
-  joinedAt DateTime @default(now())
-  mutedUntil DateTime?
+  id          String   @id @default(uuid())
+  serverId    String
+  userId      String
+  role        String   @default("MEMBER")
+  nick        String?
+  joinedAt    DateTime @default(now())
+  mutedUntil  DateTime?
+  deafened    Boolean  @default(false)
+  timeoutUntil DateTime?
+  
+  customPowers Json?
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -343,49 +361,6 @@ model AuditLog {
   user   User   @relation(fields: [userId], references: [id])
 
   @@index([serverId, createdAt])
-}
-
-// ─── Poll ────────────────────────────────────────────────────────
-
-model Poll {
-  id        String   @id @default(uuid())
-  channelId String
-  userId    String
-  question  String
-  options   PollOption[]
-  ended     Boolean  @default(false)
-  maxVotes  Int      @default(1) // 0 = unlimited
-  createdAt DateTime @default(now())
-  expiresAt DateTime?
-
-  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([channelId])
-  @@index([userId])
-}
-
-model PollOption {
-  id      String @id @default(uuid())
-  pollId  String
-  text    String
-  votes   PollVote[]
-
-  poll Poll @relation(fields: [pollId], references: [id], onDelete: Cascade)
-
-  @@index([pollId])
-}
-
-model PollVote {
-  id       String @id @default(uuid())
-  optionId String
-  userId   String
-  createdAt DateTime @default(now())
-
-  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
-  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([optionId, userId])
 }
 
 // ─── Category ────────────────────────────────────────────────────
@@ -612,24 +587,6 @@ model UserNote {
   @@unique([userId, targetId])
 }
 
-// ─── ScheduledMessage ──────────────────────────────────────────
-
-model ScheduledMessage {
-  id          String   @id @default(uuid())
-  channelId   String
-  userId      String
-  body        String
-  attachments Json?
-  scheduledAt DateTime
-  sent        Boolean  @default(false)
-  createdAt   DateTime @default(now())
-
-  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([scheduledAt, sent])
-}
-
 // ─── ServerTemplate ────────────────────────────────────────────
 
 model ServerTemplate {
@@ -746,22 +703,6 @@ model UserBadge {
   @@unique([userId, badgeId])
   @@index([userId])
   @@index([badgeId])
-}
-
-// ─── Sticker (server packs + global stickers) ──
-
-model Sticker {
-  id        String   @id @default(uuid())
-  name      String
-  url       String
-  serverId  String?  // null = global sticker
-  type      String   @default("PNG") // PNG | APNG | LOTTIE | GIF
-  createdAt DateTime @default(now())
-
-  server Server? @relation(fields: [serverId], references: [id], onDelete: Cascade)
-
-  @@unique([serverId, name])
-  @@index([serverId])
 }
 
 // ─── Sound (soundboard: server sounds + global sounds) ──
@@ -890,4 +831,228 @@ model Feedback {
   @@index([category])
   @@index([createdAt])
   @@index([rating])
+}
+
+// ─── ChannelPermission (allow/deny bitfield overrides) ──────────
+
+model ChannelPermission {
+  id        String  @id @default(uuid())
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  roleId    String?
+  userId    String?
+
+  allow     BigInt  @default(0)
+  deny      BigInt  @default(0)
+
+  @@unique([channelId, roleId])
+  @@unique([channelId, userId])
+}
+
+// ─── Moderation Enums ──────────────────────────────────────────
+
+enum ModerationActionType {
+  KICK
+  BAN
+  TEMPBAN
+  UNBAN
+  TIMEOUT
+  UNTIMEOUT
+  MUTE
+  UNMUTE
+  DEAFEN
+  UNDEAFEN
+  WARN
+  DELETE_MESSAGE
+  BULK_DELETE
+  NICKNAME_CHANGE
+  ROLE_ASSIGN
+  ROLE_REMOVE
+  CHANNEL_LOCK
+  CHANNEL_UNLOCK
+  SLOWMODE_SET
+  VERIFICATION_SET
+}
+
+enum AppealStatus {
+  NONE
+  PENDING
+  APPROVED
+  DENIED
+}
+
+enum AppealStage {
+  SUBMITTED
+  UNDER_REVIEW
+  AWAITING_RESPONSE
+  APPROVED
+  DENIED
+  ESCALATED
+}
+
+enum AutoModTriggerType {
+  SPAM
+  MENTION_SPAM
+  KEYWORD
+  REGEX
+  INVITE_LINK
+  LINK
+  CAPS
+  EMOJI_SPAM
+  ATTACHMENT_SPAM
+  NEWLINE_SPAM
+  ZALGO_TEXT
+  CUSTOM_ML
+}
+
+enum AutoModActionType {
+  BLOCK_MESSAGE
+  SEND_ALERT
+  TIMEOUT_USER
+  KICK_USER
+  BAN_USER
+  WARN_USER
+  ADD_ROLE
+  REMOVE_ROLE
+  SEND_DM
+  QUARANTINE
+  LOG_ONLY
+}
+
+// ─── ModerationLog ────────────────────────────────────────────
+
+model ModerationLog {
+  id          String   @id @default(uuid())
+  serverId    String
+  action      ModerationActionType
+  targetId    String
+  targetType  String   @default("user")
+
+  moderatorId String
+  moderator   User     @relation("ModerationLogModerator", fields: [moderatorId], references: [id])
+
+  reason      String?
+  duration    Int?
+  evidence    Json?
+
+  appealed    Boolean  @default(false)
+  appealReason String?
+  appealStatus AppealStatus @default(NONE)
+
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+
+  appeals    Appeal[]
+
+  @@index([serverId, targetId])
+  @@index([serverId, createdAt])
+}
+
+// ─── AutoModRule ──────────────────────────────────────────────
+
+model AutoModRule {
+  id          String   @id @default(uuid())
+  serverId    String
+  name        String
+  enabled     Boolean  @default(true)
+
+  triggerType AutoModTriggerType
+  triggerConfig Json
+
+  actions     AutoModAction[]
+
+  exemptRoles       Json
+  exemptChannels    Json
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── AutoModAction ────────────────────────────────────────────
+
+model AutoModAction {
+  id          String   @id @default(uuid())
+  ruleId      String
+  rule        AutoModRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  type        AutoModActionType
+  config      Json?
+  order       Int      @default(0)
+}
+
+// ─── Appeal ───────────────────────────────────────────────────
+
+model Appeal {
+  id              String   @id @default(uuid())
+  moderationLogId String
+  log             ModerationLog @relation(fields: [moderationLogId], references: [id])
+
+  reason        String
+  evidence      Json?
+
+  stage         AppealStage @default(SUBMITTED)
+  reviewerId    String?
+  reviewer      User?     @relation("AppealReviewer", fields: [reviewerId], references: [id])
+  reviewNotes   String?
+  reviewedAt    DateTime?
+
+  messages      AppealMessage[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── AppealMessage ────────────────────────────────────────────
+
+model AppealMessage {
+  id        String   @id @default(uuid())
+  appealId  String
+  appeal    Appeal   @relation(fields: [appealId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+}
+
+// ─── CustomPower ──────────────────────────────────────────────
+
+model CustomPower {
+  id          String   @id @default(uuid())
+  serverId    String
+  name        String
+  description String?
+  icon        String?
+
+  grants      Json
+  grantableBy Json     // String[]
+  maxHolders  Int?
+
+  createdAt   DateTime @default(now())
+}
+
+// ─── ModerationWebhook ────────────────────────────────────────
+
+model ModerationWebhook {
+  id          String   @id @default(uuid())
+  serverId    String
+  url         String
+  secret      String
+  events      Json     // String[]
+  active      Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+}
+
+// ─── ModerationConfig (per-server escalation + quarantine settings) ──
+
+model ModerationConfig {
+  id              String   @id @default(uuid())
+  serverId        String   @unique
+  escalationRules  Json    // Array of { warningThreshold, action, duration }
+  quarantineEnabled Boolean @default(true)
+  quarantineAction  String  @default("DELETE_MESSAGE")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 }

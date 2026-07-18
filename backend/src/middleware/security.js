@@ -1,5 +1,6 @@
 import { logger } from '../lib/logger.js';
 import { recordRequest } from '../lib/monitoring.js';
+import { isRateLimited } from '../lib/redis.js';
 
 // Security middleware for production
 export function securityMiddleware(req, res, next) {
@@ -48,40 +49,55 @@ export function requestLogger(req, res, next) {
   next();
 }
 
-// Rate limiting middleware (simple in-memory for single instance)
-const requests = new Map();
+// Rate limiting middleware.
+//
+// Primary: a Redis-backed sliding-window limiter (isRateLimited) so limits are
+// enforced consistently across all PM2 workers / instances. This replaces the
+// old per-process in-memory Map, which silently multiplied the effective limit
+// by the number of workers under cluster mode.
+//
+// Fallback: when Redis is not configured, we degrade to an in-memory limiter so
+// a single-instance dev/small deploy still gets basic protection.
+const memoryRequests = new Map();
+
+function memoryLimit(key, windowMs, maxRequests) {
+  const now = Date.now();
+  const hits = (memoryRequests.get(key) || []).filter((t) => now - t < windowMs);
+  if (hits.length >= maxRequests) return true;
+  hits.push(now);
+  memoryRequests.set(key, hits);
+  if (memoryRequests.size > 10000) {
+    for (const [k, times] of memoryRequests) {
+      memoryRequests.set(k, times.filter((t) => now - t < windowMs));
+    }
+  }
+  return false;
+}
 
 export function rateLimitMiddleware(options = {}) {
   const windowMs = options.windowMs || 60000;
   const maxRequests = options.maxRequests || 100;
-  
-  return (req, res, next) => {
-    const key = req.ip || req.connection.remoteAddress;
-    const now = Date.now();
-    
-    const userRequests = requests.get(key) || [];
-    
-    // Clean old requests
-    const recentRequests = userRequests.filter(time => now - time < windowMs);
-    
-    if (recentRequests.length >= maxRequests) {
-      logger.warn(`Rate limit exceeded for ${key}`);
+  const scope = options.scope || 'global';
+
+  return async (req, res, next) => {
+    const key = `${req.ip || req.connection.remoteAddress || 'unknown'}`;
+
+    let limited = false;
+    try {
+      limited = await isRateLimited(key, scope, maxRequests, windowMs);
+    } catch {
+      limited = memoryLimit(key, windowMs, maxRequests);
+    }
+    if (!limited) limited = memoryLimit(key, windowMs, maxRequests);
+
+    if (limited) {
+      logger.warn(`Rate limit exceeded for ${key} (scope=${scope})`);
       return res.status(429).json({
         error: 'Too many requests. Please try again later.',
         retryAfter: Math.ceil(windowMs / 1000),
       });
     }
-    
-    recentRequests.push(now);
-    requests.set(key, recentRequests);
-    
-    // Cleanup old entries periodically
-    if (requests.size > 10000) {
-      for (const [k, times] of requests) {
-        requests.set(k, times.filter(t => now - t < windowMs));
-      }
-    }
-    
+
     next();
   };
 }

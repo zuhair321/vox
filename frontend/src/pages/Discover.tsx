@@ -5,6 +5,7 @@ import { useServerStore } from '../stores/serverStore';
 import { useNavigate } from 'react-router-dom';
 import { discoverServers, joinServerById, DiscoverServer } from '../api/discover';
 import { API_BASE } from '../api/client';
+import ServerLogo from '../components/ui/ServerLogo';
 
 const CATEGORIES = [
   'ALL', 'GAMING', 'DARK ARTS', 'TECH', 'MUSIC',
@@ -292,28 +293,14 @@ const Discover: React.FC = () => {
 
                     {/* Icon + Name */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
-                      <div
-                        className="octagon"
+                      <ServerLogo
+                        src={iconUrl}
+                        name={server.name}
+                        size={48}
                         style={{
-                          width: '48px',
-                          height: '48px',
-                          overflow: 'hidden',
                           background: bannerUrl ? 'transparent' : 'linear-gradient(135deg, #3b0a12, #0f0f13)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontWeight: 800,
-                          fontSize: '18px',
-                          flexShrink: 0,
                         }}
-                      >
-                        {iconUrl ? (
-                          <img src={iconUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                        ) : (
-                          server.name.slice(0, 2).toUpperCase()
-                        )}
-                      </div>
+                      />
                       <div style={{ minWidth: 0 }}>
                         <div
                           style={{

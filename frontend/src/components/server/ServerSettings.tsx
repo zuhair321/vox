@@ -11,15 +11,16 @@ import BanList from './BanList';
 import CategoryManager from './CategoryManager';
 import WebhookPanel from './WebhookPanel';
 import EmojiPanel from './EmojiPanel';
-import StickerPanel from './StickerPanel';
 import SoundboardPanel from './SoundboardPanel';
 import BadgePanel from './BadgePanel';
 import AutomodPanel from './AutomodPanel';
 import AuditLog from './AuditLog';
 import TemplatesPanel from './TemplatesPanel';
 import WidgetPanel from './WidgetPanel';
+import ModerationCenter from '../moderation/ModerationCenter';
+import ServerLogo from '../ui/ServerLogo';
 
-type TabKey = 'OVERVIEW' | 'ROLES' | 'CATEGORIES' | 'BANS' | 'WEBHOOKS' | 'EMOJI' | 'STICKERS' | 'SOUNDBOARD' | 'BADGES' | 'AUTOMOD' | 'AUDIT' | 'TEMPLATES' | 'WIDGET';
+type TabKey = 'OVERVIEW' | 'ROLES' | 'CATEGORIES' | 'BANS' | 'WEBHOOKS' | 'EMOJI' | 'SOUNDBOARD' | 'BADGES' | 'AUTOMOD' | 'AUDIT' | 'TEMPLATES' | 'WIDGET' | 'MODERATION';
 
 interface TabItem {
   key: TabKey;
@@ -35,13 +36,13 @@ const TABS: TabItem[] = [
   { key: 'BANS', label: 'Bans', icon: '🔨', adminOnly: true },
   { key: 'WEBHOOKS', label: 'Webhooks', icon: '🔗', adminOnly: true },
   { key: 'EMOJI', label: 'Emoji', icon: '😀', adminOnly: true },
-  { key: 'STICKERS', label: 'Stickers', icon: '🎨', adminOnly: true },
   { key: 'SOUNDBOARD', label: 'Soundboard', icon: '🔊', adminOnly: true },
   { key: 'BADGES', label: 'Badges', icon: '🏅', adminOnly: true },
   { key: 'AUTOMOD', label: 'Auto-Mod', icon: '🤖', adminOnly: true },
   { key: 'AUDIT', label: 'Audit Log', icon: '📋', adminOnly: true },
   { key: 'TEMPLATES', label: 'Templates', icon: '📄', adminOnly: false },
   { key: 'WIDGET', label: 'Widget', icon: '🧩', adminOnly: true },
+  { key: 'MODERATION', label: 'Moderation', icon: '🛡️', adminOnly: true },
 ];
 
 const ServerSettings: React.FC = () => {
@@ -115,110 +116,94 @@ const ServerSettings: React.FC = () => {
       transition={{ duration: 0.2 }}
       style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}
     >
-      {/* Banner */}
-      <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Banner + Server icon */}
+      <div style={{ position: 'relative', paddingBottom: '32px' }}>
         <div style={{
-          width: '100%',
-          height: '180px',
-          background: server.banner
-            ? 'transparent'
-            : 'linear-gradient(135deg, #1a1d23 0%, #2d323b 50%, #1a1d23 100%)',
-          position: 'relative',
+          borderRadius: '12px',
           overflow: 'hidden',
         }}>
-          {server.banner && (
-            <img
-              src={`${API_BASE}${server.banner.startsWith('/') ? server.banner : '/' + server.banner}`}
-              alt=""
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
-          )}
-          {!server.banner && (
-            <div style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--shadow)',
-              fontSize: '14px',
-              letterSpacing: '0.05em',
-            }}>
-              SERVER BANNER
-            </div>
-          )}
-          {canManage && (
-            <div
-              onClick={() => bannerInputRef.current?.click()}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'rgba(0,0,0,0)',
-                cursor: 'pointer',
-                transition: 'background 0.2s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0.4)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0)')}
-            >
+          <div style={{
+            width: '100%',
+            height: '180px',
+            background: server.banner
+              ? 'transparent'
+              : 'linear-gradient(135deg, #1a1d23 0%, #2d323b 50%, #1a1d23 100%)',
+            position: 'relative',
+          }}>
+            {server.banner && (
+              <img
+                src={`${API_BASE}${server.banner.startsWith('/') ? server.banner : '/' + server.banner}`}
+                alt=""
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+              />
+            )}
+            {!server.banner && (
               <div style={{
                 position: 'absolute',
                 inset: 0,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: 0,
-                transition: 'opacity 0.2s',
-                color: 'var(--ghost-white)',
-                fontSize: '13px',
-                fontWeight: 600,
+                color: 'var(--shadow)',
+                fontSize: '14px',
                 letterSpacing: '0.05em',
               }}>
-                {server.banner ? 'CHANGE BANNER' : 'UPLOAD BANNER'}
+                SERVER BANNER
               </div>
-            </div>
-          )}
+            )}
+            {canManage && (
+              <div
+                onClick={() => bannerInputRef.current?.click()}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0)',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0.4)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0)')}
+              >
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                  color: 'var(--ghost-white)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  letterSpacing: '0.05em',
+                }}>
+                  {server.banner ? 'CHANGE BANNER' : 'UPLOAD BANNER'}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Server icon overlaid on banner */}
-        <div style={{
-          position: 'absolute',
-          bottom: '-32px',
-          left: '24px',
-          width: '64px',
-          height: '64px',
-          borderRadius: '50%',
-          overflow: 'hidden',
-          background: server.icon ? 'var(--obsidian)' : 'linear-gradient(135deg, var(--chaos), #ff6b6b)',
-          border: '4px solid var(--abyss)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-          cursor: canManage ? 'pointer' : 'default',
-        }} onClick={() => { if (canManage) fileInputRef.current?.click(); }}>
-          {server.icon ? (
-            <img
-              src={`${API_BASE}${server.icon.startsWith('/') ? server.icon : '/' + server.icon}`}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
-          ) : (
-            <div style={{
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--ghost-white)',
-              fontSize: '24px',
-              fontWeight: 700,
-            }}>
-              {server?.name[0]?.toUpperCase()}
-            </div>
-          )}
-        </div>
+        {/* Server icon overlaid on banner (outside clipped container) */}
+        <ServerLogo
+          src={server.icon ? `${API_BASE}${server.icon.startsWith('/') ? server.icon : '/' + server.icon}` : null}
+          name={server.name}
+          size={64}
+          onClick={() => { if (canManage) fileInputRef.current?.click(); }}
+          style={{
+            position: 'absolute',
+            bottom: '0px',
+            left: '24px',
+            border: '4px solid var(--abyss)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+            borderRadius: '50%',
+          }}
+        />
       </div>
 
       {/* Server name */}
@@ -345,8 +330,6 @@ const ServerSettings: React.FC = () => {
         return canManage ? <WebhookPanel serverId={server.id} /> : null;
       case 'EMOJI':
         return canManage ? <EmojiPanel serverId={server.id} /> : null;
-      case 'STICKERS':
-        return canManage ? <StickerPanel serverId={server.id} /> : null;
       case 'SOUNDBOARD':
         return canManage ? <SoundboardPanel serverId={server.id} /> : null;
       case 'BADGES':
@@ -359,6 +342,13 @@ const ServerSettings: React.FC = () => {
         return <TemplatesPanel serverId={server.id} />;
       case 'WIDGET':
         return canManage ? <WidgetPanel serverId={server.id} /> : null;
+      case 'MODERATION':
+        return canManage ? (
+          <ModerationCenter
+            serverId={server.id}
+            members={(server.members || []).map((m: any) => ({ userId: m.userId, user: m.user }))}
+          />
+        ) : null;
       default:
         return null;
     }

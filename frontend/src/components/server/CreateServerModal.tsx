@@ -25,9 +25,6 @@ const CreateServerModal: React.FC = () => {
   const [templates, setTemplates] = useState<ServerTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
 
-  if (!isCreateServerOpen) return null;
-
-  // Load public templates whenever the modal is shown.
   React.useEffect(() => {
     if (!isCreateServerOpen) return;
     listTemplates().then((d) => {
@@ -36,6 +33,8 @@ const CreateServerModal: React.FC = () => {
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCreateServerOpen]);
+
+  if (!isCreateServerOpen) return null;
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, lazy, Suspense, useRef } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { useSocketStore } from './stores/socketStore';
 import { useServerStore } from './stores/serverStore';
@@ -46,6 +46,21 @@ import { TurboModal } from './components/turbo/TurboModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useRipple } from './hooks/useRipple';
 import { useNotificationStore } from './stores/notificationStore';
+import UpdateModal from './components/ui/UpdateModal';
+
+const ChannelViewWithMessage: React.FC<{ onOpenThemes: () => void }> = ({ onOpenThemes }) => {
+  const { messageId } = useParams<{ serverId: string; channelId: string; messageId: string }>();
+  return (
+    <PanelErrorBoundary panelName="ChannelView">
+      <Sidebar onOpenThemes={onOpenThemes} />
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+        <MainContent messageId={messageId} />
+        <VoiceChannelPanel />
+      </div>
+      <MemberPanel />
+    </PanelErrorBoundary>
+  );
+};
 
 const Discover = lazy(() => import('./pages/Discover'));
 const ServerInsights = lazy(() => import('./pages/ServerInsights'));
@@ -122,19 +137,21 @@ const AppLayout = () => {
   // session flag instead of direct navigation from RegisterPage.
   // Also wait for auth initialization to complete before checking login state
   const { isInitialized } = useAuthStore();
+  const hasRedirectedRef = React.useRef(false);
   useEffect(() => {
-    // Don't do anything until auth initialization is complete
     if (!isInitialized) {
       return;
     }
     
     if (sessionStorage.getItem('vox_just_registered') === '1') {
       sessionStorage.removeItem('vox_just_registered');
+      hasRedirectedRef.current = true;
       navigate('/friends');
       return;
     }
     // If at root "/" and already logged in, go to friends (new users have no servers).
-    if (location.pathname === '/') {
+    if (!hasRedirectedRef.current && location.pathname === '/') {
+      hasRedirectedRef.current = true;
       navigate('/friends');
     }
   }, [navigate, location.pathname, isInitialized]);
@@ -152,9 +169,20 @@ const AppLayout = () => {
     },
   });
 
-  const { user, accessToken } = useAuthStore();
+  const { user, accessToken, isLoading } = useAuthStore();
 
   useEffect(() => {
+    // Don't make any auth-based routing decisions until initialization has
+    // finished restoring a remembered session (localStorage tokens) — otherwise
+    // a valid "remember me" session would be bounced to /login before getMe()
+    // resolves, then flashed back.
+    if (!isInitialized) return;
+
+    // No user yet but initialization is still re-validating a restored token
+    // (e.g. the cached user was absent) — wait for it to finish before
+    // concluding we must log in.
+    if (!user && isLoading) return;
+
     if (!user && location.pathname !== '/login') {
       navigate('/login');
       return;
@@ -169,6 +197,14 @@ const AppLayout = () => {
           localStorage.removeItem('vox_user');
         }
       }
+
+      // If auth restored a remembered session (e.g. via "remember me"), the
+      // user may already be sitting on the login/2fa/register route. Leave it
+      // for the real app instead of leaving them stuck on the login screen.
+      if (['/login', '/register', '/2fa'].includes(location.pathname)) {
+        navigate('/friends');
+      }
+
       connect();
       Promise.all([fetchServers(), fetchFriends()]).then(() => {
         const servers = useServerStore.getState().servers;
@@ -185,7 +221,7 @@ const AppLayout = () => {
         disconnect();
       }
     };
-  }, [connect, disconnect, fetchServers, fetchFriends, hydrateFromUser, navigate, user, accessToken]);
+  }, [connect, disconnect, fetchServers, fetchFriends, hydrateFromUser, navigate, user, accessToken, isInitialized, location.pathname]);
 
   return (
     <div className="app-container">
@@ -227,7 +263,6 @@ const AppLayout = () => {
         </PanelErrorBoundary>
 
         <Suspense fallback={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}><div className="spinner" /></div>}>
-          <AnimatePresence mode="wait" initial={false}>
           <Routes location={location} key={location.pathname}>
             <Route path="/invite/:code" element={<PanelErrorBoundary panelName="Invite"><InviteAccept /></PanelErrorBoundary>} />
             <Route path="/friends" element={<PanelErrorBoundary panelName="Friends"><FriendsPage /></PanelErrorBoundary>} />
@@ -269,9 +304,12 @@ const AppLayout = () => {
                 <MemberPanel />
               </PanelErrorBoundary>
             } />
+            <Route path="/channels/:serverId/:channelId/:messageId" element={
+              <ChannelViewWithMessage onOpenThemes={() => setThemeOpen(true)} />
+            } />
             <Route path="/" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Select a server or friends.</div>} />
+            <Route path="*" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Page not found.</div>} />
           </Routes>
-          </AnimatePresence>
         </Suspense>
       </div>
 
@@ -303,6 +341,9 @@ const AppLayout = () => {
 
       {/* Onboarding */}
       {showOnboarding && <OnboardingFlow username={useAuthStore.getState().user?.username || 'Operative'} onComplete={() => setShowOnboarding(false)} />}
+
+      {/* Auto-update */}
+      <UpdateModal />
     </div>
   );
 };

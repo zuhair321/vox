@@ -29,6 +29,10 @@ export async function emitRealtimeEvent(event, id, payload) {
     const ch = channelFor(event, id);
     await publisher.publish(ch, JSON.stringify(payload));
   } catch (err) {
-    console.warn('[bridge] publish failed:', err.message);
+    // Only warn once to reduce spam
+    if (!global.__bridgeWarned) {
+      console.warn('[bridge] publish failed:', err.message);
+      global.__bridgeWarned = true;
+    }
   }
 }

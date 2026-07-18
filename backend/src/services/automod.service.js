@@ -3,6 +3,19 @@
 // filters (words / links / spam), and on a violation issues an auto-strike
 // (auto-timing-out the member once they hit maxStrikes) and blocks the message.
 import { prisma } from '../lib/prisma.js';
+import {
+  detectSpam,
+  detectMentionSpam,
+  detectKeywords,
+  detectInviteLinks,
+  detectExcessiveCaps,
+  detectEmojiSpam,
+  detectZalgo,
+  detectRegex,
+  detectLinks,
+  detectAttachmentSpam,
+  detectNewlineSpam,
+} from './automod-extended.service.js';
 
 // Default blocked-word list. Kept here (not in the route) so the route can
 // import the cache-invalidator from this module without a circular import.
@@ -50,19 +63,18 @@ export function invalidateAutomodCache(serverId) {
 /**
  * @returns {Promise<{ blocked: boolean, reason?: string, timedOut?: boolean, strikeCount?: number }>}
  */
-export async function runAutomod({ serverId, userId, content }) {
+export async function runAutomod({ serverId, userId, content, channelId }) {
   if (!serverId || !userId || !content) return { blocked: false };
 
   const config = await getConfig(serverId);
   if (!config) return { blocked: false };
 
-  // Server owners/admins are exempt from auto-mod.
   try {
     const member = await prisma.serverMember.findUnique({
       where: { serverId_userId: { serverId, userId } },
     });
     if (member && ['FOUNDER', 'ADMIN'].includes(member.role)) return { blocked: false };
-  } catch { /* fall through — treat as normal member */ }
+  } catch { /* fall through */ }
 
   const text = String(content);
 
@@ -71,27 +83,53 @@ export async function runAutomod({ serverId, userId, content }) {
     if (hit) return violation({ serverId, userId, config, reason: `blocked word: "${hit}"` });
   }
 
-  if (config.filterLinks && URL_RE.test(text)) {
-    const domain = (text.match(URL_RE)?.[0] || '').toLowerCase();
-    if (KNOWN_BAD_DOMAINS.some((d) => domain.includes(d))) {
-      return violation({ serverId, userId, config, reason: 'link to a known scam domain' });
-    }
-    return violation({ serverId, userId, config, reason: 'links are not allowed here' });
-  }
-
   if (config.filterProfanity) {
     const hit = PROFANITY.find((w) => new RegExp(`\\b${escapeRe(w)}\\b`, 'i').test(text));
     if (hit) return violation({ serverId, userId, config, reason: `prohibited language: "${hit}"` });
   }
 
   if (config.filterSpam) {
-    const now = Date.now();
-    const arr = (recentSends.get(userId) || []).filter((t) => now - t < SPAM_WINDOW_MS);
-    arr.push(now);
-    recentSends.set(userId, arr);
-    if (arr.length > SPAM_MAX) {
+    if (detectSpam(userId, channelId, { maxDuplicates: SPAM_MAX })) {
       return violation({ serverId, userId, config, reason: 'spam detected — slow down' });
     }
+  }
+
+  if (config.filterLinks) {
+    if (detectLinks(text)) {
+      const domain = (text.match(URL_RE)?.[0] || '').toLowerCase();
+      if (KNOWN_BAD_DOMAINS.some((d) => domain.includes(d))) {
+        return violation({ serverId, userId, config, reason: 'link to a known scam domain' });
+      }
+      return violation({ serverId, userId, config, reason: 'links are not allowed here' });
+    }
+  }
+
+  if (detectMentionSpam(text, { maxMentions: 5, maxRoleMentions: 3, maxEveryoneMentions: 1 })) {
+    return violation({ serverId, userId, config, reason: 'mention spam detected' });
+  }
+
+  if (detectInviteLinks(text)) {
+    return violation({ serverId, userId, config, reason: 'invite links are not allowed' });
+  }
+
+  if (detectExcessiveCaps(text, { threshold: 70, minLength: 10 })) {
+    return violation({ serverId, userId, config, reason: 'excessive caps detected' });
+  }
+
+  if (detectEmojiSpam(text, { maxEmojis: 10 })) {
+    return violation({ serverId, userId, config, reason: 'emoji spam detected' });
+  }
+
+  if (detectZalgo(text)) {
+    return violation({ serverId, userId, config, reason: 'zalgo text detected' });
+  }
+
+  if (detectAttachmentSpam(text, { maxAttachments: 3 })) {
+    return violation({ serverId, userId, config, reason: 'attachment spam detected' });
+  }
+
+  if (detectNewlineSpam(text, { maxNewlines: 20 })) {
+    return violation({ serverId, userId, config, reason: 'newline spam detected' });
   }
 
   return { blocked: false };

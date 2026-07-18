@@ -7,7 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { env } from './lib/env.js';
+import { env, isAllowedOrigin } from './lib/env.js';
 import { initSockets, getIO } from './sockets/index.js';
 import { initBroadcaster } from './lib/broadcaster.js';
 import { errorHandler, notFound } from './middleware/error.js';
@@ -18,9 +18,9 @@ import {
 } from './middleware/security.js';
 import { requireAuth } from './middleware/auth.js';
 import { startDiscovery, stopDiscovery } from './lib/discovery.js';
-import { startScheduledWorker, stopScheduledWorker } from './lib/scheduled.worker.js';
 import { logMetrics } from './lib/monitoring.js';
 import { legalRouter } from './routes/legal.routes.js';
+import { monitorPerformance, monitorDatabaseQueries } from './middleware/performance.js';
 
 // ── Crash resilience ──────────────────────────────────────────
 // After an uncaughtException the process state is undefined, so the correct
@@ -68,10 +68,8 @@ const ROUTE_REGISTRY = [
   ['/api', './routes/readReceipts.routes.js', 'readReceiptRouter'],
   ['/api/admin', './routes/admin.routes.js', 'adminRouter', true],
   ['/api/turbo', './routes/turbo.routes.js', 'turboRouter'],
-  ['/api', './routes/poll.routes.js', 'pollRouter'],
   ['/api', './routes/mod.routes.js', 'modRouter'],
   ['/api', './routes/notes.routes.js', 'notesRouter'],
-  ['/api', './routes/scheduled.routes.js', 'scheduledRouter'],
   ['/api', './routes/templates.routes.js', 'templatesRouter'],
   ['/api', './routes/apikeys.routes.js', 'apiKeysRouter'],
   ['/api', './routes/archives.routes.js', 'archivesRouter'],
@@ -80,7 +78,6 @@ const ROUTE_REGISTRY = [
   ['/api', './routes/automod.routes.js', 'automodRouter'],
   ['/api', './routes/forums.routes.js', 'forumsRouter'],
   ['/api', './routes/stages.routes.js', 'stagesRouter'],
-  ['/api', './routes/stickers.routes.js', 'stickersRouter'],
   ['/api', './routes/soundboard.routes.js', 'soundboardRouter'],
   ['/api', './routes/badges.routes.js', 'badgesRouter'],
   ['/api', './routes/regions.routes.js', 'regionsRouter'],
@@ -88,6 +85,8 @@ const ROUTE_REGISTRY = [
   ['/api', './routes/notifications.routes.js', 'notificationsRouter'],
   ['/api', './routes/integrations.routes.js', 'integrationsRouter'],
   ['/api', './routes/feedback.routes.js', 'feedbackRouter'],
+  ['/api', './routes/moderation.routes.js', 'moderationRouter'],
+  ['/api', './routes/custom-powers.routes.js', 'customPowersRouter'],
 ];
 
 // Check database mode at startup. If DATABASE_URL is missing, we default to a
@@ -113,14 +112,35 @@ app.use(rateLimitMiddleware({
   windowMs: env.rateLimit?.windowMs || 60000,
   maxRequests: env.rateLimit?.maxRequests || 100,
 }));
-app.use(
-  cors({
-    origin: env.corsOrigins,
-    credentials: true,
-  }),
-);
+// Dynamic CORS: reflect the requesting origin for local-first clients.
+//
+// VOX is a desktop app (Electron) that loads the built bundle via `loadFile`
+// (origin `app://localhost` / `file://`) and talks to the backend on a
+// different port. A static origin allow-list breaks the API (and therefore
+// registration/login) whenever the renderer's real origin isn't an exact match
+// in the list — e.g. a packaged build, a preview server, or a LAN/self-signed
+// origin. To keep the app working everywhere it's deployed locally we reflect
+// the request Origin for any localhost / 127.0.0.1 / file:// / app:// / mobile
+// scheme, while still allowing the explicitly configured production origins.
+// Unknown public origins are rejected so we don't become an open CORS proxy.
+const corsOptionsDelegate = (req, callback) => {
+  const origin = req.headers.origin;
+  if (!origin || isAllowedOrigin(origin)) {
+    callback(null, { origin: origin || true, credentials: true });
+  } else {
+    callback(null, { origin: false });
+  }
+};
+
+app.use(cors(corsOptionsDelegate));
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
+
+// Performance monitoring (development only)
+if (env.NODE_ENV !== 'production') {
+  app.use(monitorPerformance());
+  app.use(monitorDatabaseQueries());
+}
 
 // ── Uploaded files (avatars / banners) ───────────────────────
 // Served statically from backend/uploads/ so the frontend can load them with a
@@ -221,7 +241,6 @@ function gracefulShutdown(signal, exitCode = 0) {
   shuttingDown = true;
   console.log(`[vox] received ${signal} — shutting down`);
   try { stopDiscovery(); } catch { /* ignore */ }
-  try { stopScheduledWorker(); } catch { /* ignore */ }
 
   const done = () => process.exit(exitCode);
   // Force-exit after 10s if close() hangs on open sockets.
@@ -243,11 +262,23 @@ async function start() {
   await initSockets(server);
   initBroadcaster();
 
+  server.once('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      // Another VOX backend already holds this port (e.g. a stray dev
+      // process or a second app instance). electron-main.js detects the
+      // in-use port and reuses the existing backend, so we exit cleanly
+      // instead of crashing with an uncaught exception dialog.
+      console.warn(`[vox] port ${env.port} already in use — another VOX backend is running. Reusing it.`);
+      process.exit(0);
+    }
+    console.error('[vox] server error:', err && err.stack ? err.stack : err);
+    process.exit(1);
+  });
+
   server.listen(env.port, () => {
     // The string 'listening' is what electron-main.js watches for.
     console.log(`VOX backend listening on http://127.0.0.1:${env.port}`);
     startDiscovery();
-    startScheduledWorker();
     logMetrics();
   });
 

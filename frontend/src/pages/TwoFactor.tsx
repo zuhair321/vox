@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 
 const TwoFactorPage: React.FC = () => {
   const [code, setCode] = useState('');
+  const [rememberMe, setRememberMe] = useState(() => sessionStorage.getItem('vox_remember_me_2fa') === '1');
   const navigate = useNavigate();
   const { addToast } = useUiStore();
   const { completeTwoFactor, isLoading } = useAuthStore();
@@ -14,7 +15,8 @@ const TwoFactorPage: React.FC = () => {
     e.preventDefault();
 
     try {
-      await completeTwoFactor(code);
+      await completeTwoFactor(code, rememberMe);
+      sessionStorage.removeItem('vox_remember_me_2fa');
       addToast('Welcome back.', 'success');
       navigate('/');
     } catch (err: any) {
@@ -70,6 +72,16 @@ const TwoFactorPage: React.FC = () => {
                 maxLength={8}
               />
             </div>
+          </div>
+
+          <div className="vox-login-remember">
+            <input
+              type="checkbox"
+              id="vox-remember-me-2fa"
+              checked={rememberMe}
+              onChange={e => setRememberMe(e.target.checked)}
+            />
+            <label htmlFor="vox-remember-me-2fa">Remember me</label>
           </div>
 
           <button type="submit" className="vox-login-submit" disabled={isLoading}>

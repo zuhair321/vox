@@ -4,10 +4,11 @@ export type UserRole = 'Founder' | 'Admin' | 'Moderator' | 'Member';
 // A chat attachment. `kind` drives how the client renders it:
 //   image  → inline <img>
 //   video  → <video controls>
+//   audio  → <audio controls> (voice note)
 //   file   → a download chip
 // `url` is a backend-relative path (e.g. /uploads/chat-<id>-<ts>.mp4) —
 // prepend API_BASE to load it.
-export type AttachmentKind = 'image' | 'video' | 'file';
+export type AttachmentKind = 'image' | 'video' | 'audio' | 'file';
 
 export interface Attachment {
   url: string;

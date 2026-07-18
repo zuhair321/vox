@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import { API_BASE } from '../api/client';
+import { getApiBase } from '../api/client';
 import { useMessageStore } from './messageStore';
 import { useDMStore } from './dmStore';
 import { useServerStore } from './serverStore';
@@ -48,7 +48,7 @@ export const useSocketStore = create<SocketStore>((set, get) => {
   connect: () => {
     const token = useAuthStore.getState().accessToken;
     if (!token || get().socket) return;
-    const socket = io(API_BASE, {
+    const socket = io(getApiBase(), {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: MAX_RECONNECT_ATTEMPTS,
@@ -57,7 +57,7 @@ export const useSocketStore = create<SocketStore>((set, get) => {
     });
 
     socket.on('connect_error', () => {
-      const freshToken = useAuthStore.getState().accessToken || sessionStorage.getItem('vox_access');
+      const freshToken = useAuthStore.getState().accessToken || sessionStorage.getItem('vox_access') || localStorage.getItem('vox_access');
       if (freshToken) {
         (socket as any).auth = { token: freshToken };
       }
@@ -173,6 +173,13 @@ export const useSocketStore = create<SocketStore>((set, get) => {
         }
       } catch {
         // skip
+      }
+    });
+
+    socket.on('message:deleted', ({ messageId, channelId }) => {
+      const targetChannel = channelId || '';
+      if (targetChannel) {
+        useMessageStore.getState().removeMessage(targetChannel, messageId);
       }
     });
 

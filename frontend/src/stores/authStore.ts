@@ -1,12 +1,17 @@
-// Vox Web — Auth store (tokens, user, login/logout)
+// Vox Web — Auth store (user, login/logout)
+//
+// SECURITY: access/refresh tokens live ONLY in HttpOnly cookies set by the
+// backend (see backend/src/services/auth.service.js#setAuthCookies). They are
+// NEVER written to sessionStorage/localStorage, so an XSS bug cannot read a
+// live token. The `api()` client sends the cookie automatically via
+// `credentials: 'include'`. Only the non-secret `vox_user` profile is cached
+// in localStorage so the UI can render instantly on reload.
 
 import { create } from 'zustand';
 import * as authApi from '../api/auth';
 import * as storage from '../utils/auth';
 import { useSocketStore } from './socketStore';
 
-const SESSION_ACCESS_KEY = 'vox_access';
-const SESSION_REFRESH_KEY = 'vox_refresh';
 const LOCAL_USER_KEY = 'vox_user';
 
 // The canonical "current user" is persisted to localStorage under `vox_user`
@@ -49,47 +54,55 @@ interface AuthState {
   loginAlert: { isNewLogin: boolean; alertMessage: string | null } | null;
 
   initialize: () => Promise<void>;
-  login: (emailOrUsername: string, password: string) => Promise<{ twoFactorRequired?: boolean; tempToken?: string }>;
-  completeTwoFactor: (code: string) => Promise<void>;
-  register: (email: string, username: string, password: string) => Promise<void>;
+  login: (emailOrUsername: string, password: string, rememberMe?: boolean) => Promise<{ twoFactorRequired?: boolean; tempToken?: string }>;
+  completeTwoFactor: (code: string, rememberMe?: boolean) => Promise<void>;
+  register: (email: string, username: string, password: string, rememberMe?: boolean) => Promise<void>;
   logout: () => Promise<void>;
   clearLoginAlert: () => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
-  accessToken: sessionStorage.getItem(SESSION_ACCESS_KEY),
+  accessToken: null, // tokens themselves live in HttpOnly cookies, not here
   isLoading: false,
   isInitialized: false,
   loginAlert: null,
 
   initialize: async () => {
-    const accessToken = sessionStorage.getItem(SESSION_ACCESS_KEY);
-    const refreshToken = sessionStorage.getItem(SESSION_REFRESH_KEY);
+    set({ isInitialized: true, isLoading: true, loginAlert: null });
 
-    // If we have a token, try to validate it by fetching the current user
-    if (accessToken) {
-      set({ accessToken, isLoading: true });
-      try {
-        const { user } = await authApi.getMe();
-        if (user) {
-          persistUser(user);
-          set({ user, accessToken, isInitialized: true, isLoading: false, loginAlert: null });
-          return;
-        }
-      } catch {
-        // Token invalid — clear it and fall through to logged-out state
-        sessionStorage.removeItem(SESSION_ACCESS_KEY);
-        sessionStorage.removeItem(SESSION_REFRESH_KEY);
-        clearPersistedUser();
+    // Restore the current user optimistically from the cached profile so a
+    // valid session never bounces to login while the API is briefly
+    // unreachable (e.g. the Electron backend is still booting). We re-validate
+    // in the background and fall back to login on a genuine auth failure.
+    let restoredUser: any = null;
+    try {
+      const raw = localStorage.getItem(LOCAL_USER_KEY);
+      if (raw) restoredUser = JSON.parse(raw);
+    } catch {
+      /* ignore corrupt cache */
+    }
+    set({ user: restoredUser, isLoading: true });
+
+    // The HttpOnly cookie carries auth. getMe() hits /api/auth/me which the
+    // backend authenticates from the cookie. If the access cookie is expired,
+    // api() transparently refreshes it via the refresh cookie.
+    try {
+      const { user } = await authApi.getMe();
+      if (user) {
+        persistUser(user);
+        set({ user, isLoading: false });
+        return;
       }
+    } catch {
+      // Auth failed — fall through to a clean logout.
     }
 
-    // No valid token — start logged out
-    set({ user: null, accessToken: null, isInitialized: true, isLoading: false, loginAlert: null });
+    clearPersistedUser();
+    set({ user: null, accessToken: null, isLoading: false, loginAlert: null });
   },
 
-  login: async (emailOrUsername, password) => {
+  login: async (emailOrUsername, password, rememberMe = false) => {
     set({ isLoading: true, loginAlert: null });
     try {
       const result = await authApi.login(emailOrUsername, password);
@@ -102,10 +115,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       const authResult = result as any;
-      sessionStorage.setItem(SESSION_ACCESS_KEY, authResult.tokens.access);
-      sessionStorage.setItem(SESSION_REFRESH_KEY, authResult.tokens.refresh);
       persistUser(authResult.user);
-      
+
       if (authResult.loginAlert?.isNewLogin && authResult.loginAlert.alertMessage) {
         set({ loginAlert: authResult.loginAlert });
         if (typeof window !== 'undefined' && (window as any).electronAPI?.notify) {
@@ -115,8 +126,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           );
         }
       }
-      
-      set({ user: authResult.user, accessToken: authResult.tokens.access, isLoading: false });
+
+      set({ user: authResult.user, accessToken: authResult.tokens?.access || null, isLoading: false });
       return {};
     } catch (err) {
       set({ isLoading: false });
@@ -124,19 +135,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  completeTwoFactor: async (code) => {
+  completeTwoFactor: async (code, rememberMe = false) => {
     const tempToken = sessionStorage.getItem('vox_2fa_temp_token');
     if (!tempToken) throw new Error('No 2FA temp token');
 
     set({ isLoading: true, loginAlert: null });
     try {
       const result = await authApi.twoFactorLogin(tempToken, code);
-      sessionStorage.setItem(SESSION_ACCESS_KEY, result.tokens.access);
-      sessionStorage.setItem(SESSION_REFRESH_KEY, result.tokens.refresh);
       persistUser(result.user);
-      set({ user: result.user, accessToken: result.tokens.access, isLoading: false });
+      set({ user: result.user, accessToken: result.tokens?.access || null, isLoading: false });
       sessionStorage.removeItem('vox_2fa_temp_token');
-      
+
       if (result.loginAlert?.isNewLogin && result.loginAlert.alertMessage) {
         set({ loginAlert: result.loginAlert });
         if (typeof window !== 'undefined' && (window as any).electronAPI?.notify) {
@@ -152,14 +161,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  register: async (email, username, password) => {
+  register: async (email, username, password, rememberMe = false) => {
     set({ isLoading: true });
     try {
       const result = await authApi.register(email, username, password);
-      sessionStorage.setItem(SESSION_ACCESS_KEY, result.tokens.access);
-      sessionStorage.setItem(SESSION_REFRESH_KEY, result.tokens.refresh);
       persistUser(result.user);
-      set({ user: result.user, accessToken: result.tokens.access, isLoading: false });
+      set({ user: result.user, accessToken: result.tokens?.access || null, isLoading: false });
     } catch (err) {
       set({ isLoading: false });
       throw err;
@@ -167,12 +174,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
-    const refreshToken = sessionStorage.getItem(SESSION_REFRESH_KEY);
-    if (refreshToken) {
-      try { await authApi.logout(refreshToken); } catch { /* ignore */ }
-    }
-    sessionStorage.removeItem(SESSION_ACCESS_KEY);
-    sessionStorage.removeItem(SESSION_REFRESH_KEY);
+    // Logout is cookie-based: the backend clears the HttpOnly cookies and
+    // revokes the refresh token server-side. No client-side token needed.
+    try { await authApi.logout(); } catch { /* ignore */ }
     clearPersistedUser();
     storage.logout();
     set({ user: null, accessToken: null, loginAlert: null });
@@ -182,16 +186,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 }));
 
 export function getAccessToken(): string | null {
-  // Check sessionStorage first (regular login)
-  let accessToken = useAuthStore.getState().accessToken || sessionStorage.getItem(SESSION_ACCESS_KEY);
-  
-  // If no token in sessionStorage, check localStorage for "remember me" tokens
-  if (!accessToken) {
-    const rememberMe = localStorage.getItem('vox_remember_me') === 'true';
-    if (rememberMe) {
-      accessToken = localStorage.getItem('vox_access');
-    }
-  }
-  
-  return accessToken;
+  // Tokens are not held in JS — auth is cookie-based. Returning null keeps any
+  // legacy callers harmless; the cookie is what authenticates requests.
+  return null;
 }

@@ -7,6 +7,7 @@ import { Message } from '../../stores/messageStore';
 import { markMessageRead } from '../../api/messages';
 import { useSocketStore } from '../../stores/socketStore';
 import { useMessageStore } from '../../stores/messageStore';
+import { useServerStore } from '../../stores/serverStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useContextMenu, MenuItem } from '../../hooks/useContextMenu';
 import ContextMenu from '../ui/ContextMenu';
@@ -86,6 +87,7 @@ function formatRelativeTime(dateString: string) {
 const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: isOwnProp, myUsername, myId: myIdProp, myRole: myRoleProp }) => {
   const { setReplyingTo, messages } = useMessageStore();
   const { setThreadMessageId, setShowPinnedPanel, addToast } = useUiStore();
+  const { selectedServer } = useServerStore();
   const { show, hide, contextMenu } = useContextMenu();
   const messageRowRef = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -202,6 +204,8 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
   const gifMatch = message.body.match(/^\[GIF\]\s*(\S+)\s*$/i);
   const isGif = !!gifMatch;
   const gifUrl = gifMatch ? gifMatch[1] : null;
+  const [gifLoaded, setGifLoaded] = useState(false);
+  useEffect(() => { setGifLoaded(false); }, [gifUrl]);
   const textBody = isGif
     ? message.body.replace(/^\[GIF\]\s*\S+\s*/i, '').trim()
     : message.body;
@@ -274,6 +278,13 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
     } catch { addToast('Failed to bookmark.', 'error'); }
   };
 
+  const quickMenuItems: MenuItem[] = [
+    ...(isOwn
+      ? [{ id: 'edit', label: 'Edit Message', icon: <IconEdit />, onClick: () => setIsEditing(true) }]
+      : []),
+    { id: 'delete', label: 'Delete Message', icon: <IconDelete />, danger: true, onClick: requestDelete },
+  ];
+
   const ownMenuItems: MenuItem[] = [
     { id: 'edit', label: 'Edit Message', icon: <IconEdit />, onClick: () => setIsEditing(true) },
     { id: 'reply', label: 'Reply', icon: <IconReply />, onClick: handleReply },
@@ -295,7 +306,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
     ...(canModerate ? [{ id: 'pin', label: 'Pin Message', icon: <IconPin />, onClick: handlePin }] : []),
     { id: 'd1', label: '', divider: true },
     { id: 'report', label: 'Report', icon: <IconFlag />, onClick: () => setShowReport(true) },
-    // Moderators can delete other users' messages for moderation purposes.
     ...(canModerate
       ? [{ id: 'delete', label: 'Delete Message (Mod)', icon: <IconDelete />, danger: true, onClick: requestDelete }]
       : []),
@@ -569,49 +579,18 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
           </motion.div>
         ) : (
           <>
-            {/* Fuse message — sealed time capsule */}
-            {(message as any).fuseTime && new Date((message as any).fuseTime) > new Date() ? (
-              <div style={{
-                padding: '12px 16px',
-                background: 'linear-gradient(135deg, rgba(255,209,102,0.08), rgba(216,74,90,0.05))',
-                border: '1px solid rgba(255,209,102,0.2)',
-                borderRadius: '8px',
-                textAlign: 'center',
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
-                <div style={{ fontSize: '24px', marginBottom: '6px' }}>💣</div>
-                <div style={{ fontSize: '12px', color: '#d9c98d', fontWeight: 600, letterSpacing: '0.05em' }}>
-                  TIME CAPSULE — sealed
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--shadow)', marginTop: '4px' }}>
-                  Reveals {format(new Date((message as any).fuseTime), 'MMM d, yyyy h:mm a')}
-                </div>
-                {/* Glowing fuse line */}
-                <div style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  height: '2px',
-                  background: 'linear-gradient(90deg, transparent, #d9c98d, transparent)',
-                  animation: 'fuseGlow 2s ease-in-out infinite',
-                }} />
-              </div>
-            ) : (
-              <>
-                {textBody && (
-                  <div
-                    style={{
-                      color: 'var(--ghost-white)',
-                      lineHeight: 1.5,
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      width: '100%',
-                      whiteSpace: 'pre-wrap',
-                    }}
-                  >
-                    <RichText text={textBody} />
+            {textBody && (
+              <div
+                style={{
+                  color: 'var(--ghost-white)',
+                  lineHeight: 1.5,
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
+                  width: '100%',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                <RichText text={textBody} serverId={selectedServer?.id} />
                 {message.edited && (
                   <span style={{ fontSize: '10px', color: 'var(--ash)', marginLeft: '4px', verticalAlign: 'middle' }}>
                     (edited)
@@ -637,6 +616,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
                   src={gifUrl}
                   alt="GIF"
                   className="gif-message"
+                  onLoad={() => setGifLoaded(true)}
                   style={{
                     width: 'auto',
                     maxWidth: '100%',
@@ -646,6 +626,10 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
                     objectFit: 'contain',
                     clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)',
                     cursor: 'pointer',
+                    opacity: gifLoaded ? 1 : 0,
+                    transform: gifLoaded ? 'none' : 'scale(0.98)',
+                    transition: 'opacity 0.25s ease, transform 0.25s ease',
+                    background: gifLoaded ? 'transparent' : 'rgba(255,255,255,0.04)',
                   }}
                 />
               </a>
@@ -703,8 +687,6 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
             {/* Read receipt — show avatar stack of who has seen this message */}
             <SeenByStack messageId={message.id} maxVisible={4} />
           </>
-          )}
-        </>
         )}
       </div>
 
@@ -717,7 +699,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
             <ContextMenu
               x={popover.x}
               y={popover.y}
-              items={isOwn ? ownMenuItems : otherMenuItems}
+              items={quickMenuItems}
               onClose={() => { setPopover(null); setChevronRect(null); }}
               anchorRect={chevronRect}
             />

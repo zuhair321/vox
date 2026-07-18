@@ -4,6 +4,7 @@ import { resolveInvite, joinByInvite } from '../api/invites';
 import { useServerStore } from '../stores/serverStore';
 import { useUiStore } from '../stores/uiStore';
 import { API_BASE } from '../api/client';
+import ServerLogo from '../components/ui/ServerLogo';
 
 interface InviteInfo {
   code: string;
@@ -84,13 +85,15 @@ const InviteAccept: React.FC = () => {
               <img src={serverBanner} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
           )}
-          <div className="octagon" style={{ width: '64px', height: '64px', margin: '0 auto 16px', backgroundColor: 'var(--phantom)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {serverIcon ? (
-              <img src={serverIcon} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '24px' }}>{invite.server.name.slice(0, 1).toUpperCase()}</span>
-            )}
-          </div>
+          <ServerLogo
+            src={serverIcon}
+            name={invite.server.name}
+            size={64}
+            style={{
+              margin: '0 auto 16px',
+              backgroundColor: 'var(--phantom)',
+            }}
+          />
           <h2 style={{ fontSize: '20px', color: 'var(--ghost-white)', marginBottom: '4px' }}>{invite.server.name}</h2>
           {invite.server.description && (
             <p style={{ color: 'var(--ash)', fontSize: '13px', marginBottom: '8px' }}>{invite.server.description}</p>

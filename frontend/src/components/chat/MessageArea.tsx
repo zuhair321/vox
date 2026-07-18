@@ -11,7 +11,7 @@ import { analyzeMood, applyMoodShift } from '../../utils/moodShift';
 
 const SCROLL_THRESHOLD = 300;
 
-const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
+const MessageArea: React.FC<{ channelId: string; messageId?: string }> = ({ channelId, messageId }) => {
   const { messages, setMessages, loading } = useMessageStore();
   const { joinChannel, leaveChannel } = useSocketStore();
   const channelMessages = messages[channelId] || [];
@@ -64,7 +64,18 @@ const MessageArea: React.FC<{ channelId: string }> = ({ channelId }) => {
 
   useEffect(() => { if (showJump) setNewCount((c) => c + 1); }, [channelMessages.length, showJump]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelId]);
+   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [channelId]);
+
+   useEffect(() => {
+     if (!messageId) return;
+     const timer = setTimeout(() => {
+       const el = document.querySelector(`[data-message-id="${messageId}"]`);
+       if (el) {
+         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+       }
+     }, 300);
+     return () => clearTimeout(timer);
+   }, [channelId, messageId, channelMessages.length]);
 
   const prevMessageCount = useRef(channelMessages.length);
   useEffect(() => { prevMessageCount.current = 0; }, [channelId]);
