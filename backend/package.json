@@ -5,7 +5,7 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "npx prisma generate && node server.js",
     "dev": "node server.js",
     "cluster": "pm2 start ../ecosystem.config.cjs",
     "cluster:restart": "pm2 restart vox-backend",
