@@ -1,4 +1,4 @@
-import { API_BASE, getToken } from './client';
+import { API_BASE, tryRefresh } from './client';
 import type { Attachment, AttachmentKind } from '../types';
 
 export type UploadKind = 'avatar' | 'banner' | 'chat' | 'server-icon' | 'server-banner' | 'sound';
@@ -12,30 +12,45 @@ export interface ChatUploadResponse {
 }
 
 export async function uploadMedia(kind: UploadKind, file: File, extraFields?: Record<string, string>) {
-  const token = getToken();
-  if (!token) {
-    throw new Error('Please log in before uploading media.');
+  // Upload responses are open-shaped JSON; callers cast to the shape they need.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untyped upload response
+  async function attempt(formData: FormData): Promise<any> {
+    const res = await fetch(`${API_BASE}/api/upload/${kind}`, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw new Error(data?.error || 'Upload failed.');
+    }
+    return data;
   }
 
   const formData = new FormData();
   formData.append('file', file);
   Object.entries(extraFields || {}).forEach(([key, value]) => formData.append(key, value));
 
-  const res = await fetch(`${API_BASE}/api/upload/${kind}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-    credentials: 'include',
-  });
-
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(data?.error || 'Upload failed.');
+  try {
+    return await attempt(formData);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message?.includes('Authentication required')) {
+      try {
+        // Go through the shared deduped refresh (api/client.ts) so this can't
+        // race another in-flight refresh and invalidate the session.
+        const refreshed = await tryRefresh();
+        if (!refreshed) throw new Error('Session expired. Please log in again.');
+        const retryData = new FormData();
+        retryData.append('file', file);
+        Object.entries(extraFields || {}).forEach(([key, value]) => retryData.append(key, value));
+        return await attempt(retryData);
+      } catch {
+        throw new Error('Session expired. Please log in again.');
+      }
+    }
+    throw err;
   }
-
-  return data;
 }
 
 export const uploadProfileImage = uploadMedia;

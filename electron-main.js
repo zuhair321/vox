@@ -1,13 +1,20 @@
-// VOX Desktop — Electron Main Process
-// No auto-updater: bundled for offline use, client delivers a fresh installer.
+// VOX Desktop — Electron Main Process (local-first, no deployment tooling)
+//
+// This build is for LOCAL testing/use only. It connects to a PostgreSQL
+// database on the local machine (default 127.0.0.1:5433 / vox_dev) and runs
+// the bundled backend on 127.0.0.1:4000. No hosted mode, no auto-updater,
+// no packaging/deploy logic.
 
 const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, globalShortcut, nativeImage, desktopCapturer, dialog } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
 const PROJECT_ROOT = path.join(__dirname);
 const IS_PACKAGED = app.isPackaged;
+
+// Module-level app config (resolved once at startup, read by createWindow()).
+let appConfig = null;
 
 // In packaged mode the backend lives as real files under process.resourcesPath
 // (see electron-builder extraResources). Node can resolve node_modules from there
@@ -26,16 +33,41 @@ function getPortableNode() {
   return fs.existsSync(portableNode) ? portableNode : null;
 }
 
-// ── Runtime server config (Option 1: hosted SaaS EXE) ──────────────
-// The frontend reads window.__VOX_CONFIG.apiBase. We compute it here so the
-// same packaged bundle can either:
-//   • run a local backend (default, SQLite)  → apiBase = http://127.0.0.1:4000
-//   • connect to a hosted backend            → apiBase = your server URL
-// Priority: VOX_API_BASE env  >  app-config.json (extraResources)  >  local default.
-// When the apiBase is NOT localhost, we skip spawning the bundled backend.
+// ── Local PostgreSQL connection (local-first, no deployment tooling) ──
+// VOX requires PostgreSQL. For LOCAL testing we use a PostgreSQL instance that
+// is already running on this machine (default 127.0.0.1:5433). The connection
+// string is resolved in this priority:
+//   1. process.env.DATABASE_URL
+//   2. VOX_DB_URL env
+//   3. a vox-db.txt file (one URL per line) in %APPDATA%/VOX-Desktop
+//   4. the default local dev URL below
+// No embedded/bundled Postgres is started — keep Postgres running yourself
+// (e.g. the "postgresql-x64-18" Windows service).
+const DEFAULT_LOCAL_DB = 'postgresql://vox:vox@127.0.0.1:5433/vox_dev';
+
+function resolveBackendDatabaseUrl() {
+  const overrideFile = path.join(VOX_USER_DATA, 'vox-db.txt');
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  if (process.env.VOX_DB_URL) return process.env.VOX_DB_URL;
+  if (fs.existsSync(overrideFile)) {
+    const raw = fs.readFileSync(overrideFile, 'utf8').split('\n')[0].trim();
+    if (raw) return raw;
+  }
+  return DEFAULT_LOCAL_DB;
+}
+
+function isPostgresDatabase(url) {
+  return /^postgresql:\/\//i.test(url);
+}
+
+// ── Runtime server config (local-first) ────────────────────────────
+// The frontend reads window.__VOX_CONFIG.apiBase. We compute it here. This
+// local-only build always runs the bundled backend on 127.0.0.1:4000.
+// Priority: VOX_API_BASE env  >  app-config.json  >  local default.
 function loadAppConfig() {
+  // Local-first only. Read the apiBase so the renderer knows where the
+  // backend is, but always run in local mode (no hosted/deployment logic).
   let apiBase = 'http://127.0.0.1:4000';
-  let mode = 'local';
 
   const configPath = IS_PACKAGED
     ? path.join(process.resourcesPath, 'app-config.json')
@@ -45,21 +77,14 @@ function loadAppConfig() {
     if (fs.existsSync(configPath)) {
       const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       if (cfg.apiBase) apiBase = cfg.apiBase;
-      if (cfg.mode) mode = cfg.mode;
     }
   } catch (e) {
     console.error('[Config] failed to read app-config.json:', e.message);
   }
 
-  if (process.env.VOX_API_BASE) {
-    apiBase = process.env.VOX_API_BASE;
-    mode = 'hosted';
-  }
+  if (process.env.VOX_API_BASE) apiBase = process.env.VOX_API_BASE;
 
-  const isLocal = /(^|\/\/)127\.0\.0\.1[:\/]/.test(apiBase) ||
-                  /(^|\/\/)localhost[:\/]/.test(apiBase);
-  const hosted = mode === 'hosted' || !isLocal;
-  return { apiBase, mode: hosted ? 'hosted' : 'local', hosted };
+  return { apiBase, mode: 'local', hosted: false };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -104,7 +129,7 @@ app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('enable-zero-copy');
 app.commandLine.appendSwitch('enable-hardware-overlays', 'single-fullscreen,single-on-top,underlay');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
-app.commandLine.appendSwitch('disable-features', 'Quota,ServiceWorker,NetworkService,NetworkServiceInProcess');
+app.commandLine.appendSwitch('disable-features', 'Quota,ServiceWorker,NetworkService,NetworkServiceInProcess,BlockThirdPartyCookies');
 app.commandLine.appendSwitch('no-pings');
 app.commandLine.appendSwitch('disable-background-networking');
 app.commandLine.appendSwitch('disable-breakpad');
@@ -164,6 +189,16 @@ function saveWindowState() {
 }
 
 function resolveIconPath() {
+  // Prefer the branded coat icon (build-resources) — used for the window,
+  // tray and notifications. Fall back to the web favicon in dev trees.
+  const branded = [
+    path.join(process.resourcesPath || '', 'build-resources', 'icon-256.png'),
+    path.join(__dirname, 'build-resources', 'icon-256.png'),
+    path.join(PROJECT_ROOT, 'build-resources', 'icon-256.png'),
+  ];
+  for (const p of branded) {
+    if (p && fs.existsSync(p)) return p;
+  }
   const d = path.join(__dirname, 'frontend', 'dist', 'favicon.ico');
   const b = path.join(__dirname, 'frontend', 'build', 'favicon.ico');
   return fs.existsSync(d) ? d : fs.existsSync(b) ? b : null;
@@ -183,30 +218,119 @@ function isPortInUse(port) {
   });
 }
 
+// Kill whatever process is listening on `port` (Windows). Used to clear a
+// stale/half-broken VOX backend that is up but can't reach the database, so a
+// fresh backend can bind the port instead of hitting EADDRINUSE and exiting.
+function killProcessOnPort(port) {
+  return new Promise((resolve) => {
+    try {
+      const out = spawnSync('cmd', ['/c', `netstat -ano -p tcp | findstr LISTENING | findstr :${port}`], {
+        windowsHide: true, encoding: 'utf8',
+      });
+      const pids = new Set();
+      (out.stdout || '').split(/\r?\n/).forEach((line) => {
+        const m = line.trim().match(/\s(\d+)$/);
+        if (m && m[1] !== '0') pids.add(m[1]);
+      });
+      if (!pids.size) return resolve(false);
+      for (const pid of pids) {
+        console.log(`[Backend] Killing stale process ${pid} on port ${port}`);
+        try { spawnSync('taskkill', ['/F', '/PID', pid], { windowsHide: true }); } catch { /* ignore */ }
+      }
+      // Give the OS a beat to release the port.
+      setTimeout(() => resolve(true), 500);
+    } catch (e) {
+      console.warn('[Backend] killProcessOnPort failed:', e.message);
+      resolve(false);
+    }
+  });
+}
+
+// If a backend already holds port 4000, reuse it only when it is genuinely
+// healthy (2xx from /health). If it is up but unhealthy (e.g. 503 — DB
+// unreachable, the classic "internal server error on login" cause), kill it so
+// we can start a fresh, working backend. Returns true when an existing healthy
+// backend can be reused.
+async function reuseOrClearBackendPort() {
+  if (!(await isPortInUse(4000))) return false;
+  const healthy = await waitForServer('http://127.0.0.1:4000/health', 1500);
+  if (healthy) {
+    console.log('[Backend] Reusing existing healthy instance on port 4000');
+    return true;
+  }
+  console.warn('[Backend] Existing backend on port 4000 is unhealthy — clearing it.');
+  await killProcessOnPort(4000);
+  return false;
+}
+
+// Quick TCP reachability probe for the configured database. Used to skip the
+// (slow) service-query + bundled pg_ctl dance when Postgres is already up on
+// the port the app actually connects to.
+function isTcpOpen(host, port, timeoutMs = 1200) {
+  return new Promise((resolve) => {
+    const net = require('net');
+    const socket = new net.Socket();
+    let settled = false;
+    const done = (ok) => { if (!settled) { settled = true; socket.destroy(); resolve(ok); } };
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => done(true));
+    socket.once('timeout', () => done(false));
+    socket.once('error', () => done(false));
+    socket.connect(port, host);
+  });
+}
+
 function waitForServer(url, timeout = 15000) {
   return new Promise((resolve) => {
     const http = require('http');
     const start = Date.now();
+    function retryOrFail() {
+      if (Date.now() - start > timeout) resolve(false);
+      else setTimeout(tryIt, 300);
+    }
     function tryIt() {
-      const req = http.get(url, () => resolve(true));
-      req.on('error', () => {
-        if (Date.now() - start > timeout) resolve(false);
-        else setTimeout(tryIt, 300);
+      const req = http.get(url, (res) => {
+        // Only treat a genuinely healthy response (2xx) as "ready". A backend
+        // that is up but can't reach the database answers /health with 503 —
+        // reusing it would surface as "internal server error" on login. Keep
+        // polling until it turns healthy (or the timeout elapses).
+        const ok = res.statusCode >= 200 && res.statusCode < 300;
+        res.resume(); // drain so the socket can be reused/closed
+        if (ok) resolve(true);
+        else retryOrFail();
       });
+      req.on('error', retryOrFail);
       req.end();
     }
     tryIt();
   });
 }
 
+// Wait for the backend's own readiness signal on stdout ("VOX backend
+// listening") instead of blindly sleeping or hammering /health (which runs a
+// DB query every 300ms). Resolves as soon as the process is actually serving,
+// or after `timeout` so startup never deadlocks.
+function waitForBackendReady(proc, timeout = 35000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (up) => { if (!done) { done = true; resolve(up); } };
+    const timer = setTimeout(() => finish(false), timeout);
+    timer.unref?.();
+    if (!proc) return finish(false);
+    const onData = (d) => {
+      if (/VOX backend listening/.test(d.toString())) {
+        clearTimeout(timer);
+        finish(true);
+      }
+    };
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
+    proc.on('exit', () => finish(false));
+  });
+}
+
 function shouldSuppressStderr(line) {
-  return [
-    /cache_util_win\.cc/, /disk_cache\.cc/, /gpu_disk_cache\.cc/,
-    /service_worker_storage\.cc/, /quota_database\.cc/,
-    /Could not open the quota database/, /Failed to reset the quota database/,
-    /Gpu Cache Creation failed/, /Unable to move the cache/,
-    /Unable to create cache/, /Failed to delete the database/,
-  ].some((re) => re.test(line));
+  return NOISE_PATTERNS.some((re) => re.test(line));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -237,99 +361,489 @@ function setupScreenCapture(win) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  Database bootstrap (first run — creates SQLite tables)
+//  Database bootstrap (first run — applies Prisma migrations)
 // ═══════════════════════════════════════════════════════════════════
 
+async function ensureDatabaseExists(dbUrl) {
+  try {
+    const pgCandidates = (() => {
+      const bundled = (() => {
+        const candidates = [
+          path.join(process.resourcesPath || '', 'postgres', 'pgsql', 'bin'),
+          path.join(__dirname, 'vx', 'resources', 'postgres', 'pgsql', 'bin'),
+          path.join(PROJECT_ROOT, 'vx', 'resources', 'postgres', 'pgsql', 'bin'),
+          path.join(PROJECT_ROOT, 'resources', 'postgres', 'pgsql', 'bin'),
+        ];
+        for (const c of candidates) {
+          if (fs.existsSync(path.join(c, 'createdb.exe'))) return c;
+        }
+        return null;
+      })();
+      if (bundled) return [bundled];
+      const versions = ['18', '17', '16', '15', '14'];
+      const sysBins = versions.map(v => `C:\\Program Files\\PostgreSQL\\${v}\\bin`);
+      sysBins.push(path.join(PROJECT_ROOT, 'tools', 'postgres', 'pgsql', 'bin'));
+      return sysBins;
+    })();
+    let pgBin = null;
+    for (const candidate of pgCandidates) {
+      if (fs.existsSync(path.join(candidate, 'createdb.exe'))) {
+        pgBin = candidate;
+        break;
+      }
+    }
+    if (!pgBin) return;
+    const createdb = path.join(pgBin, 'createdb.exe');
+    if (!fs.existsSync(createdb)) return;
+    const parsedUrl = new URL(dbUrl);
+    const host = parsedUrl.hostname || '127.0.0.1';
+    const port = parsedUrl.port || '5433';
+    const user = parsedUrl.username || 'vox';
+    const dbName = parsedUrl.pathname.replace(/^\//, '') || 'vox_dev';
+    await new Promise((resolve) => {
+      const child = spawn(createdb, ['-h', host, '-p', port, '-U', user, dbName], {
+        windowsHide: true,
+        env: { ...process.env, PGPASSWORD: parsedUrl.password || '' },
+      });
+      child.on('close', () => resolve());
+      child.on('error', () => resolve());
+    });
+  } catch (e) {
+    console.warn('[Bootstrap] Could not ensure database exists:', e.message);
+  }
+}
+
+async function ensurePostgresRunning() {
+  const serviceNames = [
+    'postgresql-x64-18',
+    'postgresql-x64-17',
+    'postgresql-x64-16',
+    'postgresql-x64-15',
+    'postgresql-x64-14',
+    'postgresql',
+    'postgresql-18',
+    'postgresql-17',
+    'postgresql-16',
+  ];
+  try {
+    for (const svc of serviceNames) {
+      const sc = spawn('sc', ['query', svc], { windowsHide: true });
+      let output = '';
+      sc.stdout.on('data', (d) => { output += d.toString(); });
+      await new Promise((resolve) => sc.on('close', resolve));
+      if (output.includes('RUNNING')) {
+        console.log(`[Bootstrap] PostgreSQL service "${svc}" is already running.`);
+        return true;
+      }
+    }
+    console.log('[Bootstrap] PostgreSQL service not running — attempting to start it...');
+    for (const svc of serviceNames) {
+      const start = spawn('sc', ['start', svc], { windowsHide: true });
+      await new Promise((resolve) => start.on('close', resolve));
+      await new Promise((r) => setTimeout(r, 2000));
+      const check = spawn('sc', ['query', svc], { windowsHide: true });
+      let output = '';
+      check.stdout.on('data', (d) => { output += d.toString(); });
+      await new Promise((resolve) => check.on('close', resolve));
+      if (output.includes('RUNNING')) {
+        console.log(`[Bootstrap] Started PostgreSQL service "${svc}".`);
+        return true;
+      }
+    }
+    return false;
+  } catch (e) {
+    console.warn('[Bootstrap] Could not ensure PostgreSQL is running:', e.message);
+    return false;
+  }
+}
+
+async function startBundledPostgres() {
+  const pgBin = (() => {
+    const candidates = [
+      path.join(process.resourcesPath || '', 'postgres', 'pgsql', 'bin'),
+      path.join(__dirname, 'vx', 'resources', 'postgres', 'pgsql', 'bin'),
+      path.join(PROJECT_ROOT, 'vx', 'resources', 'postgres', 'pgsql', 'bin'),
+      path.join(PROJECT_ROOT, 'resources', 'postgres', 'pgsql', 'bin'),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(path.join(c, 'pg_ctl.exe'))) return c;
+    }
+    return null;
+  })();
+  if (!pgBin) {
+    console.log('[Bootstrap] Bundled PostgreSQL binaries not found.');
+    return null;
+  }
+  const pgCtl = path.join(pgBin, 'pg_ctl.exe');
+  const initDb = path.join(pgBin, 'initdb.exe');
+
+  const dataDir = path.join(VOX_USER_DATA, 'pgdata');
+  const logFile = path.join(VOX_USER_DATA, 'pgdata.log');
+  const port = '5433';
+
+  if (!fs.existsSync(path.join(dataDir, 'PG_VERSION'))) {
+    console.log('[Bootstrap] Initialising bundled PostgreSQL data directory...');
+    try {
+      await new Promise((resolve, reject) => {
+        const child = spawn(initDb, ['-D', dataDir, '-U', 'postgres', '--auth=trust', '-A', 'trust'], {
+          windowsHide: true,
+          stdio: 'pipe'
+        });
+        let stderr = '';
+        child.stderr.on('data', (d) => { stderr += d.toString(); });
+        child.on('close', (code) => {
+          if (code === 0) resolve();
+          else reject(new Error(`initdb failed (code ${code}): ${stderr}`));
+        });
+        child.on('error', (err) => reject(err));
+      });
+    } catch (e) {
+      console.warn('[Bootstrap] initdb failed:', e.message);
+      return null;
+    }
+  }
+
+  console.log('[Bootstrap] Starting bundled PostgreSQL...');
+  try {
+    await new Promise((resolve, reject) => {
+      // IMPORTANT: use stdio:'ignore' (not 'pipe') — pg_ctl spawns postgres as a
+      // child that inherits the pipe handles. With 'pipe', Node's 'close' event
+      // only fires once EVERY handle is closed, i.e. when postgres itself exits,
+      // so this promise would never resolve while the DB runs and boot would
+      // hang forever on the splash screen. Logs go to -l logFile anyway.
+      const child = spawn(pgCtl, ['-D', dataDir, '-l', logFile, '-o', `-p ${port} -h 127.0.0.1`, 'start'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      });
+      child.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`pg_ctl start failed (code ${code}) — see ${logFile}`));
+      });
+      child.on('error', (err) => reject(err));
+    });
+  } catch (e) {
+    console.warn('[Bootstrap] pg_ctl start failed:', e.message);
+    return null;
+  }
+
+  const start = Date.now();
+  const timeout = 15000;
+  while (Date.now() - start < timeout) {
+    try {
+      const net = require('net');
+      await new Promise((resolve, reject) => {
+        const socket = net.createConnection(port, '127.0.0.1');
+        socket.once('connect', () => { socket.end(); resolve(); });
+        socket.once('error', () => reject());
+        setTimeout(() => { socket.destroy(); reject(); }, 1000);
+      });
+      console.log(`[Bootstrap] Bundled PostgreSQL ready on port ${port}`);
+      return `postgresql://postgres@127.0.0.1:${port}/vox_dev`;
+    } catch {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+
+  console.warn('[Bootstrap] Bundled PostgreSQL did not become ready in time.');
+  return null;
+}
+
+function stopBundledPostgres() {
+  const pgBin = (() => {
+    const candidates = [
+      path.join(process.resourcesPath || '', 'postgres', 'pgsql', 'bin'),
+      path.join(__dirname, 'vx', 'resources', 'postgres', 'pgsql', 'bin'),
+      path.join(PROJECT_ROOT, 'vx', 'resources', 'postgres', 'pgsql', 'bin'),
+      path.join(PROJECT_ROOT, 'resources', 'postgres', 'pgsql', 'bin'),
+    ];
+    for (const c of candidates) {
+      if (fs.existsSync(path.join(c, 'pg_ctl.exe'))) return c;
+    }
+    return null;
+  })();
+  if (!pgBin) return;
+  const pgCtl = path.join(pgBin, 'pg_ctl.exe');
+  const dataDir = path.join(VOX_USER_DATA, 'pgdata');
+  if (!fs.existsSync(path.join(dataDir, 'PG_VERSION'))) return;
+  try {
+    spawnSync(pgCtl, ['-D', dataDir, 'stop'], { windowsHide: true, timeout: 10000 });
+  } catch {}
+}
+
 async function runDbBootstrap() {
-  const scriptPath = getBackendPath('src', 'db', 'ensure-schema.mjs');
-  if (!fs.existsSync(scriptPath)) {
-    console.log('[Bootstrap] ensure-schema.mjs not found — skipping');
+  let dbUrl = resolveBackendDatabaseUrl();
+  if (!isPostgresDatabase(dbUrl)) {
+    console.error('[Bootstrap] Only PostgreSQL is supported. Configured URL: ' + dbUrl);
     return;
   }
+  const migrationsDir = getBackendPath('prisma', 'migrations');
+  const bootstrappedMarker = path.join(VOX_USER_DATA, '.db-bootstrapped');
+  const alreadyBootstrapped = fs.existsSync(bootstrappedMarker);
+
+  let bundled = false;
+  // Fast path: if the configured DB (vox-db.txt / backend .env / default) is
+  // ALREADY answering on its port, skip all service/bundled orchestration.
+  // This is the common case — a prior launch left the bundled Postgres
+  // running, or the user points at their own instance — and it boots in
+  // milliseconds instead of seconds.
+  const url = new URL(dbUrl);
+  const dbHost = url.hostname || '127.0.0.1';
+  const dbPort = parseInt(url.port || '5433', 10);
+  if (await isTcpOpen(dbHost, dbPort, 1200)) {
+    console.log(`[Bootstrap] PostgreSQL already reachable at ${dbHost}:${dbPort} — using it.`);
+  } else {
+    // A running Windows PG service (usually on 5432) does NOT mean the
+    // configured DB port (e.g. the bundled 5433 instance) is up — trusting it
+    // blindly made boot stall ~60s on a dead port. Start/verify the service,
+    // then re-probe the port the app actually connects to before falling back
+    // to the bundled Postgres.
+    if (await ensurePostgresRunning()) {
+      console.log('[Bootstrap] PostgreSQL service started/confirmed — verifying configured port...');
+      if (await isTcpOpen(dbHost, dbPort, 2000)) {
+        console.log(`[Bootstrap] PostgreSQL now reachable at ${dbHost}:${dbPort} — using it.`);
+      }
+    }
+    if (!(await isTcpOpen(dbHost, dbPort, 800))) {
+      const bundledUrl = await startBundledPostgres();
+      if (bundledUrl) {
+        // Keep the CONFIGURED credentials (vox:vox from vox-db.txt / backend
+        // .env) and only take host/port from the bundled instance. The bundled
+        // data dir may have been initialised with a different superuser name
+        // than 'postgres', so blindly adopting the bundled URL's user used to
+        // yield "role does not exist" and a backend that exits 1.
+        try {
+          const conf = new URL(dbUrl);
+          const bnd = new URL(bundledUrl);
+          conf.hostname = bnd.hostname;
+          conf.port = bnd.port;
+          dbUrl = conf.toString();
+        } catch {
+          dbUrl = bundledUrl;
+        }
+        bundled = true;
+        process.env.DATABASE_URL = dbUrl;
+        console.log('[Bootstrap] Using bundled PostgreSQL: ' + dbUrl);
+      }
+    }
+  }
+  await ensureDatabaseExists(dbUrl);
+
+  if (!fs.existsSync(migrationsDir)) {
+    console.log('[Bootstrap] No prisma/migrations bundled — skipping schema apply.');
+    return;
+  }
+
   const portableNode = getPortableNode();
   const nodeBin = portableNode || 'node';
   const nodeDir = portableNode ? path.join(process.resourcesPath, 'nodejs') : null;
-  const dbPath = path.join(VOX_USER_DATA, 'vox.db');
-  console.log('[Bootstrap] Running first-run database setup...');
+  const prismaBin = portableNode
+    ? path.join(getBackendPath('node_modules', '.bin', 'prisma'))
+    : path.join(getBackendPath('node_modules', '.bin', 'prisma'));
+
+  if (alreadyBootstrapped) {
+    console.log('[Bootstrap] Database already initialised — skipping migrations.');
+    if (!fs.existsSync(prismaBin)) {
+      try {
+        const { getPrisma } = await import('file:///' + getBackendPath('src', 'lib', 'prisma.js').replace(/\\/g, '/'));
+        const client = await getPrisma();
+        if (client) {
+          await client.$queryRaw`SELECT 1`;
+          console.log('[Bootstrap] Database reachable and already bootstrapped.');
+          return;
+        }
+      } catch {}
+      console.warn('[Bootstrap] Database not reachable but migrations already applied.');
+    }
+    return;
+  }
+
+  if (!fs.existsSync(prismaBin)) {
+    console.log('[Bootstrap] prisma CLI not found at', prismaBin, '— checking if DB is already initialised...');
+    try {
+      const { getPrisma } = await import('file:///' + getBackendPath('src', 'lib', 'prisma.js').replace(/\\/g, '/'));
+      const client = await getPrisma();
+      if (client) {
+        await client.$queryRaw`SELECT 1`;
+        console.log('[Bootstrap] Database is already reachable — marking as bootstrapped.');
+        try { fs.writeFileSync(bootstrappedMarker, new Date().toISOString()); } catch {}
+        return;
+      }
+    } catch {
+      // DB not ready yet — fall through and try migrate deploy below
+    }
+    console.log('[Bootstrap] prisma CLI not found — skipping schema apply.');
+    return;
+  }
+  console.log('[Bootstrap] Applying database migrations (first run)...');
   await new Promise((resolve) => {
-    const child = spawn(nodeBin, [scriptPath], {
-      cwd: getBackendPath(),
-      windowsHide: true,
-      env: {
-        ...process.env,
-        DATABASE_URL: 'file:' + dbPath,
-        NODE_PATH: nodeDir
-          ? path.join(nodeDir, 'node_modules') + ';' + path.join(process.resourcesPath, 'backend', 'node_modules')
-          : path.join(process.resourcesPath, 'backend', 'node_modules'),
-        PATH: nodeDir ? nodeDir + ';' + (process.env.PATH || '') : process.env.PATH || '',
+    const child = spawn(
+      portableNode ? prismaBin : nodeBin,
+      portableNode ? ['migrate', 'deploy'] : [prismaBin, 'migrate', 'deploy'],
+      {
+        cwd: getBackendPath(),
+        windowsHide: true,
+        env: {
+          ...process.env,
+          DATABASE_URL: dbUrl,
+          NODE_PATH: portableNode
+            ? path.join(process.resourcesPath, 'backend', 'node_modules')
+            : path.join(process.resourcesPath, 'backend', 'node_modules'),
+          PATH: nodeDir ? nodeDir + ';' + (process.env.PATH || '') : process.env.PATH || '',
+          NODE_ENV: 'production',
+        },
       },
+    );
+    child.stdout.on('data', (d) => { const t = d.toString().trim(); if (t) console.log('[Bootstrap]', t); });
+    child.stderr.on('data', (d) => { const t = d.toString().trim(); if (t && !shouldSuppressStderr(t)) console.error('[Bootstrap]', t); });
+    child.on('exit', (code) => {
+      if (code !== 0) { console.warn('[Bootstrap] migrate deploy exited code', code); }
+      else {
+        try { fs.writeFileSync(bootstrappedMarker, new Date().toISOString()); } catch {}
+        console.log('[Bootstrap] Database initialised.');
+      }
+      resolve();
     });
-    child.stdout.on('data', (d) => console.log('[Bootstrap]', d.toString().trim()));
-    child.stderr.on('data', (d) => { const t = d.toString().trim(); if (!shouldSuppressStderr(t)) console.error('[Bootstrap]', t); });
-    child.on('exit', (code) => { if (code !== 0) console.warn('[Bootstrap] exited code', code); resolve(); });
     child.on('error', (err) => { console.error('[Bootstrap] spawn error:', err.message); resolve(); });
   });
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  Animated splash screen (data URI — no external file needed)
+//  Boot terminal — VOX Secure Boot
+//  (data URI — no external file needed)
 // ═══════════════════════════════════════════════════════════════════
 
 const SPLASH_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
-  :root{--c:#d84a5a;--c2:#7d1f2b;--v:#030304;--vp:#3b0a12;--a:#c7ced8}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%;background:radial-gradient(circle at 50% 38%,#0a0a0d 0%,var(--v) 70%);
-    display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;
-    font-family:'Segoe UI',system-ui,sans-serif;color:#fff}
-  .stage{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center}
-  .ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(216,74,90,.22)}
-  .ring.r1{animation:spin 6s linear infinite}
-  .ring.r2{inset:22px;border-color:rgba(216,74,90,.35);animation:spin 4s linear infinite reverse}
-  .ring.r3{inset:44px;border-color:rgba(216,74,90,.5);animation:spin 3s linear infinite}
-  .ring::before{content:"";position:absolute;top:-3px;left:50%;width:6px;height:6px;margin-left:-3px;
-    border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c),0 0 20px var(--c)}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .core{width:74px;height:74px;display:flex;align-items:center;justify-content:center;
-    clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%);
-    background:linear-gradient(135deg,var(--vp),var(--c2));
-    box-shadow:0 0 26px rgba(216,74,90,.45),inset 0 0 14px rgba(0,0,0,.6);
-    animation:corepulse 2.4s ease-in-out infinite}
-  @keyframes corepulse{0%,100%{box-shadow:0 0 18px rgba(216,74,90,.3),inset 0 0 14px rgba(0,0,0,.6)}
-    50%{box-shadow:0 0 40px rgba(216,74,90,.7),inset 0 0 14px rgba(0,0,0,.6)}}
-  .vox{font-family:'Arial Black',system-ui,sans-serif;font-weight:900;font-size:30px;letter-spacing:3px;
-    color:#fff;text-shadow:0 0 14px rgba(216,74,90,.8);animation:flick 2.4s ease-in-out infinite}
-  @keyframes flick{0%,100%{opacity:1}50%{opacity:.78}}
-  .wave{display:flex;align-items:flex-end;gap:3px;height:18px;margin-top:26px}
-  .wave span{width:3px;border-radius:2px;background:linear-gradient(180deg,var(--c),var(--c2));
-    animation:bounce 1.1s ease-in-out infinite;box-shadow:0 0 5px rgba(216,74,90,.5)}
-  .wave span:nth-child(1){animation-delay:0s;height:8px}
-  .wave span:nth-child(2){animation-delay:.12s;height:16px}
-  .wave span:nth-child(3){animation-delay:.24s;height:11px}
-  .wave span:nth-child(4){animation-delay:.36s;height:18px}
-  .wave span:nth-child(5){animation-delay:.48s;height:9px}
-  .wave span:nth-child(6){animation-delay:.6s;height:14px}
-  .wave span:nth-child(7){animation-delay:.72s;height:7px}
-  @keyframes bounce{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1)}}
-  .status{margin-top:18px;font-size:12px;letter-spacing:1px;color:var(--a);
-    text-transform:uppercase;opacity:.8}
+  html,body{margin:0;height:100%;overflow:hidden;user-select:none;
+    background:radial-gradient(ellipse 120% 80% at 50% -10%, #101319 0%, #05060a 55%, #030407 100%);
+    font-family:'Cascadia Code','Consolas','SF Mono',Menlo,monospace;color:#c8d3d0}
+  .term{position:relative;height:100%;padding:26px 24px 20px;display:flex;flex-direction:column;
+    background:linear-gradient(180deg, rgba(255,255,255,0.025), transparent 30%);
+    border:1px solid rgba(140,170,164,0.14);border-radius:14px;
+    box-shadow:0 0 60px rgba(0,0,0,.6), inset 0 0 80px rgba(0,0,0,.45)}
+  .term::before{content:"";position:absolute;inset:0;border-radius:14px;pointer-events:none;
+    background:repeating-linear-gradient(0deg, transparent 0 2px, rgba(0,0,0,.18) 2px 4px);
+    opacity:.5}
+  .head{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;
+    border-bottom:1px solid rgba(140,170,164,0.14);font-size:10px;letter-spacing:.24em;
+    text-transform:uppercase;color:#7fa69e}
+  .head b{color:#d7a94a;font-weight:600}
+  .dot{display:inline-flex;gap:5px;margin-right:10px}
+  .dot i{width:8px;height:8px;border-radius:50%;background:#3a4650}
+  .dot i:nth-child(1){background:#c0523e}
+  .dot i:nth-child(2){background:#c9a23e}
+  .dot i:nth-child(3){background:#58a06b}
+  .body{flex:1;overflow:hidden;padding-top:16px;font-size:12.5px;line-height:1.75}
+  .ln{white-space:pre-wrap;opacity:0;transform:translateY(3px);animation:lin .22s ease forwards}
+  @keyframes lin{to{opacity:1;transform:none}}
+  .ln .p{color:#d7a94a}
+  .ln .ok{color:#58a06b}
+  .cursor{display:inline-block;width:7px;height:13px;margin-left:2px;vertical-align:-2px;
+    background:#d7a94a;animation:blink 1.1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .prog{margin-top:16px}
+  .prog .track{height:3px;border-radius:2px;background:rgba(140,170,164,0.14);overflow:hidden}
+  .prog .fill{height:100%;width:0%;border-radius:2px;
+    background:linear-gradient(90deg,#8a6a2a,#d7a94a,#f2d489);
+    box-shadow:0 0 8px rgba(215,169,74,.5);transition:width .5s ease}
+  .prog .meta{display:flex;justify-content:space-between;margin-top:8px;font-size:10px;
+    letter-spacing:.2em;text-transform:uppercase;color:#5d6f6b}
+  .prog .meta .st{color:#a8c3bb}
+  .prog .meta .pc{color:#d7a94a}
+  @media (prefers-reduced-motion: reduce){
+    .ln{opacity:1;transform:none;animation:none}
+    .cursor{animation:none}
+  }
 </style></head><body>
-  <div class="stage">
-    <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
-    <div class="core"><div class="vox">VOX</div></div>
+<div class="term">
+  <div class="head">
+    <span><span class="dot"><i></i><i></i><i></i></span>VOX SECURE BOOT</span>
+    <span>v1.0 <b>ENCRYPTED</b></span>
   </div>
-  <div class="wave"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-  <div class="status">Booting VOX…</div>
+  <div class="body" id="log"></div>
+  <div class="prog">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <div class="meta"><span class="st" id="st">Booting kernel…</span><span class="pc" id="pc">0%</span></div>
+  </div>
+</div>
+<script>
+  const log = document.getElementById('log');
+  const fill = document.getElementById('fill');
+  const st = document.getElementById('st');
+  const pc = document.getElementById('pc');
+  const PER = { 'Booting kernel…': 12, 'Connecting vault…': 42, 'Waking backend…': 74, 'Opening interface…': 92 };
+  const STEPS = {
+    'Booting kernel…': [
+      '> initialising secure kernel', '  [ ok ] memory regions locked', '  [ ok ] integrity verified'
+    ],
+    'Connecting vault…': [
+      '> connecting data vault', '  [ ok ] vault unlocked · 127.0.0.1:5433', '  [ ok ] schema ready'
+    ],
+    'Waking backend…': [
+      '> waking backend services', '  [ ok ] api listening · :4000', '  [ ok ] socket mesh active'
+    ],
+    'Opening interface…': [
+      '> opening interface', '  [ ok ] handshake complete', '  [ ok ] welcome back'
+    ]
+  };
+  function typeLine(text, cls, delay) {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.className = 'ln';
+      div.innerHTML = text.replace(/^(>|&gt;|\s*\[.*?\])/, function (m) { return '<span class="' + cls + '">' + m + '</span>'; });
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+      addCursor();
+    }, delay);
+  }
+  function addCursor() {
+    const prev = log.querySelector('.cursor');
+    if (prev) prev.remove();
+    const c = document.createElement('span');
+    c.className = 'cursor';
+    log.lastChild && log.lastChild.appendChild(c);
+  }
+  window.__boot = function (text) {
+    const pct = PER[text] || 0;
+    fill.style.width = pct + '%';
+    pc.textContent = pct + '%';
+    st.textContent = text;
+    const steps = STEPS[text] || [];
+    let delay = 60;
+    steps.forEach((s, i) => {
+      const cls = s.startsWith('>') ? 'p' : s.includes('[ ok ]') ? 'ok' : 'dim';
+      typeLine(s.replace(/</g, '&lt;'), cls, delay);
+      delay += 240;
+    });
+    if (text === 'Opening interface…') {
+      setTimeout(() => { fill.style.width = '100%'; pc.textContent = '100%'; }, delay + 200);
+    }
+  };
+  // The main process drives every phase via window.__boot — no auto-run here,
+  // otherwise the pending 'Booting kernel…' flush on did-finish-load would
+  // render the first phase twice.
+</script>
 </body></html>`;
 
 let splash = null;
+let splashReady = false;
+let splashPendingStatus = null;
 function createSplash() {
   if (splash) return;
   splash = new BrowserWindow({
-    width: 340, height: 420, frame: false, resizable: false,
+    width: 400, height: 300, frame: false, resizable: false,
     center: true, alwaysOnTop: true, skipTaskbar: true,
-    backgroundColor: '#1e1f22',
+    backgroundColor: '#05060a',
     webPreferences: { contextIsolation: true, nodeIntegration: false },
+  });
+  splash.webContents.once('did-finish-load', () => {
+    splashReady = true;
+    if (splashPendingStatus) {
+      const t = splashPendingStatus;
+      splashPendingStatus = null;
+      setSplashStatus(t);
+    }
   });
   splash.loadURL('data:text/html,' + encodeURIComponent(SPLASH_HTML));
 }
@@ -337,50 +851,109 @@ function closeSplash() {
   if (!splash) return;
   try { splash.close(); } catch {}
   splash = null;
+  splashReady = false;
+  splashPendingStatus = null;
+}
+function setSplashStatus(text) {
+  if (!splash || splash.isDestroyed()) return;
+  if (!splashReady) { splashPendingStatus = text; return; }
+  try {
+    splash.webContents.executeJavaScript(
+      `window.__boot(${JSON.stringify(text)})`
+    ).catch(() => {});
+  } catch {}
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  Backend (Node.js — bundled SQLite, zero setup)
+//  Backend (Node.js — requires a PostgreSQL database)
 // ═══════════════════════════════════════════════════════════════════
 
 async function startBackend() {
   const portableNode = getPortableNode();
   if (!portableNode) {
-    // Dev mode
-    if (await isPortInUse(4000)) {
-      const ok = await waitForServer('http://127.0.0.1:4000/health', 3000);
-      if (ok) { console.log('[Backend] Reusing existing instance on port 4000'); return; }
-    }
+    const dbUrl = resolveBackendDatabaseUrl();
+    if (!process.env.DATABASE_URL) process.env.DATABASE_URL = dbUrl;
+    if (await reuseOrClearBackendPort()) return true;
     console.log('[Backend] Starting with system Node.js...');
+    const devFrontendDist = path.join(PROJECT_ROOT, 'frontend', 'dist');
     backendProc = spawn('node', [getBackendPath('server.js')], {
       cwd: PROJECT_ROOT, windowsHide: true,
+      env: {
+        ...process.env,
+        DATABASE_URL: process.env.DATABASE_URL,
+        // Pin the API port explicitly: a stray PORT in the inherited env
+        // (e.g. an orchestrator/CI wrapper exporting its own port) would
+        // otherwise make the backend bind the wrong port and the window —
+        // which always loads http://127.0.0.1:4000 — never connects.
+        PORT: '4000',
+        NODE_ENV: 'production',
+        SERVE_FRONTEND: '1',
+        FRONTEND_DIST: devFrontendDist,
+        VOX_REQUIRE_DB: isPostgresDatabase(dbUrl) ? '1' : undefined,
+      },
     });
+    let backendStderr = '';
+    const stderrHandler = (d) => {
+      const t = d.toString().trim();
+      if (t && !shouldSuppressStderr(t)) {
+        console.error('[Backend]', t);
+        backendStderr += t + '\n';
+      }
+    };
     backendProc.stdout.on('data', (d) => { const t = d.toString().trim(); if (t) console.log('[Backend]', t); });
-    backendProc.stderr.on('data', (d) => { const t = d.toString().trim(); if (t && !shouldSuppressStderr(t)) console.error('[Backend]', t); });
+    backendProc.stderr.on('data', stderrHandler);
     backendProc.on('error', (e) => console.error('[Backend]', e.message));
     backendProc.on('exit', (c) => console.log('[Backend] exited:', c));
-    await new Promise((r) => setTimeout(r, 3000));
-    return;
+    const ready = await waitForBackendReady(backendProc);
+    if (!ready) {
+      return { ready: false, stderr: backendStderr.slice(-500) };
+    }
+    return { ready: true };
   }
 
   console.log('[Backend] Using bundled Node.js:', portableNode);
   const nodeDir = path.join(process.resourcesPath, 'nodejs');
+  const dbUrl = resolveBackendDatabaseUrl();
+  if (!process.env.DATABASE_URL) process.env.DATABASE_URL = dbUrl;
+  const env2 = {
+    ...process.env,
+    DATABASE_URL: dbUrl,
+    // See the system-node spawn above — always bind the canonical API port.
+    PORT: '4000',
+    NODE_PATH: path.join(nodeDir, 'node_modules') + ';' + path.join(process.resourcesPath, 'backend', 'node_modules'),
+    PATH: nodeDir + ';' + (process.env.PATH || ''),
+    NODE_ENV: 'production',
+    SERVE_FRONTEND: '1',
+    FRONTEND_DIST: fs.existsSync(path.join(process.resourcesPath, 'frontend', 'dist'))
+      ? path.join(process.resourcesPath, 'frontend', 'dist')
+      : path.join(__dirname, 'frontend', 'dist'),
+  };
+  if (isPostgresDatabase(dbUrl)) {
+    env2.VOX_REQUIRE_DB = '1';
+  }
+  if (await reuseOrClearBackendPort()) return { ready: true };
   backendProc = spawn(portableNode, [getBackendPath('server.js')], {
     cwd: getBackendPath(),
     windowsHide: true,
-    env: {
-      ...process.env,
-      DATABASE_URL: 'file:' + path.join(VOX_USER_DATA, 'vox.db'),
-      NODE_PATH: path.join(nodeDir, 'node_modules') + ';' + path.join(process.resourcesPath, 'backend', 'node_modules'),
-      PATH: nodeDir + ';' + (process.env.PATH || ''),
-      NODE_ENV: 'production',
-    },
+    env: env2,
   });
+  let backendStderr = '';
+  const stderrHandler = (d) => {
+    const t = d.toString().trim();
+    if (t && !shouldSuppressStderr(t)) {
+      console.error('[Backend]', t);
+      backendStderr += t + '\n';
+    }
+  };
   backendProc.stdout.on('data', (d) => { const t = d.toString().trim(); if (t) console.log('[Backend]', t); });
-  backendProc.stderr.on('data', (d) => { const t = d.toString().trim(); if (t && !shouldSuppressStderr(t)) console.error('[Backend]', t); });
+  backendProc.stderr.on('data', stderrHandler);
   backendProc.on('error', (e) => console.error('[Backend]', e.message));
   backendProc.on('exit', (c) => console.log('[Backend] exited:', c));
-  await new Promise((r) => setTimeout(r, 5000));
+  const ready = await waitForBackendReady(backendProc);
+  if (!ready) {
+    return { ready: false, stderr: backendStderr.slice(-500) };
+  }
+  return { ready: true };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -399,8 +972,11 @@ function createWindow() {
       backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.js'),
       devTools: false,
-      webSecurity: true,
-      allowRunningInsecureContent: false,
+      // The packaged app loads the SPA from inside app.asar (file://), so
+      // the renderer origin is file:// while the backend is http://127.0.0.1:4000.
+      // Disable web security so SameSite cookies attach on these cross-site
+      // fetches. Without this, auth cookies are silently dropped and login 401s.
+      webSecurity: false,
       disableBlinkFeatures: 'Auxclick',
     },
     frame: false, titleBarStyle: 'hidden', title: 'VOX',
@@ -416,12 +992,11 @@ function createWindow() {
   try {
     rendererLog = fs.createWriteStream(rendererLogPath, { flags: 'w', encoding: 'utf8' });
     rendererLog.write('[LOG] Renderer started\n');
-    rendererLog.flush();
   } catch (e) { console.error('[RendererLog]', e.message); }
 
   function writeRenderer(msg) {
     if (!rendererLog) return;
-    try { rendererLog.write(msg + '\n'); rendererLog.flush(); } catch {}
+    try { rendererLog.write(msg + '\n'); } catch {}
   }
 
   const mainLogPath = path.join(VOX_USER_DATA, 'main.log');
@@ -429,7 +1004,7 @@ function createWindow() {
   try { mainLog = fs.createWriteStream(mainLogPath, { flags: 'a', encoding: 'utf8' }); } catch {}
   function writeMain(msg) {
     const line = `[${new Date().toISOString()}] ${msg}`;
-    if (mainLog) { try { mainLog.write(line + '\n'); mainLog.flush(); } catch {} }
+    if (mainLog) { try { mainLog.write(line + '\n'); } catch {} }
     console.log(line);
   }
 
@@ -442,7 +1017,27 @@ function createWindow() {
       .then(() => writeMain('loadFile succeeded'))
       .catch((e) => writeMain('loadFile FAILED: ' + e.message));
   } else {
-    mainWindow.loadURL('http://127.0.0.1:3000');
+    const appUrl = appConfig.apiBase + '/';
+    writeMain('Loading: ' + appUrl);
+    // Dev mode: the backend is still booting when the window opens. If the
+    // first load refuses the connection, retry with backoff until it answers
+    // instead of leaving the user stuck on an ERR_CONNECTION_REFUSED page.
+    let loadAttempts = 0;
+    const loadAppUrl = () => {
+      if (isQuitting || !mainWindow) return;
+      mainWindow.loadURL(appUrl).catch(() => {});
+    };
+    mainWindow.webContents.on('did-fail-load', (_e, code, desc) => {
+      // -102 = ERR_CONNECTION_REFUSED. Keep retrying while the backend comes
+      // up (rare now that the window is created after readiness), then give up
+      // and let the user retry.
+      if (code === -102 && !isQuitting && loadAttempts < 60) {
+        loadAttempts += 1;
+        writeMain(`Retrying load (${loadAttempts}): ${desc}`);
+        setTimeout(loadAppUrl, 500);
+      }
+    });
+    loadAppUrl();
   }
 
   mainWindow.webContents.on('console-message', (_e, level, msg, line, src) => {
@@ -463,6 +1058,7 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     mainWindow.focus();
+    closeSplash();
   });
 
   mainWindow.on('resize', saveWindowState);
@@ -485,7 +1081,16 @@ function createWindow() {
 function createTray() {
   let trayIcon;
   try {
-    const iconPath = resolveIconPath();
+    // Use a small dedicated tray size for a crisp system-tray glyph.
+    let iconPath = null;
+    for (const p of [
+      path.join(process.resourcesPath || '', 'build-resources', 'icon-32.png'),
+      path.join(__dirname, 'build-resources', 'icon-32.png'),
+      path.join(PROJECT_ROOT, 'build-resources', 'icon-32.png'),
+    ]) {
+      if (p && fs.existsSync(p)) { iconPath = p; break; }
+    }
+    if (!iconPath) iconPath = resolveIconPath();
     trayIcon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
     if (trayIcon.isEmpty()) throw new Error('empty');
   } catch {
@@ -582,36 +1187,59 @@ ipcMain.handle('screen-capture:start-direct', async (_e, sourceId) => {
 async function start() {
   console.log('Starting VOX Desktop...');
   createSplash();
+  setSplashStatus('Booting kernel…');
 
-  const appConfig = loadAppConfig();
+  appConfig = loadAppConfig();
   // Expose the resolved server URL to the renderer (window.__VOX_CONFIG.apiBase).
   process.env.VOX_APP_CONFIG = JSON.stringify({ apiBase: appConfig.apiBase, mode: appConfig.mode });
   console.log(`[Config] mode=${appConfig.mode} apiBase=${appConfig.apiBase}`);
 
-  if (appConfig.hosted) {
-    // Hosted SaaS mode: connect to the remote backend, do NOT spawn a local
-    // backend or bootstrap a local SQLite database.
-    console.log('[Startup] Hosted mode — skipping local backend & DB bootstrap.');
-  } else {
-    try {
-      await runDbBootstrap();
-    } catch (err) {
-      console.error('[Startup] DB bootstrap error:', err.message);
-    }
-
-    try {
-      await startBackend();
-    } catch (err) {
-      console.error('[Startup] Backend error:', err.message);
-    }
-
-    // Backend should be up — if not, it will lazy-connect on first request
-    const backendUp = await waitForServer('http://127.0.0.1:4000/health', 12000);
-    console.log(backendUp ? '[Startup] Backend ready.' : '[Startup] Backend not yet responding — will retry on first request.');
+  // Local-first startup: apply Prisma migrations once against the local
+  // PostgreSQL database, then spawn the bundled backend. The splash screen
+  // covers this boot; the window is created AFTER the backend answers so its
+  // first load succeeds immediately instead of staring at ERR_CONNECTION_REFUSED
+  // retries for seconds (which read as "stuck on a black screen").
+  setSplashStatus('Connecting vault…');
+  try {
+    await runDbBootstrap();
+  } catch (err) {
+    console.error('[Startup] DB bootstrap error:', err.message);
   }
 
+  try {
+    setSplashStatus('Waking backend…');
+    const result = await startBackend();
+    if (result.ready) {
+      console.log('[Startup] Backend ready.');
+    } else {
+      console.error('[Startup] Backend exited before becoming ready — check the error output below.');
+      if (!isQuitting) {
+        const stderrSnippet = result.stderr || 'No additional output captured.';
+        dialog.showErrorBox(
+          'VOX could not start',
+          'The VOX backend failed to start. VOX requires a running PostgreSQL ' +
+          'database (default: postgresql://vox:vox@127.0.0.1:5433/vox_dev).\n\n' +
+          'To fix this:\n' +
+          '• Make sure PostgreSQL is running — e.g. start the local\n' +
+          '  "postgresql-x64-18" Windows service (Services app), or run:\n' +
+          '  docker compose up -d\n' +
+          '• Or run the backend dev script directly to see full errors:\n' +
+          '  cd backend && npm run start\n' +
+          '• Advanced: point VOX at any PostgreSQL by creating:\n' +
+          `  ${path.join(VOX_USER_DATA, 'vox-db.txt')}\n` +
+          '  with a single line: postgresql://user:pass@host:5433/dbname\n\n' +
+          'Backend error output (last lines):\n' + stderrSnippet
+        );
+      }
+    }
+  } catch (err) {
+    console.error('[Startup] Backend error:', err.message);
+  }
+
+  // Window + tray come after the backend is listening so the first paint is
+  // the real app — no blank-window retry phase.
+  setSplashStatus('Opening interface…');
   createWindow();
-  closeSplash();
   createTray();
 
   // Global shortcuts
@@ -645,6 +1273,7 @@ app.on('before-quit', () => { isQuitting = true; });
 
 app.on('window-all-closed', () => {
   if (backendProc) backendProc.kill();
+  stopBundledPostgres();
   globalShortcut.unregisterAll();
   if (tray) tray.destroy();
   if (process.platform !== 'darwin') app.quit();

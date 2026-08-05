@@ -626,8 +626,8 @@ h1, h2, h3, h4, h5, h6, .title {
 }
 
 @keyframes fog-drift {
-  0%, 100% { opacity: 0.25; transform: translateX(-8%) scaleX(1.2); }
-  50%      { opacity: 0.45; transform: translateX(8%) scaleX(1.1); }
+  0%, 100% { opacity: 0.25; transform: translateX(-3%) scaleX(1.03); }
+  50%      { opacity: 0.45; transform: translateX(3%) scaleX(1.02); }
 }
 
 @keyframes corner-flicker {
@@ -1180,15 +1180,612 @@ h1, h2, h3, h4, h5, h6, .title {
   justify-content: center;
   min-height: 26px;
   padding: 5px 8px;
-  color: rgba(216, 74, 90, 0.4);
+  color: rgba(216, 74, 90, 0.55);
   background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(216, 74, 90, 0.1);
+  border: 1px solid rgba(216, 74, 90, 0.12);
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
-  font-size: 9px;
-  letter-spacing: 0.14em;
+  font-size: 10px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   flex: 1;
+  white-space: nowrap;
+  transition: color 0.2s ease, border-color 0.2s ease;
 }
+
+.vox-login-footer span:hover {
+  color: rgba(216, 74, 90, 0.85);
+  border-color: rgba(216, 74, 90, 0.3);
+}
+
+/* ── decrypting subtitle ── */
+.decypher-text {
+  display: inline-block;
+  min-width: 0;
+  white-space: nowrap;
+  text-shadow: 0 0 10px rgba(216, 74, 90, 0.35);
+}
+
+/* ── live signal charge ── */
+.vox-login-signal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 2px 16px;
+}
+
+.vox-login-signal .signal-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vox-login-signal .signal-label > span:first-child {
+  color: rgba(140, 149, 163, 0.55);
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.vox-login-signal .signal-readout {
+  color: rgba(216, 74, 90, 0.65);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+}
+
+.vox-login-signal .signal-readout.ready {
+  color: var(--toxic);
+  text-shadow: 0 0 8px rgba(143, 207, 155, 0.5);
+}
+
+.vox-login-signal .signal-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 14px;
+}
+
+.vox-login-signal .signal-bar {
+  display: block;
+  width: 18px;
+  height: 6px;
+  background: rgba(216, 74, 90, 0.12);
+  border: 1px solid rgba(216, 74, 90, 0.15);
+  clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%);
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.vox-login-signal .signal-bar:last-child {
+  height: 10px;
+}
+
+.vox-login-signal .signal-bar.lit {
+  background: linear-gradient(90deg, rgba(216, 74, 90, 0.55), rgba(216, 74, 90, 0.85));
+  border-color: rgba(216, 74, 90, 0.6);
+  box-shadow: 0 0 10px rgba(216, 74, 90, 0.35);
+}
+
+/* ── orbiting rune arc ── */
+.vox-login-orbit {
+  position: absolute;
+  inset: -14px;
+  pointer-events: none;
+  animation: sigil-spin 24s linear infinite;
+}
+
+.vox-login-orbit .orbit-glyph {
+  position: absolute;
+  font-style: normal;
+  color: rgba(216, 74, 90, 0.35);
+  font-size: 13px;
+  text-shadow: 0 0 8px rgba(216, 74, 90, 0.4);
+  animation: cross-glow 3.2s ease-in-out infinite;
+}
+
+.orbit-g1 { top: -6px; left: 46%; }
+.orbit-g2 { top: 42%; right: -4px; animation-delay: 0.8s; }
+.orbit-g3 { bottom: -6px; left: 48%; animation-delay: 1.6s; }
+.orbit-g4 { top: 44%; left: -4px; animation-delay: 2.4s; }
+
+/* ── caps-lock hint ── */
+.vox-login-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  color: var(--gold);
+  background: rgba(217, 201, 141, 0.06);
+  border: 1px solid rgba(217, 201, 141, 0.18);
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── filled input glow ── */
+.vox-login-input-wrap.filled {
+  border-color: rgba(216, 74, 90, 0.28);
+}
+
+/* ── submit spinner + chevron ── */
+.vox-login-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--chaos);
+  border-radius: 50%;
+  animation: vox-spin 0.7s linear infinite;
+  justify-self: center;
+}
+
+.vox-login-submit .submit-chevron {
+  color: rgba(216, 74, 90, 0.7);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.vox-login-submit:hover:not(:disabled) .submit-chevron {
+  transform: translateX(3px);
+  color: var(--chaos);
+}
+
+/* ── live status footer ── */
+.vox-login-footer .vox-login-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vox-login-status em {
+  font-style: normal;
+}
+
+.vox-login-status .status-dot {
+  width: 7px;
+  height: 7px;
+  background: rgba(216, 74, 90, 0.45);
+  box-shadow: 0 0 6px rgba(216, 74, 90, 0.4);
+  animation: vox-pulse 2s ease-in-out infinite;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.vox-login-status .status-dot.ready {
+  background: var(--toxic);
+  box-shadow: 0 0 8px rgba(143, 207, 155, 0.6);
+  animation: statusDotPulse 1.6s ease-in-out infinite;
+}
+
+.vox-login-status:hover .status-dot {
+  filter: brightness(1.25);
+}
+
+/* ── error with icon ── */
+.vox-login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.vox-login-error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── wax-seal monogram ── */
+.vox-login-seal {
+  position: relative;
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+  place-items: center;
+  color: var(--gold);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(217, 201, 141, 0.16), transparent 60%),
+    linear-gradient(145deg, #241305, #120801);
+  border: 1px solid rgba(217, 201, 141, 0.35);
+  border-radius: 50%;
+  box-shadow: 0 0 22px rgba(217, 201, 141, 0.12), inset 0 0 14px rgba(217, 201, 141, 0.06);
+  clip-path: none;
+}
+
+.vox-login-seal .seal-ring {
+  position: absolute;
+  inset: 3px;
+  border: 1px dashed rgba(217, 201, 141, 0.3);
+  border-radius: 50%;
+  animation: sigil-spin 30s linear infinite;
+  pointer-events: none;
+}
+
+.vox-login-seal svg {
+  filter: drop-shadow(0 0 6px rgba(217, 201, 141, 0.4));
+}
+
+/* ── privacy pledge chips ── */
+.vox-login-pledge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  flex-wrap: wrap;
+}
+
+.vox-login-pledge span {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  color: rgba(217, 201, 141, 0.75);
+  background: rgba(217, 201, 141, 0.05);
+  border: 1px solid rgba(217, 201, 141, 0.16);
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vox-login-pledge span:hover {
+  color: var(--gold);
+  border-color: rgba(217, 201, 141, 0.35);
+  box-shadow: 0 0 12px rgba(217, 201, 141, 0.12);
+}
+
+/* ── privacy note under the card ── */
+.vox-login-note {
+  max-width: 320px;
+  margin-top: 14px;
+  color: rgba(140, 149, 163, 0.45);
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1.55;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+/* ════════════════════════════════════════════════════════════════════
+   VOX MIN · Minimal Private Auth
+   A quiet, minimal, elegant sign-in — single card, nothing extra.
+   Shared by Login and Register.
+   ════════════════════════════════════════════════════════════════════ */
+
+.vox-min-login {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100vw;
+  padding: 32px 20px;
+  overflow: hidden;
+  color: #e8e6df;
+  background:
+    radial-gradient(ellipse 60% 45% at 50% 30%, rgba(217, 201, 141, 0.04), transparent 60%),
+    linear-gradient(180deg, #0e0f11 0%, #08090b 60%, #050607 100%);
+}
+
+/* soft ambient glow */
+.vox-min-glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(217, 201, 141, 0.05), transparent 34%),
+    linear-gradient(90deg, transparent, rgba(217, 201, 141, 0.012), transparent);
+}
+
+/* ── card ── */
+.vox-min-card {
+  display: flex;
+  flex-direction: column;
+  width: min(360px, 100%);
+  padding: 44px 36px 36px;
+  background: rgba(15, 16, 18, 0.9);
+  border: 1px solid rgba(217, 201, 141, 0.14);
+  border-radius: 10px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+/* ── brand ── */
+.vox-min-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.vox-min-mark {
+  position: relative;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  background: radial-gradient(circle at 50% 38%, #0c0c0f, #050506 72%);
+  border: 1px solid rgba(217, 201, 141, 0.4);
+  border-radius: 50%;
+  box-shadow: 0 0 18px rgba(217, 201, 141, 0.16), inset 0 1px 0 rgba(217, 201, 141, 0.2);
+}
+
+.vox-min-emblem {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 26px;
+  height: 30px;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* soft champagne rim-light keeps the black coat legible on the black badge */
+  filter: drop-shadow(0 0 2px rgba(216, 210, 196, 0.45)) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+}
+
+.vox-min-brand h1 {
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #f4efe2;
+}
+
+.vox-min-sub {
+  margin-bottom: 30px;
+  color: rgba(232, 230, 223, 0.45);
+  font-size: 12.5px;
+  line-height: 1.55;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ── form ── */
+.vox-min-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.vox-min-field {
+  position: relative;
+}
+
+.vox-min-field input {
+  width: 100%;
+  height: 46px;
+  padding: 0 42px 0 14px;
+  color: #f4efe2;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(217, 201, 141, 0.14);
+  border-radius: 8px;
+  outline: none;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 13.5px;
+  letter-spacing: 0.02em;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.vox-min-field input::placeholder {
+  color: rgba(232, 230, 223, 0.28);
+}
+
+.vox-min-field input:focus {
+  border-color: rgba(217, 201, 141, 0.45);
+  background: rgba(0, 0, 0, 0.45);
+  box-shadow: 0 0 0 3px rgba(217, 201, 141, 0.06), 0 0 20px rgba(217, 201, 141, 0.05);
+}
+
+.vox-min-eye {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: rgba(217, 201, 141, 0.4);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.vox-min-eye:hover {
+  color: #e9d9a8;
+  background: rgba(217, 201, 141, 0.06);
+}
+
+.vox-min-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: #e9d9a8;
+  background: rgba(217, 201, 141, 0.05);
+  border: 1px solid rgba(217, 201, 141, 0.16);
+  border-radius: 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+/* ── remember / forgot row ── */
+.vox-min-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.vox-min-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(232, 230, 223, 0.6);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vox-min-remember input {
+  width: 14px;
+  height: 14px;
+  accent-color: #c4b078;
+  cursor: pointer;
+}
+
+.vox-min-forgot {
+  padding: 0;
+  color: rgba(217, 201, 141, 0.55);
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.vox-min-forgot:hover {
+  color: #e9d9a8;
+}
+
+/* ── error ── */
+.vox-min-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  color: #f0b9a0;
+  background: rgba(170, 74, 58, 0.08);
+  border: 1px solid rgba(170, 74, 58, 0.28);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.vox-min-error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── submit ── */
+.vox-min-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 46px;
+  margin-top: 4px;
+  padding: 0 18px;
+  color: #e8e6df;
+  background: rgba(217, 201, 141, 0.06);
+  border: 1px solid rgba(217, 201, 141, 0.25);
+  border-radius: 8px;
+  font-family: 'Cinzel Decorative', serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, filter 0.25s ease;
+}
+
+.vox-min-submit:hover:not(:disabled) {
+  background: rgba(217, 201, 141, 0.12);
+  border-color: rgba(217, 201, 141, 0.4);
+  box-shadow: 0 6px 24px rgba(217, 201, 141, 0.1);
+}
+
+.vox-min-submit.armed {
+  color: #14110a;
+  background: linear-gradient(135deg, #e9d9a8, #c4b078);
+  border-color: rgba(217, 201, 141, 0.6);
+  box-shadow: 0 6px 26px rgba(217, 201, 141, 0.18);
+}
+
+.vox-min-submit.armed:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: linear-gradient(135deg, #f0e2ba, #cdba84);
+}
+
+.vox-min-submit:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.vox-min-submit .vox-min-arrow {
+  transition: transform 0.2s ease;
+}
+
+.vox-min-submit:hover:not(:disabled) .vox-min-arrow {
+  transform: translateX(3px);
+}
+
+.vox-min-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(217, 201, 141, 0.25);
+  border-top-color: #c4b078;
+  border-radius: 50%;
+  animation: vox-spin 0.7s linear infinite;
+}
+
+/* ── alt + foot ── */
+.vox-min-alt {
+  margin-top: 26px;
+  color: rgba(232, 230, 223, 0.5);
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.vox-min-alt button {
+  padding: 0;
+  color: #e9d9a8;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+.vox-min-alt button:hover {
+  color: #fff3cd;
+}
+
+.vox-min-foot {
+  margin-top: 22px;
+  color: rgba(232, 230, 223, 0.3);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  user-select: none;
+}
+
+@media (max-width: 420px) {
+  .vox-min-card {
+    padding: 36px 24px 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vox-min-card,
+  .vox-min-glow {
+    animation: none;
+  }
+}
+
 
 /* ── responsive ── */
 @media (max-width: 560px) {
@@ -1202,6 +1799,23 @@ h1, h2, h3, h4, h5, h6, .title {
 
   .vox-login-card {
     padding: 22px;
+  }
+
+  /* Scale the sigil rings down so they stay inside the viewport instead of
+     being sliced by the overflow clip at narrow widths. */
+  .vox-login-ring.ring-outer {
+    width: min(340px, 92vw);
+    height: min(340px, 92vw);
+  }
+
+  .vox-login-ring.ring-inner {
+    width: min(280px, 76vw);
+    height: min(280px, 76vw);
+  }
+
+  .vox-login-ring.ring-sigil {
+    width: min(310px, 84vw);
+    height: min(310px, 84vw);
   }
 
   .vox-login-header {
@@ -1224,11 +1838,14 @@ h1, h2, h3, h4, h5, h6, .title {
 
   .vox-login-footer {
     gap: 6px;
+    flex-wrap: wrap;
   }
 
   .vox-login-footer span {
-    padding-inline: 4px;
-    font-size: 8px;
+    padding-inline: 6px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    flex: 1 1 auto;
   }
 }
 

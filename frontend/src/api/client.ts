@@ -7,10 +7,10 @@
 // and a hosted backend — the user never configures anything.
 function resolveApiBase(): string {
   try {
-    const injected = (window as any).__VOX_CONFIG?.apiBase;
+    const injected = window.__VOX_CONFIG?.apiBase;
     if (injected && typeof injected === 'string' && injected.length) return injected;
   } catch { /* ignore */ }
-  return (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:4000';
+  return import.meta.env.VITE_API_BASE || 'http://127.0.0.1:4000';
 }
 
 export const API_BASE = resolveApiBase();
@@ -33,7 +33,10 @@ export function getToken() {
 // JS-reachable storage (sessionStorage/localStorage).
 let refreshPromise: Promise<boolean> | null = null;
 
-async function tryRefresh(): Promise<boolean> {
+// Shared, deduped refresh. All refresh paths (401 retries, upload retries)
+// must go through this single promise so two concurrent refreshes can never
+// race the server's token handling and invalidate each other.
+export async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
     try {
@@ -74,10 +77,24 @@ async function getLogout(): Promise<() => void> {
   return logoutFn;
 }
 
-export async function api<T = any>(path: string, options: RequestInit = {}, _retry = false): Promise<T> {
-  const { skipAuth = false, headers: customHeaders, ...rest } = options as any;
+// Backend JSON responses are untyped; callers pass an explicit generic or
+// cast where they need a concrete shape.
+function extractError(data: unknown, fallback: string): string {
+  if (data && typeof data === 'object') {
+    const d = data as Record<string, unknown>;
+    if (typeof d.error === 'string') return d.error;
+    if (typeof d.message === 'string') return d.message;
+  }
+  return fallback;
+}
+
+// The `any` default keeps untyped call sites working; typed callers pass an
+// explicit generic (e.g. api<{ config: ArchiveConfig }>(...)).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional generic default for untyped JSON responses
+export async function api<T = any>(path: string, options: RequestInit & { skipAuth?: boolean } = {}, _retry = false): Promise<T> {
+  const { skipAuth = false, headers: customHeaders, ...rest } = options;
   let res: Response | null = null;
-  let data: any;
+  let data: unknown;
 
   // ── Resilient fetch with retry ───────────────────────────────
   // In the desktop app the renderer can fire requests (servers, friends,
@@ -148,17 +165,16 @@ export async function api<T = any>(path: string, options: RequestInit = {}, _ret
         });
         throw new Error('Session expired. Please log in again.');
       }
-      let data: any;
+      let data: unknown;
       try {
         data = await retryRes.json();
       } catch {
         data = null;
       }
       if (!retryRes.ok) {
-        const errorMsg = data?.error || data?.message || retryRes.statusText || `HTTP ${retryRes.status}`;
-        throw new Error(errorMsg);
+        throw new Error(extractError(data, retryRes.statusText || `HTTP ${retryRes.status}`));
       }
-      return data;
+      return data as T;
     }
     console.warn('[API] Token refresh failed, logging out');
     const logoutFn = await getLogout();
@@ -173,11 +189,12 @@ export async function api<T = any>(path: string, options: RequestInit = {}, _ret
 
   if (res.status === 429) {
     const retryAfter = res.headers.get('Retry-After');
-    const seconds = retryAfter ? parseInt(retryAfter, 10) : (data?.retryAfter ? Math.ceil(data.retryAfter) : 60);
-    const err = new Error(data?.error || `You're doing that too fast. Please wait ${seconds}s.`);
-    (err as any).rateLimited = true;
-    (err as any).retryAfter = seconds;
-    (err as any).status = 429;
+    const d = data as { retryAfter?: number } | null;
+    const seconds = retryAfter ? parseInt(retryAfter, 10) : (d?.retryAfter ? Math.ceil(d.retryAfter) : 60);
+    const err = new Error(extractError(data, `You're doing that too fast. Please wait ${seconds}s.`)) as Error & { rateLimited?: boolean; retryAfter?: number; status?: number };
+    err.rateLimited = true;
+    err.retryAfter = seconds;
+    err.status = 429;
     throw err;
   }
 
@@ -189,10 +206,10 @@ export async function api<T = any>(path: string, options: RequestInit = {}, _ret
   }
 
   if (!res.ok) {
-    const errorMsg = data?.error || data?.message || res.statusText || `HTTP ${res.status}`;
+    const errorMsg = extractError(data, res.statusText || `HTTP ${res.status}`);
     console.error(`[API] Error on ${path}:`, errorMsg);
     throw new Error(errorMsg);
   }
 
-  return data;
+  return data as T;
 }

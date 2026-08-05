@@ -11,6 +11,7 @@ import { env } from '../lib/env.js';
 import { sendPasswordResetEmail, sendVerificationEmail } from './email.service.js';
 import {
   mintTokenPair,
+  mintAccessToken,
   findValidRefreshToken,
   revokeRefreshToken,
   verifyRefresh,
@@ -51,10 +52,33 @@ export function publicUser(user) {
   };
 }
 
-function setAuthCookies(res, access, refresh) {
+// Decide whether auth cookies get the `; Secure` attribute.
+//
+// `Secure` cookies are ONLY stored by the browser over HTTPS. The local-first
+// desktop app serves the SPA + API over plain http://127.0.0.1:4000, so marking
+// the cookies Secure there makes the browser silently drop them — the user
+// "logs in" but the next request is unauthenticated ("session expired, please
+// log in again"). We therefore only set Secure when the app is actually served
+// over HTTPS:
+//   • COOKIE_SECURE=1  → force Secure (hosted HTTPS deployments)
+//   • COOKIE_SECURE=0  → force off
+//   • otherwise: Secure only in production AND when NOT serving the SPA locally
+//     over HTTP (SERVE_FRONTEND=1 is the desktop/single-origin HTTP case).
+function useSecureCookies() {
+  if (process.env.COOKIE_SECURE === '1') return true;
+  if (process.env.COOKIE_SECURE === '0') return false;
   const isProd = process.env.NODE_ENV === 'production';
-  const maxAgeAccess = env.jwt.accessTtl === '15m' ? 900 : Math.floor(parseInt(env.jwt.accessTtl) * 60) || 900;
-  const maxAgeRefresh = env.jwt.refreshTtl === '7d' ? 604800 : Math.floor(parseInt(env.jwt.refreshTtl) * 86400) || 604800;
+  const localHttp = process.env.SERVE_FRONTEND === '1';
+  return isProd && !localHttp;
+}
+
+function setAuthCookies(res, access, refresh) {
+  const isProd = useSecureCookies();
+  const now = Math.floor(Date.now() / 1000);
+  const accessDecoded = jwt.decode(access);
+  const refreshDecoded = jwt.decode(refresh);
+  const maxAgeAccess = (accessDecoded && typeof accessDecoded.exp === 'number' ? accessDecoded.exp : now + 900) - now;
+  const maxAgeRefresh = (refreshDecoded && typeof refreshDecoded.exp === 'number' ? refreshDecoded.exp : now + 604800) - now;
   res.setHeader('Set-Cookie', [
     `vox_access=${access}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeAccess}${isProd ? '; Secure' : ''}`,
     `vox_refresh=${refresh}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeRefresh}${isProd ? '; Secure' : ''}`,
@@ -62,7 +86,7 @@ function setAuthCookies(res, access, refresh) {
 }
 
 function clearAuthCookies(res) {
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = useSecureCookies();
   res.setHeader('Set-Cookie', [
     `vox_access=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProd ? '; Secure' : ''}`,
     `vox_refresh=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProd ? '; Secure' : ''}`,
@@ -333,9 +357,8 @@ export async function completeTwoFactorLogin(tempToken, code) {
 
 // ── Refresh ──────────────────────────────────────────────────
 export async function refreshTokens(refreshToken) {
-  let payload;
   try {
-    payload = verifyRefresh(refreshToken);
+    verifyRefresh(refreshToken);
   } catch {
     throw new HttpError(401, 'Invalid refresh token.');
   }
@@ -345,9 +368,16 @@ export async function refreshTokens(refreshToken) {
     throw new HttpError(401, 'Refresh token is no longer valid.');
   }
 
-  await revokeRefreshToken(refreshToken);
-  const tokens = await mintTokenPair(row.user);
-  return { user: publicUser(row.user), tokens };
+  // Deliberately NO rotation on refresh. The same refresh token stays valid
+  // for its full lifetime (env.jwt.refreshTtl) and only ever mints new access
+  // tokens. Rotating here meant a concurrent refresh (parallel 401s, an upload
+  // retry racing the API client) or a lost response after rotation would leave
+  // the client holding a just-revoked cookie — forcing a forced logout and
+  // "session expired" on the very next request. Tokens rotate at login, logout,
+  // and password change instead. The refresh token is HttpOnly so the widened
+  // window carries no practical XSS risk.
+  const access = mintAccessToken(row.user);
+  return { user: publicUser(row.user), tokens: { access, refresh: refreshToken } };
 }
 
 export async function logout(refreshToken) {

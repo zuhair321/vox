@@ -17,12 +17,17 @@ function hashToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-export async function mintTokenPair(user, deviceInfo, ipAddress, userAgent) {
-  const access = jwt.sign(
+// Mint a single access token (used both at login and on every token refresh).
+export function mintAccessToken(user) {
+  return jwt.sign(
     { username: user.username, role: user.role || 'MEMBER', userId: user.id },
     env.jwt.accessSecret,
     { subject: user.id, expiresIn: env.jwt.accessTtl },
   );
+}
+
+export async function mintTokenPair(user, deviceInfo, ipAddress, userAgent) {
+  const access = mintAccessToken(user);
 
   const refresh = jwt.sign({}, env.jwt.refreshSecret, {
     subject: user.id,

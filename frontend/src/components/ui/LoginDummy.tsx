@@ -1,18 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogIn, Shield, Zap, Eye, EyeOff } from 'lucide-react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { Eye, EyeOff, TriangleAlert, KeyRound, ArrowRight } from 'lucide-react';
+import voxCoat from '../../assets/vox-coat.png';
 import { useUiStore } from '../../stores/uiStore';
 import { useAuthStore } from '../../stores/authStore';
 
 const LoginDummy: React.FC = () => {
+  const reduceMotion = useReducedMotion();
   const [emailOrUsername, setEmailOrUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [capsLock, setCapsLock] = useState(false);
   const navigate = useNavigate();
   const { addToast } = useUiStore();
   const { login, isLoading } = useAuthStore();
+
+  const identitySet = emailOrUsername.trim().length > 0;
+  const passwordSet = password.length > 0;
+  const formReady = identitySet && passwordSet;
+
+  // Emblem nod: the coat dips once the card settles, and again on field focus.
+  // The mark is remounted via `key`, which replays the tip keyframes.
+  const [hatTip, setHatTip] = useState(0);
+  const lastTipAt = useRef(0);
+
+  const tipHat = () => {
+    const now = Date.now();
+    if (now - lastTipAt.current > 1200) {
+      lastTipAt.current = now;
+      setHatTip(k => k + 1);
+    }
+  };
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      lastTipAt.current = Date.now();
+      setHatTip(k => k + 1);
+    }, 420);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,140 +56,157 @@ const LoginDummy: React.FC = () => {
       }
       addToast('Welcome back.', 'success');
       navigate('/');
-    } catch (err: any) {
-      const msg = err.message || 'Login failed';
+    } catch (err) {
+      const msg = (err as Error).message || 'Login failed';
       setError(msg);
       addToast(msg, 'error');
     }
   };
 
   return (
-    <main className="vox-login" aria-label="VOX login">
-      {/* ── atmospheric layers ── */}
-      <div className="vox-login-scanlines" aria-hidden="true" />
-      <div className="vox-login-fog" aria-hidden="true" />
+    <main className="vox-min-login" aria-label="Sign in to VOX">
+      <div className="vox-min-glow" aria-hidden="true" />
 
-      {/* ── floating ember particles ── */}
-      <div className="vox-login-embers" aria-hidden="true">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <span key={i} className="ember" style={{ '--i': i } as React.CSSProperties} />
-        ))}
-      </div>
+      <motion.div
+        className="vox-min-card"
+        initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="vox-min-brand">
+          <motion.span
+            key={hatTip}
+            className="vox-min-mark"
+            aria-hidden="true"
+            style={{ transformOrigin: '50% 95%' }}
+            initial={reduceMotion ? undefined : { rotate: 0 }}
+            animate={reduceMotion ? { rotate: 0 } : { rotate: [0, -14, -14, 0] }}
+            transition={{ duration: 0.85, times: [0, 0.22, 0.78, 1], ease: 'easeInOut' }}
+          >
+            <img src={voxCoat} alt="" aria-hidden="true" className="vox-min-emblem" draggable={false} />
+          </motion.span>
+          <h1>VOX</h1>
+        </div>
 
-      {/* ── watermark ── */}
-      <div className="vox-login-watermark" aria-hidden="true">VOX</div>
+        <p className="vox-min-sub">Private messaging for people who keep their own counsel.</p>
 
-      {/* ── pentagram sigil ring ── */}
-      <div className="vox-login-orb" aria-hidden="true">
-        <div className="vox-login-ring ring-outer" />
-        <div className="vox-login-ring ring-inner" />
-        <div className="vox-login-ring ring-sigil" />
-      </div>
-
-      <section className="vox-login-stage">
-        <form onSubmit={handleLogin} className="vox-login-card" autoComplete="off">
+        <form onSubmit={handleLogin} autoComplete="off" className="vox-min-form" onFocus={tipHat}>
           {/* Hidden dummy fields to defeat browser autofill detection */}
           <input type="text" name="fakeuser" autoComplete="username" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0 }} tabIndex={-1} aria-hidden="true" />
           <input type="password" name="fakepass" autoComplete="current-password" style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', height: 0, width: 0 }} tabIndex={-1} aria-hidden="true" />
-          {/* animated border glow */}
-          <span className="vox-login-border-glow" aria-hidden="true" />
 
-          {/* corner ornaments */}
-          <span className="vox-login-corner corner-tl" aria-hidden="true" />
-          <span className="vox-login-corner corner-tr" aria-hidden="true" />
-          <span className="vox-login-corner corner-bl" aria-hidden="true" />
-          <span className="vox-login-corner corner-br" aria-hidden="true" />
-
-          <header className="vox-login-header">
-            <p className="vox-login-subtitle">† SECURE ACCESS †</p>
-            <h1 className="glitch-text" data-text="VOX">VOX</h1>
-            <strong>ENCRYPTED COMMS PROTOCOL</strong>
-            <div className="vox-login-ornament" aria-hidden="true">
-              <span />
-              <span className="cross">✦</span>
-              <span />
-            </div>
-          </header>
-
-          <div className="vox-login-divider" aria-hidden="true">
-            <span className="divider-diamond" />
-          </div>
-
-          <div className="vox-login-field">
-            <label htmlFor="vox-login-email">IDENTITY</label>
-            <div className="vox-login-input-wrap">
-              <Shield size={16} aria-hidden="true" />
-              <input
-                id="vox-login-email"
-                value={emailOrUsername}
-                onChange={e => setEmailOrUsername(e.target.value)}
-                required
-                autoComplete="off"
-                placeholder="email or username"
-              />
-            </div>
-          </div>
-
-          <div className="vox-login-field">
-            <label htmlFor="vox-login-password">PASSKEY</label>
-            <div className="vox-login-input-wrap">
-              <Zap size={16} aria-hidden="true" />
-              <input
-                id="vox-login-password"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-                autoComplete="off"
-                placeholder="enter passcode"
-              />
-              <button
-                type="button"
-                className="vox-login-eye"
-                onClick={() => setShowPassword(v => !v)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                aria-pressed={showPassword}
-              >
-                {showPassword ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="vox-login-remember">
+          <div className="vox-min-field">
             <input
-              type="checkbox"
-              id="vox-remember-me"
-              checked={rememberMe}
-              onChange={e => setRememberMe(e.target.checked)}
+              id="vox-min-identity"
+              value={emailOrUsername}
+              onChange={e => setEmailOrUsername(e.target.value)}
+              required
+              autoComplete="off"
+              placeholder="Email or username"
+              aria-label="Email or username"
             />
-            <label htmlFor="vox-remember-me">Remember me</label>
           </div>
 
-          {error && (
-            <div className="vox-login-error" role="alert">
-              {error}
-            </div>
-          )}
+          <div className="vox-min-field">
+            <input
+              id="vox-min-password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyUp={e => setCapsLock(e.getModifierState('CapsLock'))}
+              onBlur={() => setCapsLock(false)}
+              required
+              autoComplete="off"
+              placeholder="Password"
+              aria-label="Password"
+            />
+            <button
+              type="button"
+              className="vox-min-eye"
+              onClick={() => setShowPassword(v => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? <Eye size={16} aria-hidden="true" /> : <EyeOff size={16} aria-hidden="true" />}
+            </button>
+          </div>
 
-          <button type="submit" className="vox-login-submit" disabled={isLoading}>
-            <LogIn size={16} aria-hidden="true" />
-            <span>{isLoading ? 'AUTHENTICATING…' : 'ENTER THE VOID'}</span>
-          </button>
+          <AnimatePresence>
+            {capsLock && (
+              <motion.div
+                className="vox-min-hint"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+              >
+                <KeyRound size={12} aria-hidden="true" /> Caps Lock is on
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          <footer className="vox-login-footer">
-            <span>END-TO-END</span>
-            <span>† VOXLINK †</span>
-            <span>SECURE</span>
-          </footer>
+          <div className="vox-min-row">
+            <label className="vox-min-remember">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+              />
+              <span>Remember me</span>
+            </label>
+            <button
+              type="button"
+              className="vox-min-forgot"
+              onClick={() => addToast('Contact your administrator to reset your passcode.', 'info')}
+            >
+              Forgot passcode
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                className="vox-min-error"
+                role="alert"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+              >
+                <TriangleAlert size={14} aria-hidden="true" />
+                <span>{error}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <motion.button
+            type="submit"
+            className={`vox-min-submit ${formReady ? 'armed' : ''}`}
+            disabled={isLoading}
+            whileHover={formReady && !isLoading ? { y: -1 } : {}}
+            whileTap={formReady && !isLoading ? { y: 0, scale: 0.99 } : {}}
+          >
+            {isLoading ? (
+              <>
+                <span className="vox-min-spinner" aria-hidden="true" />
+                <span>Signing in…</span>
+              </>
+            ) : (
+              <>
+                <span>Sign in</span>
+                <ArrowRight size={15} className="vox-min-arrow" aria-hidden="true" />
+              </>
+            )}
+          </motion.button>
         </form>
 
-        <p className="vox-login-register">
-          No account?{' '}
-          <button type="button" onClick={() => navigate('/register')} style={{ background: 'none', border: 'none', color: 'var(--chaos)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', textDecoration: 'underline' }}>
-            <strong>REGISTER</strong>
+        <div className="vox-min-alt">
+          New to VOX?{' '}
+          <button type="button" onClick={() => navigate('/register')}>
+            Create an account
           </button>
-        </p>
-      </section>
+        </div>
+      </motion.div>
+
+      <p className="vox-min-foot">End-to-end encrypted · No logs · Yours alone</p>
     </main>
   );
 };

@@ -65,15 +65,22 @@ const corsOrigins = Array.from(
   ].filter((v) => v !== '' && v !== undefined)),
 );
 
-// Dynamic origin check for CORS. Reflects the requesting origin for any
-// localhost / loopback / LAN / file:// / app:// / mobile scheme so the desktop
-// (Electron), mobile, and dev builds can always reach the API regardless of the
-// exact origin they run under. Explicitly configured production origins are
-// also allowed. Unknown public origins are rejected to avoid becoming an open
-// CORS proxy.
+// Dynamic origin check for CORS.
+//
+// DEV / desktop / mobile: reflect any localhost / loopback / LAN / file:// /
+// app:// / capacitor: origin so the Electron, mobile, and dev builds can
+// always reach the API regardless of the exact origin they run under.
+//
+// PRODUCTION: the open reflection above is a liability — it lets any
+// localhost/LAN page (or a sandboxed iframe sending Origin: null) talk to the
+// API. In prod we ONLY allow the explicitly configured `corsOrigins`
+// (CLIENT_ORIGIN + EXTRA_CORS_ORIGINS set in Railway), so the API can't
+// be used as an open CORS proxy. Dev-only schemes are still permitted
+// because packaged/mobile builds legitimately send them.
 export function isAllowedOrigin(origin) {
   if (!origin) return false;
   if (corsOrigins.includes(origin)) return true;
+  if (env.isProduction) return false; // strict: configured origins only
   if (origin === 'null') return true; // sandboxed iframes / some Electron contexts
   try {
     const u = new URL(origin);
@@ -92,13 +99,15 @@ export const env = {
   port: parseInt(process.env.PORT || '4000', 10),
   clientOrigin,
   corsOrigins,
+  isProduction: process.env.NODE_ENV === 'production',
   databaseUrl: process.env.DATABASE_URL,
+  databaseMigrateUrl: process.env.DATABASE_MIGRATE_URL || process.env.DATABASE_URL,
   apiBase: process.env.API_BASE || `http://127.0.0.1:${parseInt(process.env.PORT || '4000', 10)}`,
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
-    accessTtl: process.env.JWT_ACCESS_TTL || '15m',
-    refreshTtl: process.env.JWT_REFRESH_TTL || '7d',
+    accessTtl: process.env.JWT_ACCESS_TTL || '30m',
+    refreshTtl: process.env.JWT_REFRESH_TTL || '30d',
   },
   twoFactor: {
     appName: process.env.TWO_FACTOR_APP_NAME || 'VOX',
