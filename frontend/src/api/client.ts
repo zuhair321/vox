@@ -52,7 +52,6 @@ export async function tryRefresh(): Promise<boolean> {
       }
       // New tokens arrive as HttpOnly cookies in the Set-Cookie response;
       // nothing to persist client-side.
-      console.log('[Auth] Token refreshed successfully');
       return true;
     } catch (err) {
       console.error('[Auth] Token refresh failed:', err instanceof Error ? err.message : String(err));
@@ -62,6 +61,46 @@ export async function tryRefresh(): Promise<boolean> {
     }
   })();
   return refreshPromise;
+}
+
+// ── Proactive session maintenance ──────────────────────────────────────────────────
+// Background refresh scheduler so the SPA never sits on an expired access
+// token (which would surface as a flicker of "signing you in" or a 401
+// retry-after-refresh). The refresh token cookie is valid for 30 days, and
+// each successful /refresh bumps the access TTL back to 30m. Refreshing
+// every 25m means we hold a token with ~5m of runway at all times, so the
+// next interaction never crosses an expiry boundary.
+//
+// `startProactiveRefresh()` is idempotent — call it on app mount and again
+// after login or a successful refresh. It is safe across React StrictMode
+// double-mounts.
+let proactiveTimer: ReturnType<typeof setTimeout> | null = null;
+const PROACTIVE_INTERVAL_MS = 25 * 60 * 1000; // 25 minutes (< access TTL of 30m)
+
+export function startProactiveRefresh(): void {
+  if (proactiveTimer) return;
+  const tick = () => {
+    proactiveTimer = setTimeout(async () => {
+      proactiveTimer = null;
+      try {
+        // Best-effort: don't surface errors here. The 401-retry path has full
+        // fallback handling; this is just to keep the long-lived access
+        // token warm so busy users never feel a session interruption.
+        await tryRefresh();
+      } catch {
+        /* ignored — proactive refresh is best-effort */
+      }
+      tick();
+    }, PROACTIVE_INTERVAL_MS);
+  };
+  tick();
+}
+
+export function stopProactiveRefresh(): void {
+  if (proactiveTimer) {
+    clearTimeout(proactiveTimer);
+    proactiveTimer = null;
+  }
 }
 
 // Dynamic import keeps the module graph acyclic at eval time: client.ts is
@@ -139,10 +178,8 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
   }
 
   if (res.status === 401 && !_retry) {
-    console.log('[API] Got 401, attempting token refresh...');
     const refreshed = await tryRefresh();
     if (refreshed) {
-      console.log('[API] Token refreshed, retrying request');
       const newToken = getToken();
       const retryHeaders = {
         'Content-Type': 'application/json',
@@ -155,15 +192,21 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
         credentials: 'include',
       });
       if (retryRes.status === 401) {
-        console.warn('[API] Token refresh failed, logging out');
         const logoutFn = await getLogout();
         logoutFn();
-        (await import('../stores/notificationStore')).useNotificationStore.getState().addNotification({
-          type: 'error',
-          title: 'Session Expired',
-          messageId: 'Your session has expired. Please log in again.',
-        });
-        throw new Error('Session expired. Please log in again.');
+        // Quietly route the user back to /login via React Router (defined in
+        // utils/nav.ts) instead of a hard reload. We avoid the alarming
+        // "Session Expired" toast — the route change itself signals what's
+        // happening. A short, single, neutral notice is enough.
+        try {
+          const notifStore = (await import('../stores/notificationStore')).useNotificationStore;
+          notifStore.getState().addNotification({
+            type: 'warning',
+            title: 'Please sign in again',
+            messageId: 'Your session ended. Please sign in to continue.',
+          });
+        } catch { /* ignore */ }
+        throw new Error('Session ended. Please sign in to continue.');
       }
       let data: unknown;
       try {
@@ -176,15 +219,19 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
       }
       return data as T;
     }
-    console.warn('[API] Token refresh failed, logging out');
     const logoutFn = await getLogout();
     logoutFn();
-    (await import('../stores/notificationStore')).useNotificationStore.getState().addNotification({
-      type: 'error',
-      title: 'Session Expired',
-      messageId: 'Your session has expired. Please log in again.',
-    });
-    throw new Error('Session expired. Please log in again.');
+    // Same gentle UX as above — no alarming toast, just a single neutral
+    // notice and the route change to /login (handled by logoutFn).
+    try {
+      const notifStore = (await import('../stores/notificationStore')).useNotificationStore;
+      notifStore.getState().addNotification({
+        type: 'warning',
+        title: 'Please sign in again',
+        messageId: 'Your session ended. Please sign in to continue.',
+      });
+    } catch { /* ignore */ }
+    throw new Error('Session ended. Please sign in to continue.');
   }
 
   if (res.status === 429) {
@@ -201,7 +248,6 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
   try {
     data = await res.json();
   } catch {
-    console.warn(`[API] Failed to parse JSON from ${res.url}, status ${res.status}`);
     data = null;
   }
 

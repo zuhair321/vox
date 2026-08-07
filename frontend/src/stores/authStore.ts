@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import * as authApi from '../api/auth';
 import * as storage from '../utils/auth';
+import { startProactiveRefresh, stopProactiveRefresh } from '../api/client';
 import { useSocketStore } from './socketStore';
 
 const LOCAL_USER_KEY = 'vox_user';
@@ -92,6 +93,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (user) {
         persistUser(user);
         set({ user, isLoading: false });
+        // Keep the access token warm so we never hit a 401 retry path on a
+        // busy app. Safe under React StrictMode double-mount.
+        startProactiveRefresh();
         return;
       }
     } catch {
@@ -99,6 +103,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     clearPersistedUser();
+    stopProactiveRefresh();
     set({ user: null, accessToken: null, isLoading: false, loginAlert: null });
   },
 
@@ -128,6 +133,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       set({ user: authResult.user, accessToken: authResult.tokens?.access || null, isLoading: false });
+      // Start refreshing the access token on a 25m cadence so the SPA
+      // never crosses an expiry boundary.
+      startProactiveRefresh();
       return {};
     } catch (err) {
       set({ isLoading: false });
@@ -145,6 +153,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       persistUser(result.user);
       set({ user: result.user, accessToken: result.tokens?.access || null, isLoading: false });
       sessionStorage.removeItem('vox_2fa_temp_token');
+      startProactiveRefresh();
 
       if (result.loginAlert?.isNewLogin && result.loginAlert.alertMessage) {
         set({ loginAlert: result.loginAlert });
@@ -179,6 +188,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try { await authApi.logout(); } catch { /* ignore */ }
     clearPersistedUser();
     storage.logout();
+    // Cancel the proactive refresh — we're no longer authed.
+    stopProactiveRefresh();
     set({ user: null, accessToken: null, loginAlert: null });
   },
 
