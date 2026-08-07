@@ -1011,8 +1011,33 @@ function createWindow() {
   writeMain('VOX starting. isPackaged=' + IS_PACKAGED);
 
   if (IS_PACKAGED) {
-    const indexPath = path.join(__dirname, 'frontend', 'dist', 'index.html');
-    writeMain('Loading: ' + indexPath);
+    // Prefer an unpacked dist (resources/frontend/dist/index.html) over the
+    // one inside app.asar so local SPA rebuilds don't have to repack asar.
+    // If both files exist, the unpacked one wins — it is treated as a hot
+    // override; we only fall back to the asar copy when nothing has been
+    // unpacked next to the binary.
+    const packedAsarDist = path.join(__dirname, 'frontend', 'dist', 'index.html');
+    const unpackedDist = path.join(process.resourcesPath, 'frontend', 'dist', 'index.html');
+    const fromAsar = fs.existsSync(packedAsarDist);
+    const fromUnpacked = fs.existsSync(unpackedDist);
+    let indexPath;
+    if (fromUnpacked) {
+      // Sanity-check the unpacked one covers a recent rebuild (has assets/).
+      const unpackedAssets = path.join(process.resourcesPath, 'frontend', 'dist', 'assets');
+      if (fs.existsSync(unpackedAssets)) {
+        indexPath = unpackedDist;
+        writeMain('Loading (unpacked resources): ' + indexPath);
+      } else {
+        indexPath = fromAsar ? packedAsarDist : unpackedDist;
+        writeMain('Loading: ' + indexPath);
+      }
+    } else if (fromAsar) {
+      indexPath = packedAsarDist;
+      writeMain('Loading (asar): ' + indexPath);
+    } else {
+      indexPath = packedAsarDist; // last resort — let electron surface the error
+      writeMain('Loading (fallback): ' + indexPath);
+    }
     mainWindow.loadFile(indexPath)
       .then(() => writeMain('loadFile succeeded'))
       .catch((e) => writeMain('loadFile FAILED: ' + e.message));
@@ -1171,6 +1196,33 @@ ipcMain.handle('screen-capture:select', async (_e, sourceId) => {
 
 ipcMain.handle('screen-capture:cancel', () => { rejectPendingScreenRequest(); });
 
+// Open the OS-level privacy/settings page for a particular device kind so
+// users can flip a blocked permission toggle without leaving VOX. Supported
+// kinds: 'microphone' | 'camera'. Returns the URL that was opened (or null
+// if the OS doesn't support a deep link).
+ipcMain.handle('open-device-settings', async (_event, kind) => {
+  let url = null;
+  if (process.platform === 'win32') {
+    if (kind === 'microphone') url = 'ms-settings:privacy-microphone';
+    else if (kind === 'camera') url = 'ms-settings:privacy-webcam';
+  } else if (process.platform === 'darwin') {
+    if (kind === 'microphone') url = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone';
+    else if (kind === 'camera') url = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera';
+  } else {
+    // Linux: best-effort gnome-control-center; if it's missing this opens nothing.
+    if (kind === 'microphone') url = 'gnome-control-center:sound';
+    else if (kind === 'camera') url = 'gnome-control-center:camera';
+  }
+  if (!url) return null;
+  try {
+    await shell.openExternal(url);
+    return url;
+  } catch (err) {
+    console.warn('[DeviceSettings] openExternal failed:', err && err.message);
+    return null;
+  }
+});
+
 ipcMain.handle('screen-capture:start-direct', async (_e, sourceId) => {
   try {
     const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
@@ -1270,6 +1322,69 @@ process.on('uncaughtException', (err) => {
 
 app.whenReady().then(start);
 app.on('before-quit', () => { isQuitting = true; });
+
+
+// ─── Auto-updater (electron-updater) ───────────────────────────────────
+// Lazy-loaded: only paid for when an actual update is requested. The
+// IPC handlers in preload.js (`updater:check`, `updater:download`,
+// `updater:quit-and-install`, `updater:state`) ride on these.
+let _autoUpdater = null;
+async function getAutoUpdater() {
+  if (_autoUpdater !== null) return _autoUpdater;
+  try {
+    // CJS-friendly require; available when bundled by electron-builder.
+    _autoUpdater = require('electron-updater').autoUpdater;
+  } catch (err) {
+    console.warn('[updater] electron-updater not available (' + (err && err.message) + '). Update pipeline disabled.');
+    _autoUpdater = false;
+  }
+  return _autoUpdater || null;
+}
+
+function broadcastUpdaterState(state) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('updater:state', state);
+}
+
+ipcMain.handle('updater:check', async () => {
+  const updater = await getAutoUpdater();
+  if (!updater) return { ok: false, reason: 'electron-updater not available' };
+  try { await updater.checkForUpdates(); return { ok: true }; }
+  catch (e) { return { ok: false, reason: e && e.message }; }
+});
+ipcMain.handle('updater:download', async () => {
+  const updater = await getAutoUpdater();
+  if (!updater) return { ok: false, reason: 'electron-updater not available' };
+  try { await updater.downloadUpdate(); return { ok: true }; }
+  catch (e) { return { ok: false, reason: e && e.message }; }
+});
+ipcMain.handle('updater:quit-and-install', async () => {
+  const updater = await getAutoUpdater();
+  if (!updater) return { ok: false };
+  try { updater.quitAndInstall(); return { ok: true }; }
+  catch (e) { return { ok: false, reason: e && e.message }; }
+});
+ipcMain.handle('updater:state', async () => {
+  const updater = await getAutoUpdater();
+  if (!updater) return { available: false };
+  try {
+    return { available: true, version: updater.currentVersion, channel: updater.channel || null };
+  } catch (_) { return { available: false }; }
+});
+
+// Wire the autoUpdater lifecycle events to the renderer so the UI can show progress.
+async function wireUpdaterEvents() {
+  const updater = await getAutoUpdater();
+  if (!updater) return;
+  updater.on('checking-for-update', () => broadcastUpdaterState({ phase: 'CHECKING' }));
+  updater.on('update-available', (info) => broadcastUpdaterState({ phase: 'AVAILABLE', info: { version: info && info.version, releaseDate: info && info.releaseDate } }));
+  updater.on('download-progress', (p) => broadcastUpdaterState({ phase: 'DOWNLOADING', progress: { percent: Math.round((p && p.percent) || 0), transferred: p && p.transferred, total: p && p.total } }));
+  updater.on('update-downloaded', (info) => broadcastUpdaterState({ phase: 'READY', info: { version: info && info.version } }));
+  updater.on('update-not-available', () => broadcastUpdaterState({ phase: 'IDLE' }));
+  updater.on('error', (err) => broadcastUpdaterState({ phase: 'ERROR', error: err && err.message }));
+}
+
+app.whenReady().then(() => { wireUpdaterEvents(); });
 
 app.on('window-all-closed', () => {
   if (backendProc) backendProc.kill();
