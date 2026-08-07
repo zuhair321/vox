@@ -185,10 +185,18 @@ const Profile: React.FC = () => {
     setCrop({ ...crop, isDragging: false });
   };
 
-  const saveBio = () => {
-    profile.updateBio(bioDraft);
-    setEditingBio(false);
-    addToast('Bio saved', 'success');
+  const saveBio = async () => {
+    // Await + surface the actual error: the previous implementation fired
+    // "Bio saved" synchronously and lied on every network / 4xx failure.
+    // The store now reverts the optimistic edit if the API throws, so we
+    // only close the editor when the server actually persisted the value.
+    try {
+      await profile.updateBio(bioDraft);
+      setEditingBio(false);
+      addToast('Bio saved', 'success');
+    } catch (e: any) {
+      addToast(e?.message || 'Could not save bio. Please try again.', 'error');
+    }
   };
 
   const cancelBio = () => {

@@ -57,8 +57,8 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   hasTurbo: true,
   updateStatus: (status) => set({ status }),
   updateUserStatus: async (userStatus) => {
+    const previous = get().userStatus;
     set({ userStatus });
-    // Also broadcast via socket so other users see it immediately
     try {
       const { useSocketStore } = await import('./socketStore');
       useSocketStore.getState().updateStatus(userStatus.toUpperCase());
@@ -75,10 +75,16 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         localStorage.setItem('vox_user', JSON.stringify({ ...existing, ...res.user }));
       }
     } catch (err) {
+      // Revert the optimistic status so the UI stays in lock-step with the
+      // server (otherwise it would say ONLINE while the server says IDLE
+      // across a refresh). Re-throw so callers can surface a toast.
+      set({ userStatus: previous });
       console.warn('Failed to save status', err);
+      throw err;
     }
   },
   updateBio: async (bio) => {
+    const previous = get().bio;
     set({ bio });
     try {
       const res = await api('/api/auth/me', {
@@ -90,7 +96,12 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
         localStorage.setItem('vox_user', JSON.stringify({ ...existing, ...res.user }));
       }
     } catch (err) {
+      // Hard-fail: roll back the optimistic bio so the editor draft and the
+      // stored bio don't drift, then re-throw so Profile.tsx can show a real
+      // error toast instead of a fake "Bio saved" notice.
+      set({ bio: previous });
       console.warn('Failed to save bio', err);
+      throw err;
     }
   },
   hydrateFromUser: (user) => set((state) => ({

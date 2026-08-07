@@ -133,6 +133,21 @@ export const useSocketStore = create<SocketStore>((set, get) => {
       );
     });
 
+    // Server-deleted broadcast: every connected client drops this server id
+    // from its local cache so the sidebar/rail stops showing a phantom row.
+    socket.on('server:deleted', ({ serverId }) => {
+      if (!serverId) return;
+      try {
+        useServerStore.getState().removeServer(serverId);
+      } catch { /* store not mounted yet */ }
+      try {
+        const me = JSON.parse(localStorage.getItem('vox_user') || '{}');
+        if (me?.id) {
+          useUiStore.getState().addToast('A server you were in was deleted.', 'warning');
+        }
+      } catch { /* ignore */ }
+    });
+
     socket.on('typing:start', ({ username, channelId, kind = 'text' }) => {
       useMessageStore.getState().setTyping(channelId, username, true, kind);
     });
@@ -181,6 +196,40 @@ export const useSocketStore = create<SocketStore>((set, get) => {
       if (targetChannel) {
         useMessageStore.getState().removeMessage(targetChannel, messageId);
       }
+    });
+
+    // ── Threads ───────────────────────────────────────────────
+    // Live `thread:reply` delivery:
+    //   * If the user has this thread panel open, the reply drops into the
+    //     cached thread key so it renders without a refetch.
+    //   * Otherwise, bump the uiStore's unread map so the parent message's
+    //     ThreadIndicator shows a "(N)" badge.
+    socket.on('thread:reply', ({ parentId, reply }) => {
+      try {
+        const ui = useUiStore.getState();
+        if (ui.threadMessageId === parentId) {
+          useMessageStore.getState().addMessage(`thread-${parentId}`, reply);
+        }
+        const me = (() => { try { return JSON.parse(localStorage.getItem('vox_user') || '{}'); } catch { return {}; } })();
+        const isMine = reply?.userId === me.id || reply?.author?.id === me.id;
+        if (!isMine && ui.threadMessageId !== parentId) {
+          ui.bumpThreadUnread(parentId, 1);
+        }
+      } catch { /* non-fatal */ }
+    });
+
+    // Typing dots for the active thread panel. We bounce the event through
+    // uiStore's threadTyping map (per channelId:parentId) so the panel just
+    // reads it without needing a redundant store.
+    socket.on('thread:typing', ({ channelId, parentId, userId, typing }) => {
+      try {
+        const me = (() => { try { return JSON.parse(localStorage.getItem('vox_user') || '{}'); } catch { return {}; } })();
+        if (!channelId || !parentId || userId === me.id) return;
+        const key = `${channelId}:${parentId}`;
+        const ui = useUiStore.getState();
+        if (typing) ui.bumpThreadTyping(key, userId);
+        else ui.clearThreadTyping(key, userId);
+      } catch { /* non-fatal */ }
     });
 
     socket.on('dm:updated', ({ message }) => {

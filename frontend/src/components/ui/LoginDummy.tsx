@@ -57,11 +57,42 @@ const LoginDummy: React.FC = () => {
       addToast('Welcome back.', 'success');
       navigate('/');
     } catch (err) {
-      const msg = (err as Error).message || 'Login failed';
-      setError(msg);
-      addToast(msg, 'error');
+      setError(humanizeLoginError(err));
     }
   };
+
+  // Translate raw backend error strings ("Invalid input.", "Please enter a
+  // valid email address", etc.) and network failures ("Failed to fetch",
+  // "Network error: ...") into a short, friendly message the user can act on.
+  function humanizeLoginError(err: unknown): string {
+    const raw = (err instanceof Error ? err.message : String(err)) || '';
+    const lower = raw.toLowerCase();
+    if (lower.includes('failed to fetch') || lower.startsWith('network error')) {
+      return 'Can\u2019t reach the VOX service. Check your connection or restart the app.';
+    }
+    if (lower.includes('invalid email') || lower.includes('please enter a valid email')) {
+      return 'That doesn\u2019t look like a valid email address.';
+    }
+    if (lower.includes('invalid username') || lower.includes('username must be')) {
+      return 'Username must be 3\u201332 characters: letters, numbers, or underscore.';
+    }
+    if (lower.includes('password must be') || lower.includes('password is too')) {
+      return 'Password must be at least 8 characters.';
+    }
+    if (lower.includes('invalid credentials') || lower.includes('incorrect') || lower.includes('invalid password') || lower.includes('user not found')) {
+      return 'Username or password is incorrect.';
+    }
+    if (lower.includes('locked')) {
+      return 'Too many failed attempts. Try again in a few minutes.';
+    }
+    if (lower.includes('already taken') || lower.includes('already registered')) {
+      return 'That account already exists. Try signing in instead.';
+    }
+    if (raw.length === 0) return 'Login failed. Please try again.';
+    // Surface unknown errors verbatim — the backend usually sends something
+    // sensible and we'd rather show it than hide a real auth failure.
+    return raw;
+  }
 
   return (
     <main className="vox-min-login" aria-label="Sign in to VOX">
@@ -99,7 +130,7 @@ const LoginDummy: React.FC = () => {
             <input
               id="vox-min-identity"
               value={emailOrUsername}
-              onChange={e => setEmailOrUsername(e.target.value)}
+              onChange={e => { setEmailOrUsername(e.target.value); if (error) setError(''); }}
               required
               autoComplete="off"
               placeholder="Email or username"
@@ -112,7 +143,7 @@ const LoginDummy: React.FC = () => {
               id="vox-min-password"
               type={showPassword ? 'text' : 'password'}
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={e => { setPassword(e.target.value); if (error) setError(''); }}
               onKeyUp={e => setCapsLock(e.getModifierState('CapsLock'))}
               onBlur={() => setCapsLock(false)}
               required

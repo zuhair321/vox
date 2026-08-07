@@ -103,12 +103,13 @@ serverRouter.post('/servers/:id/channels', requireAuth, async (req, res, next) =
 
     const data = {
       id: newChannelId(),
-      name: name.toLowerCase().replace(/\s+/g, '-'),
-      type: type === 'VOICE' ? 'VOICE' : type === 'STAGE' ? 'STAGE' : 'TEXT',
+      name: name.trim().toLowerCase().replace(/\s+/g, '-').slice(0, 50) || 'general',
+      type: type === 'VOICE' ? 'VOICE' : type === 'STAGE' ? 'STAGE' : type === 'FORUM' ? 'FORUM' : 'TEXT',
       serverId,
     };
     if (typeof region === 'string' && region) data.region = region.slice(0, 32);
     if (rtcMode === 'MESH' || rtcMode === 'SFU') data.rtcMode = rtcMode;
+    else if (data.type === 'STAGE') data.rtcMode = 'SFU';
     if (typeof maxParticipants === 'number') {
       data.maxParticipants = Math.min(Math.max(0, Math.floor(maxParticipants)), 1000);
     }
@@ -166,7 +167,29 @@ serverRouter.delete('/servers/:id', requireAuth, async (req, res, next) => {
     if (!server) throw new HttpError(404, 'Server not found');
     if (server.ownerId !== req.user.id) throw new HttpError(403, 'Only owner can delete server');
 
+    // Capture the member list BEFORE deletion so we can tell their live
+    // clients to drop the dead server from their sidebar. Without this a
+    // server-deleted event lands on already-deleted Channel rows (cascade
+    // already ran) so we emit the membership snapshot through the realtime
+    // bridge — socket-broadcasting a server list refresh is the friendliest
+    // UX and avoids the "stale server in my sidebar" loop.
+    const memberIds = (await prisma.serverMember.findMany({
+      where: { serverId },
+      select: { userId: true },
+    })).map((m) => m.userId);
+
     await prisma.server.delete({ where: { id: serverId } });
+
+    // Tell every connected client to drop this server id from any local
+    // cache. Real-time events are best-effort — failure to broadcast doesn't
+    // roll back the database delete.
+    try {
+      const io = getIO();
+      if (io) io.emit('server:deleted', { serverId, memberIds });
+    } catch (emitErr) {
+      console.warn('[servers] Failed to broadcast server:deleted', emitErr);
+    }
+
     res.json({ message: 'Server deleted' });
   } catch (e) { next(e); }
 });
@@ -281,8 +304,20 @@ serverRouter.patch('/servers/:id', requireAuth, async (req, res, next) => {
     const data = {};
     if (typeof name === 'string' && name.trim()) data.name = sanitize(name).slice(0, 100);
     if (typeof description === 'string') data.description = sanitize(description).slice(0, 500);
-    if (typeof icon === 'string') data.icon = icon.slice(0, 1024);
-    if (typeof banner === 'string') data.banner = banner.slice(0, 1024);
+    if (typeof icon === 'string') {
+      const trimmed = icon.trim();
+      if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+        throw new HttpError(400, 'Server icon must be an http(s) URL.');
+      }
+      data.icon = trimmed.slice(0, 1024);
+    }
+    if (typeof banner === 'string') {
+      const trimmed = banner.trim();
+      if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+        throw new HttpError(400, 'Server banner must be an http(s) URL.');
+      }
+      data.banner = trimmed.slice(0, 1024);
+    }
     if (typeof category === 'string') data.category = sanitize(category).slice(0, 40);
     if (typeof isPublic === 'boolean') data.isPublic = isPublic;
     if (['NONE', 'LOW', 'MEDIUM', 'HIGH'].includes(verificationLevel)) data.verificationLevel = verificationLevel;
@@ -560,13 +595,14 @@ serverRouter.patch('/servers/:id/channels/:channelId', requireAuth, async (req, 
     const { name, type, position, topic, nsfw, slowmode, region, rtcMode, maxParticipants, stageEnabled } = req.body || {};
     const data = {};
     if (typeof name === 'string') data.name = name.toLowerCase().replace(/\s+/g, '-').slice(0, 50);
-    if (type === 'TEXT' || type === 'VOICE' || type === 'STAGE') data.type = type;
+    if (type === 'TEXT' || type === 'VOICE' || type === 'STAGE' || type === 'FORUM') data.type = type;
     if (typeof position === 'number') data.position = position;
     if (typeof topic === 'string') data.topic = sanitize(topic).slice(0, 1024);
     if (typeof nsfw === 'boolean') data.nsfw = nsfw;
     if (typeof slowmode === 'number') data.slowmode = Math.min(Math.max(0, Math.floor(slowmode)), 3600);
     if (typeof region === 'string' && region) data.region = region.slice(0, 32);
     if (rtcMode === 'MESH' || rtcMode === 'SFU') data.rtcMode = rtcMode;
+    else if (data.type === 'STAGE') data.rtcMode = 'SFU';
     if (typeof maxParticipants === 'number') data.maxParticipants = Math.min(Math.max(0, Math.floor(maxParticipants)), 1000);
     if (typeof stageEnabled === 'boolean') data.stageEnabled = stageEnabled;
     const updated = await prisma.channel.update({
@@ -861,7 +897,7 @@ serverRouter.post('/servers/:id/webhooks', requireAuth, async (req, res, next) =
 
     // Generate webhook token and URL
     const token = crypto.randomBytes(32).toString('hex');
-    const url = `${process.env.VITE_API_BASE || 'http://127.0.0.1:4000'}/api/webhooks/${token}`;
+    const url = `${env.apiBase}/api/webhooks/${token}`;
 
     const webhook = await prisma.webhook.create({
       data: {

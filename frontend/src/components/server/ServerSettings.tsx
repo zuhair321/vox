@@ -11,6 +11,8 @@ import BanList from './BanList';
 import CategoryManager from './CategoryManager';
 import WebhookPanel from './WebhookPanel';
 import EmojiPanel from './EmojiPanel';
+import CustomEmojiUploadPanel from '../settings/CustomEmojiUploadPanel';
+import BotsPanel from '../settings/BotsPanel';
 import SoundboardPanel from './SoundboardPanel';
 import BadgePanel from './BadgePanel';
 import AutomodPanel from './AutomodPanel';
@@ -20,7 +22,7 @@ import WidgetPanel from './WidgetPanel';
 import ModerationCenter from '../moderation/ModerationCenter';
 import ServerLogo from '../ui/ServerLogo';
 
-type TabKey = 'OVERVIEW' | 'ROLES' | 'CATEGORIES' | 'BANS' | 'WEBHOOKS' | 'EMOJI' | 'SOUNDBOARD' | 'BADGES' | 'AUTOMOD' | 'AUDIT' | 'TEMPLATES' | 'WIDGET' | 'MODERATION';
+type TabKey = 'OVERVIEW' | 'ROLES' | 'CATEGORIES' | 'BANS' | 'WEBHOOKS' | 'EMOJI' | 'SOUNDBOARD' | 'BADGES' | 'AUTOMOD' | 'AUDIT' | 'TEMPLATES' | 'WIDGET' | 'MODERATION' | 'BOTS';
 
 interface TabItem {
   key: TabKey;
@@ -43,6 +45,7 @@ const TABS: TabItem[] = [
   { key: 'TEMPLATES', label: 'Templates', icon: '📄', adminOnly: false },
   { key: 'WIDGET', label: 'Widget', icon: '🧩', adminOnly: true },
   { key: 'MODERATION', label: 'Moderation', icon: '🛡️', adminOnly: true },
+  { key: 'BOTS', label: 'Bots', icon: '🤖', adminOnly: true },
 ];
 
 const ServerSettings: React.FC = () => {
@@ -97,9 +100,24 @@ const ServerSettings: React.FC = () => {
   const visibleTabs = TABS.filter(tab => !tab.adminOnly || canManage);
 
   const handleDeleteServer = async () => {
-    if (!window.confirm(`💀 Permanently delete "${server.name}"? This cannot be undone.`)) return;
+    // Use a typed-confirmation rather than window.confirm: the previous
+    // // flow let anyone one-click away a server they built. Now the user
+    // must type the server name verbatim to confirm.
+    const typed = window.prompt(
+      `💀 Permanently delete "${server.name}"?\n\n` +
+      `This deletes every channel, message, role, ban and audit log.\n\n` +
+      `Type the server name exactly to confirm:`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== server.name) {
+      addToast('Server name did not match — deletion cancelled.', 'warning');
+      return;
+    }
     try {
       await deleteServer(server.id);
+      // Server:deleted socket broadcast also calls removeServer(); we belt-
+      // and-braces it here so the local cache drops the row even if the
+      // socket delivery arrives late (or the user is offline).
       useServerStore.getState().removeServer(server.id);
       addToast(`Deleted ${server.name}.`, 'info');
       navigate('/friends');
@@ -329,7 +347,7 @@ const ServerSettings: React.FC = () => {
       case 'WEBHOOKS':
         return canManage ? <WebhookPanel serverId={server.id} /> : null;
       case 'EMOJI':
-        return canManage ? <EmojiPanel serverId={server.id} /> : null;
+        return canManage ? <CustomEmojiUploadPanel serverId={server.id} /> : null;
       case 'SOUNDBOARD':
         return canManage ? <SoundboardPanel serverId={server.id} /> : null;
       case 'BADGES':
@@ -349,6 +367,8 @@ const ServerSettings: React.FC = () => {
             members={(server.members || []).map((m: any) => ({ userId: m.userId, user: m.user }))}
           />
         ) : null;
+      case 'BOTS':
+        return canManage ? <BotsPanel serverId={server.id} /> : null;
       default:
         return null;
     }
