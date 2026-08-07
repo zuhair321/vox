@@ -8,7 +8,7 @@ const RoleColor: Record<string, string> = {
   FOUNDER: '#e7edf5',
   ADMIN: '#d84a5a',
   MODERATOR: '#d9c98d',
-  MEMBER: '#8c95a3',
+  MEMBER: '#8c95a3'
 };
 
 interface Props { serverId: string; }
@@ -20,7 +20,7 @@ const RolesPanel: React.FC<Props> = ({ serverId }) => {
   const token = (() => { try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id ? localStorage.getItem('vox_token') : null; } catch { return null; } })();
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/servers/${serverId}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/servers/${serverId}`, { headers: {} })
       .then((r) => r.json())
       .then((data) => {
         setMembers(data.members || []);
@@ -33,8 +33,8 @@ const RolesPanel: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/members/${userId}/roles`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ role: newRole }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role: newRole })
       });
       if (!res.ok) throw new Error('Failed');
       addToast(`Role updated to ${newRole}`, 'success');
@@ -68,7 +68,7 @@ const RolesPanel: React.FC<Props> = ({ serverId }) => {
                   fontWeight: 800,
                   fontSize: '13px',
                   color: roleColor,
-                  overflow: 'hidden',
+                  overflow: 'hidden'
                 }}
               >
                  {member.user?.avatarUrl

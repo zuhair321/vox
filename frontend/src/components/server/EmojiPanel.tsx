@@ -13,7 +13,7 @@ const EmojiPanel: React.FC<Props> = ({ serverId }) => {
   const token = (() => { try { return localStorage.getItem('vox_token'); } catch { return null; } })();
 
   const fetchEmojis = () => {
-    fetch(`${API_BASE}/api/servers/${serverId}/emojis`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/servers/${serverId}/emojis`, { headers: {} })
       .then((r) => r.json())
       .then((data) => { setEmojis(data.emojis || []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -26,8 +26,8 @@ const EmojiPanel: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/emojis`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: name.trim(), url: url.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), url: url.trim() })
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Emoji added', 'success');
@@ -43,7 +43,7 @@ const EmojiPanel: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/emojis/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {}
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Emoji deleted', 'success');

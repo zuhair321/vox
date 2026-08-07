@@ -13,7 +13,7 @@ const ACTIVITY_VERB: Record<string, string> = {
   PLAYING: 'Playing',
   LISTENING: 'Listening to',
   WATCHING: 'Watching',
-  STREAMING: 'Streaming',
+  STREAMING: 'Streaming'
 };
 
 const isBadgeImage = (icon: string) => /^https?:\/\//.test(icon) || icon.startsWith('/');
@@ -22,14 +22,14 @@ const ROLE_BADGES: Record<string, { color: string; label: string }> = {
   FOUNDER: { color: '#e7edf5', label: 'FOUNDER' },
   ADMIN: { color: '#d84a5a', label: 'ADMIN' },
   MODERATOR: { color: '#d9c98d', label: 'MOD' },
-  MEMBER: { color: '#8c95a3', label: 'MEMBER' },
+  MEMBER: { color: '#8c95a3', label: 'MEMBER' }
 };
 
 const STATUS_COLORS: Record<string, string> = {
   online: '#3ba55c',
   idle: '#faa61a',
   dnd: '#ed4245',
-  offline: '#747f8d',
+  offline: '#747f8d'
 };
 
 const ProfilePopup: React.FC = () => {
@@ -58,7 +58,7 @@ const ProfilePopup: React.FC = () => {
   useEffect(() => {
     if (!profilePopupUser?.id) return;
     const token = localStorage.getItem('vox_token');
-    fetch(`${API_BASE}/api/users/${profilePopupUser.id}/notes`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/users/${profilePopupUser.id}/notes`, { headers: {} })
       .then(r => r.json())
       .then(d => setNote(d.note?.text || ''))
       .catch(() => setNote(''));
@@ -69,8 +69,8 @@ const ProfilePopup: React.FC = () => {
     const token = localStorage.getItem('vox_token');
     const res = await fetch(`${API_BASE}/api/users/${profilePopupUser?.id}/notes`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ text }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
     });
     if (res.ok) { setNote(text); setEditingNote(false); addToast('Note saved.', 'success'); }
     else addToast('Failed to save note.', 'error');
@@ -116,7 +116,7 @@ const ProfilePopup: React.FC = () => {
           borderRadius: '8px',
           zIndex: 1000,
           boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.3)',
-          overflow: 'hidden',
+          overflow: 'hidden'
         }}
       >
         {/* Banner */}
@@ -125,13 +125,13 @@ const ProfilePopup: React.FC = () => {
           background: profilePopupUser.bannerUrl
             ? `url(${profilePopupUser.bannerUrl.startsWith('http') ? profilePopupUser.bannerUrl : `${API_BASE}${profilePopupUser.bannerUrl}`}) center/cover`
             : `linear-gradient(135deg, ${roleBadge.color}33, var(--obsidian))`,
-          position: 'relative',
+          position: 'relative'
         }}>
           {/* Avatar overlapping banner */}
           <div style={{
             position: 'absolute',
             bottom: '-20px',
-            left: '16px',
+            left: '16px'
           }}>
             <div style={{ position: 'relative' }}>
               {avatarUrl ? (
@@ -144,7 +144,7 @@ const ProfilePopup: React.FC = () => {
                     borderRadius: '50%',
                     objectFit: 'cover',
                     border: '3px solid var(--dark-matter)',
-                    background: 'var(--obsidian)',
+                    background: 'var(--obsidian)'
                   }}
                 />
               ) : (
@@ -159,7 +159,7 @@ const ProfilePopup: React.FC = () => {
                   justifyContent: 'center',
                   color: roleBadge.color,
                   fontWeight: 700,
-                  fontSize: '18px',
+                  fontSize: '18px'
                 }}>
                   {(profilePopupUser.username || '?').slice(0, 1).toUpperCase()}
                 </div>
@@ -173,7 +173,7 @@ const ProfilePopup: React.FC = () => {
                 height: '14px',
                 borderRadius: '50%',
                 background: STATUS_COLORS[status] || STATUS_COLORS.offline,
-                border: '2.5px solid var(--dark-matter)',
+                border: '2.5px solid var(--dark-matter)'
               }} />
             </div>
           </div>
@@ -188,7 +188,7 @@ const ProfilePopup: React.FC = () => {
               fontSize: '15px',
               fontWeight: 700,
               color: 'var(--ghost-white)',
-              margin: 0,
+              margin: 0
             }}>
               {profilePopupUser.username}{profilePopupUser.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}
             </h3>
@@ -200,7 +200,7 @@ const ProfilePopup: React.FC = () => {
               borderRadius: '4px',
               color: roleBadge.color,
               fontWeight: 600,
-              letterSpacing: '0.05em',
+              letterSpacing: '0.05em'
             }}>
               {roleBadge.label}
             </span>
@@ -217,7 +217,7 @@ const ProfilePopup: React.FC = () => {
               display: 'flex', alignItems: 'center', gap: '6px',
               padding: '6px 8px', marginBottom: '12px',
               background: 'rgba(88,101,242,0.1)', border: '1px solid rgba(88,101,242,0.25)',
-              borderRadius: '4px', fontSize: '11px', color: 'var(--ash)',
+              borderRadius: '4px', fontSize: '11px', color: 'var(--ash)'
             }}>
               <span>🎮</span>
               <span>
@@ -243,7 +243,7 @@ const ProfilePopup: React.FC = () => {
                     style={{
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       width: '26px', height: '26px', borderRadius: '6px',
-                      background: (b.color || '#5865f2') + '22', border: `1px solid ${b.color || '#5865f2'}`,
+                      background: (b.color || '#5865f2') + '22', border: `1px solid ${b.color || '#5865f2'}`
                     }}
                   >
                     {isBadgeImage(b.icon)
@@ -282,7 +282,7 @@ const ProfilePopup: React.FC = () => {
               borderRadius: '4px',
               marginBottom: '12px',
               fontSize: '11px',
-              color: 'var(--toxic)',
+              color: 'var(--toxic)'
             }}>
               <span>🔊</span>
               <span>In Voice Channel</span>

@@ -9,7 +9,7 @@ const AuditLog: React.FC<Props> = ({ serverId }) => {
   const token = (() => { try { return localStorage.getItem('vox_token'); } catch { return null; } })();
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/servers/${serverId}/audit`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/servers/${serverId}/audit`, { headers: {} })
       .then((r) => r.json())
       .then((data) => { setLogs(data.logs || []); setLoading(false); })
       .catch(() => setLoading(false));

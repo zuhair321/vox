@@ -164,7 +164,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     const entries: PendingAttachment[] = list.map((file) => ({
       id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       name: file.name,
-      status: 'uploading',
+      status: 'uploading'
     }));
     setPending((prev) => [...prev, ...entries]);
 
@@ -204,9 +204,9 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': 'Bearer ' + token } : {}),
+          ...(token ? {} : {})
         },
-        body: JSON.stringify({ nickname }),
+        body: JSON.stringify({ nickname })
       });
 
       if (!res.ok) {
@@ -243,7 +243,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
     const entry: PendingAttachment = {
       id: `voice-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       name: `Voice note (${Math.round(rec.duration)}s)`,
-      status: 'uploading',
+      status: 'uploading'
     };
     setPending((prev) => [...prev, entry]);
     try {
@@ -468,7 +468,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
             border: '1px solid var(--rim)',
             borderLeft: '3px solid var(--chaos)',
             fontSize: '12px',
-            color: 'var(--ash)',
+            color: 'var(--ash)'
           }}
         >
           <span style={{ color: 'var(--chaos)', lineHeight: 1 }}>↩️</span>
@@ -489,7 +489,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
               color: 'var(--shadow)',
               cursor: 'pointer',
               fontSize: '14px',
-              lineHeight: 1,
+              lineHeight: 1
             }}
             aria-label="Cancel reply"
           >
@@ -535,7 +535,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
             marginBottom: '6px',
             background: 'var(--obsidian)',
             border: '1px solid var(--blood, #c0392b)',
-            borderRadius: '8px',
+            borderRadius: '8px'
           }}
         >
           <span style={{ fontSize: '10px', color: '#ff6b6b', animation: 'vox-pulse 1.2s infinite' }}>🔴</span>
@@ -549,7 +549,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
                 height: '100%',
                 width: `${Math.min(100, (voice.elapsed / 300) * 100)}%`,
                 background: 'var(--blood, #c0392b)',
-                transition: 'width 0.2s linear',
+                transition: 'width 0.2s linear'
               }}
             />
           </div>
@@ -562,7 +562,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
               border: 'none',
               color: 'var(--ash)',
               cursor: 'pointer',
-              fontSize: '16px',
+              fontSize: '16px'
             }}
             aria-label="Discard recording"
           >
@@ -579,7 +579,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
               padding: '4px 10px',
               cursor: 'pointer',
               fontFamily: "'Bebas Neue', sans-serif",
-              letterSpacing: '0.05em',
+              letterSpacing: '0.05em'
             }}
           >
             SEND
@@ -604,7 +604,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
             display: 'flex',
             flexWrap: 'wrap',
             gap: '6px',
-            padding: '6px 10px 0',
+            padding: '6px 10px 0'
           }}
         >
           {pending.map((p) => (
@@ -620,7 +620,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
                 borderRadius: '6px',
                 fontSize: '12px',
                 color: 'var(--ghost-white, #e0e6ed)',
-                maxWidth: '220px',
+                maxWidth: '220px'
               }}
               className="pending-attachment-chip"
               title={p.status === 'error' ? p.error : p.attachment ? formatSize(p.attachment.size) : ''}
@@ -631,7 +631,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  color: p.status === 'error' ? '#ff6b6b' : undefined,
+                  color: p.status === 'error' ? '#ff6b6b' : undefined
                 }}
               >
                 {p.name}
@@ -646,7 +646,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
                   cursor: 'pointer',
                   padding: 0,
                   fontSize: '14px',
-                  lineHeight: 1,
+                  lineHeight: 1
                 }}
                 aria-label={`Remove ${p.name}`}
               >
@@ -687,7 +687,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
           cursor: 'pointer',
           color: emojiOpen ? 'var(--chaos)' : 'var(--ash, #8a93a3)',
           fontSize: '18px',
-          padding: 0,
+          padding: 0
         }}
       >
         😊
@@ -710,7 +710,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
           color: voice.recording ? '#fff' : 'var(--ash, #8a93a3)',
           fontSize: '18px',
           padding: 0,
-          animation: voice.recording ? 'vox-pulse 1.2s infinite' : 'none',
+          animation: voice.recording ? 'vox-pulse 1.2s infinite' : 'none'
         }}
       >
         🎤
@@ -734,7 +734,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
           color: 'var(--ash, #8a93a3)',
           fontSize: '18px',
           padding: 0,
-          opacity: busy ? 0.5 : 1,
+          opacity: busy ? 0.5 : 1
         }}
       >
         📎
@@ -757,7 +757,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
             fontSize: '11px',
             color: charCountColor,
             fontFamily: "'Share Tech Mono', monospace",
-            transition: 'color 0.2s ease',
+            transition: 'color 0.2s ease'
           }}
         >
           {content.length} / 2000
@@ -788,7 +788,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
           fontSize: '12px',
           padding: 0,
           clipPath: 'polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px)',
-          transition: 'background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+          transition: 'background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease'
         }}
       >
         ➤

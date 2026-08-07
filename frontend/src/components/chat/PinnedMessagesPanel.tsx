@@ -19,7 +19,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
 
   useEffect(() => {
     fetch(`${API_BASE}/api/channels/${channelId}/messages/pinned`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: {}
     })
       .then((r) => r.json())
       .then((data) => {
@@ -33,7 +33,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
     try {
       const res = await fetch(`${API_BASE}/api/messages/${messageId}/pin`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {}
       });
       if (!res.ok) throw new Error('Failed');
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
@@ -55,7 +55,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
         borderLeft: '1px solid var(--rim)',
         zIndex: 100,
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'column'
       }}
     >
       <div
@@ -65,7 +65,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 16px',
+          padding: '0 16px'
         }}
       >
         <span style={{ fontFamily: 'Cinzel Decorative, serif', color: 'var(--ghost-white)', fontSize: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
@@ -90,7 +90,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
               marginBottom: '8px',
               background: 'var(--abyss)',
               border: '1px solid var(--rim)',
-              borderRadius: '4px',
+              borderRadius: '4px'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>

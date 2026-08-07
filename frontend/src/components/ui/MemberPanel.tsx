@@ -11,7 +11,7 @@ import {
   ROLES,
   ROLE_GROUP_ORDER,
   normalizeRole,
-  RoleKey,
+  RoleKey
 } from '../../config/roles';
 
 import { useProfileStore } from '../../stores/profileStore';
@@ -22,7 +22,7 @@ const ACTIVITY_META = {
   game: { icon: '🎮' },
   music: { icon: '🎵' },
   video: { icon: '📺' },
-  voice: { icon: '🔊' },
+  voice: { icon: '🔊' }
 };
 
 function resolveAvatar(url?: string | null) {
@@ -68,7 +68,7 @@ const MemberPanel: React.FC = () => {
             { id: 'idle', label: '🟡 Idle' },
             { id: 'dnd', label: '🔴 Do Not Disturb' },
             { id: 'offline', label: '⚫ Invisible' },
-          ],
+          ]
         },
       ];
     }
@@ -108,15 +108,15 @@ const MemberPanel: React.FC = () => {
           try {
             const res = await fetch(`${API_BASE}/api/blocks`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ userId: member.user?.id }),
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: member.user?.id })
             });
             if (!res.ok) throw new Error('Failed');
             addToast(`${username} blocked.`, 'success');
           } catch (e) {
             addToast('Failed to block user.', 'error');
           }
-        },
+        }
       },
       ...(canMod
         ? [
@@ -133,15 +133,15 @@ const MemberPanel: React.FC = () => {
                 try {
                   const res = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/members/${member.user?.id}/nickname`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({ nick: newNick }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nick: newNick })
                   });
                   if (!res.ok) throw new Error('Failed');
                   addToast(`Nickname updated to "${newNick || '(none)'}"`, 'success');
                 } catch (e) {
                   addToast('Failed to change nickname.', 'error');
                 }
-              },
+              }
             },
             {
               id: 'ban',
@@ -154,15 +154,15 @@ const MemberPanel: React.FC = () => {
                 try {
                   const res = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/bans`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                    body: JSON.stringify({ userId: member.user?.id }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: member.user?.id })
                   });
                   if (!res.ok) throw new Error('Failed');
                   addToast(`${username} banned.`, 'success');
                 } catch (e) {
                   addToast('Failed to ban user.', 'error');
                 }
-              },
+              }
             },
             { id: 'mute', label: 'Mute Member', icon: '🔇', onClick: () => addToast('Muted.', 'info') },
             { id: 'deafen', label: 'Deafen Member', icon: '🔕', onClick: () => addToast('Deafened.', 'info') },
@@ -173,13 +173,13 @@ const MemberPanel: React.FC = () => {
               label: 'Timeout Member',
               icon: '⏱️',
               submenu: [
-                { id: 't1', label: '1 minute', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 1 }) }); r.ok ? addToast(`${username} timed out for 1 minute.`, 'success') : addToast('Failed to timeout.', 'error'); } },
-                { id: 't5', label: '5 minutes', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 5 }) }); r.ok ? addToast(`${username} timed out for 5 minutes.`, 'success') : addToast('Failed to timeout.', 'error'); } },
-                { id: 't15', label: '15 minutes', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 15 }) }); r.ok ? addToast(`${username} timed out for 15 minutes.`, 'success') : addToast('Failed to timeout.', 'error'); } },
-                { id: 't60', label: '1 hour', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 60 }) }); r.ok ? addToast(`${username} timed out for 1 hour.`, 'success') : addToast('Failed to timeout.', 'error'); } },
-                { id: 't1440', label: '1 day', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 1440 }) }); r.ok ? addToast(`${username} timed out for 1 day.`, 'success') : addToast('Failed to timeout.', 'error'); } },
-                { id: 't0', label: 'Remove Timeout', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('vox_token')}` }, body: JSON.stringify({ minutes: 0 }) }); r.ok ? addToast(`Timeout removed for ${username}.`, 'success') : addToast('Failed to remove timeout.', 'error'); }, danger: true },
-              ],
+                { id: 't1', label: '1 minute', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 1 }) }); r.ok ? addToast(`${username} timed out for 1 minute.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't5', label: '5 minutes', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 5 }) }); r.ok ? addToast(`${username} timed out for 5 minutes.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't15', label: '15 minutes', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 15 }) }); r.ok ? addToast(`${username} timed out for 15 minutes.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't60', label: '1 hour', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 60 }) }); r.ok ? addToast(`${username} timed out for 1 hour.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't1440', label: '1 day', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 1440 }) }); r.ok ? addToast(`${username} timed out for 1 day.`, 'success') : addToast('Failed to timeout.', 'error'); } },
+                { id: 't0', label: 'Remove Timeout', onClick: async () => { const r = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/timeout/${member.user?.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ minutes: 0 }) }); r.ok ? addToast(`Timeout removed for ${username}.`, 'success') : addToast('Failed to remove timeout.', 'error'); }, danger: true },
+              ]
             },
             {
               id: 'kick',
@@ -192,14 +192,14 @@ const MemberPanel: React.FC = () => {
                 try {
                   const res = await fetch(`${API_BASE}/api/servers/${selectedServer?.id}/kick/${member.user?.id}`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    headers: { 'Content-Type': 'application/json' }
                   });
                   if (!res.ok) throw new Error('Failed');
                   addToast(`${username} kicked.`, 'success');
                 } catch (e) {
                   addToast('Failed to kick user.', 'error');
                 }
-              },
+              }
             },
           ]
         : [])
@@ -215,7 +215,7 @@ const MemberPanel: React.FC = () => {
       ADMIN: [],
       MODERATOR: [],
       MEMBER: [],
-      OFFLINE: [],
+      OFFLINE: []
     };
 
     selectedServer.members.forEach((member) => {
@@ -301,7 +301,7 @@ const MemberPanel: React.FC = () => {
                   color: headerColor,
                   padding: '8px 8px 4px',
                   textTransform: 'uppercase',
-                  opacity: 0.8,
+                  opacity: 0.8
                 }}
               >
                 {headerLabel}
@@ -338,7 +338,7 @@ const MemberPanel: React.FC = () => {
                         borderRadius: '4px',
                         opacity: isOffline ? 0.35 : 1,
                         transition: 'background 0.1s',
-                        minHeight: '40px',
+                        minHeight: '40px'
                       }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
@@ -356,7 +356,7 @@ const MemberPanel: React.FC = () => {
                               borderRadius: '50%',
                               objectFit: 'cover',
                               background: 'var(--obsidian)',
-                              display: 'block',
+                              display: 'block'
                             }}
                           />
                         ) : (
@@ -371,7 +371,7 @@ const MemberPanel: React.FC = () => {
                               justifyContent: 'center',
                               color: 'var(--ghost-white)',
                               fontWeight: 700,
-                              fontSize: '14px',
+                              fontSize: '14px'
                             }}
                           >
                             {String(user.username || '?').slice(0, 1).toUpperCase()}
@@ -387,7 +387,7 @@ const MemberPanel: React.FC = () => {
                             height: '12px',
                             borderRadius: '50%',
                             background: statusColor,
-                            border: '2.5px solid var(--abyss)',
+                            border: '2.5px solid var(--abyss)'
                           }}
                         />
                       </div>
@@ -401,7 +401,7 @@ const MemberPanel: React.FC = () => {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
-                          lineHeight: '32px',
+                          lineHeight: '32px'
                         }}>
                           {user.username || 'Unknown'}
                           {isMe && <span style={{ fontSize: '11px', color: 'var(--shadow)', fontStyle: 'italic', marginLeft: '4px' }}>(you)</span>}
@@ -413,7 +413,7 @@ const MemberPanel: React.FC = () => {
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                            marginTop: '-4px',
+                            marginTop: '-4px'
                           }}>
                             {ACTIVITY_META[activity.type].icon} {activity.name}
                           </div>

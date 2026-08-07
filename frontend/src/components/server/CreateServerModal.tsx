@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useUiStore } from '../../stores/uiStore';
 import { useServerStore } from '../../stores/serverStore';
 import { createServer } from '../../api/servers';
-import { API_BASE, getToken } from '../../api/client';
+import { api } from '../../api/client';
 import { useNavigate } from 'react-router-dom';
 import { validateServerName } from '../../utils/validation';
 import { listTemplates, createFromTemplate, type ServerTemplate } from '../../api/templates';
@@ -130,19 +130,21 @@ const CreateServerModal: React.FC = () => {
         const formData = new FormData();
         formData.append('file', iconFile);
         formData.append('serverId', server.id);
-
-        const token = getToken();
-        const res = await fetch(`${API_BASE}/api/upload/server-icon`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.server) serverWithImages = { ...serverWithImages, icon: data.server.icon };
-        } else {
-          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-          addToast(`Icon upload failed: ${err.error}`, 'error');
+        try {
+          // Routed through the api() wrapper so a 401 mid-upload triggers
+          // tryRefresh() + retry instead of pinning the failure as a logout.
+          // Bypassing api() earlier sent `Authorization: Bearer null` against
+          // an HttpOnly cookie auth backend; on the first refresh race that
+          // interpreted as a 401 and yanked the user back to /login while
+          // they were still in the middle of forging a server.
+          const data = await api<{ server?: { icon?: string } }>('/api/upload/server-icon', {
+            method: 'POST',
+            body: formData,
+          });
+          if (data.server?.icon) serverWithImages = { ...serverWithImages, icon: data.server.icon };
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'Upload failed';
+          addToast(`Icon upload failed: ${msg}`, 'error');
         }
       }
 
@@ -151,19 +153,15 @@ const CreateServerModal: React.FC = () => {
         const formData = new FormData();
         formData.append('file', bannerFile);
         formData.append('serverId', server.id);
-
-        const token = getToken();
-        const res = await fetch(`${API_BASE}/api/upload/server-banner`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.server) serverWithImages = { ...serverWithImages, banner: data.server.banner };
-        } else {
-          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-          addToast(`Banner upload failed: ${err.error}`, 'error');
+        try {
+          const data = await api<{ server?: { banner?: string } }>('/api/upload/server-banner', {
+            method: 'POST',
+            body: formData,
+          });
+          if (data.server?.banner) serverWithImages = { ...serverWithImages, banner: data.server.banner };
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : 'Upload failed';
+          addToast(`Banner upload failed: ${msg}`, 'error');
         }
       }
 

@@ -33,8 +33,8 @@ const Account: React.FC = () => {
     try {
       const res = await fetch(`${API_BASE}/api/auth/change-password`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw })
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Password changed successfully.', 'success');
@@ -52,7 +52,7 @@ const Account: React.FC = () => {
     try {
       const res = await fetch(`${API_BASE}/api/auth/me`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {}
       });
       if (!res.ok) throw new Error('Failed');
       localStorage.removeItem('vox_token');
@@ -143,10 +143,10 @@ const Account: React.FC = () => {
       {pwModal && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.7)',
+          background: 'rgba(0,0,0,0.7)'
         }}>
           <div style={{
-            background: 'var(--abyss)', border: '1px solid var(--rim)', padding: '24px', width: '360px', maxWidth: '90vw',
+            background: 'var(--abyss)', border: '1px solid var(--rim)', padding: '24px', width: '360px', maxWidth: '90vw'
           }}>
             <h3 style={{ fontFamily: 'Cinzel Decorative, serif', color: 'var(--ghost-white)', marginBottom: '16px' }}>CHANGE PASSWORD</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

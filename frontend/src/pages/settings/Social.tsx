@@ -20,7 +20,7 @@ const Social: React.FC = () => {
   useEffect(() => {
     const token = localStorage.getItem('vox_token');
     if (!token) return;
-    fetch(`${API_BASE}/api/blocks`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/blocks`, { headers: {} })
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data?.blocks)) setBlockedCount(data.blocks.length);

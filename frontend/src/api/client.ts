@@ -129,9 +129,31 @@ function extractError(data: unknown, fallback: string): string {
 
 // The `any` default keeps untyped call sites working; typed callers pass an
 // explicit generic (e.g. api<{ config: ArchiveConfig }>(...)).
+// Build the right header set whether the body is JSON or a FormData
+// multipart upload. We have to skip 'Content-Type: application/json'
+// for FormData so the browser can set the multipart boundary itself
+// (otherwise the parser won't recognize the parts).
+function buildHeaders(customHeaders: HeadersInit | undefined, body: unknown): Record<string, string> {
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers: Record<string, string> = {};
+  if (!isFormData) headers['Content-Type'] = 'application/json';
+  if (customHeaders) {
+    const incoming = new Headers(customHeaders);
+    incoming.forEach((value, key) => {
+      // Caller-provided Content-Type wins for non-FormData; for FormData,
+      // explicitly drop any Content-Type the caller set so the boundary is added.
+      if (isFormData && key.toLowerCase() === 'content-type') return;
+      headers[key] = value;
+    });
+  }
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return headers;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- intentional generic default for untyped JSON responses
 export async function api<T = any>(path: string, options: RequestInit & { skipAuth?: boolean } = {}, _retry = false): Promise<T> {
-  const { skipAuth = false, headers: customHeaders, ...rest } = options;
+  const { skipAuth = false, headers: customHeaders, body, ...rest } = options;
   let res: Response | null = null;
   let data: unknown;
 
@@ -146,13 +168,13 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
   let lastErr: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      const requestHeaders = skipAuth
+        ? buildHeaders(customHeaders, body)
+        : (() => { const h = buildHeaders(customHeaders, body); if (h.Authorization && getToken() === null) delete h.Authorization; return h; })();
       res = await fetch(API_BASE + path, {
         ...rest,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(customHeaders || {}),
-          ...(!skipAuth && getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {}),
-        },
+        body,
+        headers: requestHeaders,
         credentials: 'include',
       });
       lastErr = null;
@@ -180,14 +202,10 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
   if (res.status === 401 && !_retry) {
     const refreshed = await tryRefresh();
     if (refreshed) {
-      const newToken = getToken();
-      const retryHeaders = {
-        'Content-Type': 'application/json',
-        ...(customHeaders || {}),
-        ...(newToken ? { 'Authorization': 'Bearer ' + newToken } : {}),
-      };
+      const retryHeaders = buildHeaders(customHeaders, body);
       const retryRes = await fetch(API_BASE + path, {
         ...rest,
+        body,
         headers: retryHeaders,
         credentials: 'include',
       });

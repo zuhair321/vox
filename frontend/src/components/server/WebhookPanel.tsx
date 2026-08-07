@@ -13,7 +13,7 @@ const WebhookPanel: React.FC<Props> = ({ serverId }) => {
   const token = (() => { try { return localStorage.getItem('vox_token'); } catch { return null; } })();
 
   const fetchWebhooks = () => {
-    fetch(`${API_BASE}/api/servers/${serverId}/webhooks`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/servers/${serverId}/webhooks`, { headers: {} })
       .then((r) => r.json())
       .then((data) => { setWebhooks(data.webhooks || []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -26,8 +26,8 @@ const WebhookPanel: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/webhooks`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: name.trim(), channelId }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), channelId })
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Webhook created', 'success');
@@ -43,7 +43,7 @@ const WebhookPanel: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/webhooks/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {}
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Webhook deleted', 'success');

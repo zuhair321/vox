@@ -11,7 +11,7 @@ const BanList: React.FC<Props> = ({ serverId }) => {
   const token = (() => { try { return localStorage.getItem('vox_token'); } catch { return null; } })();
 
   const fetchBans = () => {
-    fetch(`${API_BASE}/api/servers/${serverId}/bans`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/servers/${serverId}/bans`, { headers: {} })
       .then((r) => r.json())
       .then((data) => { setBans(data.bans || []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -23,7 +23,7 @@ const BanList: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/bans/${userId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {}
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Unbanned', 'success');

@@ -14,7 +14,7 @@ const CategoryManager: React.FC<Props> = ({ serverId }) => {
   const token = (() => { try { return localStorage.getItem('vox_token'); } catch { return null; } })();
 
   const fetchCategories = () => {
-    fetch(`${API_BASE}/api/servers/${serverId}/categories`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API_BASE}/api/servers/${serverId}/categories`, { headers: {} })
       .then((r) => r.json())
       .then((data) => { setCategories(data.categories || []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -27,8 +27,8 @@ const CategoryManager: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/categories`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name: newName.trim() }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName.trim() })
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Category created', 'success');
@@ -44,7 +44,7 @@ const CategoryManager: React.FC<Props> = ({ serverId }) => {
     try {
       const res = await fetch(`${API_BASE}/api/servers/${serverId}/categories/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {}
       });
       if (!res.ok) throw new Error('Failed');
       addToast('Category deleted', 'success');
