@@ -1,6 +1,6 @@
 {
   "name": "vox-desktop",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "VOX Desktop - Voice and Text Chat",
   "author": "VOX Team",
   "main": "electron-main.js",
@@ -12,28 +12,41 @@
     "dev:desktop": "electron .",
     "dev:all": "concurrently \"npm run dev --prefix frontend\" \"electron .\"",
     "backend": "node backend/server.js",
-    "prod:backend": "pm2 start ecosystem.config.cjs",
-    "prod:stop": "pm2 stop all && pm2 delete all",
-    "prod:logs": "pm2 logs vox-backend",
-    "prod:status": "pm2 status",
     "setup:backend": "cd backend && npm install",
     "setup:nodejs": "node -e \"console.log('Portable Node.js is bundled automatically during electron-builder build')\"",
+    "build:frontend": "npm run build --prefix frontend",
     "build": "npm run build:win",
-    "build:win": "npm run build:win",
+    "build:win": "electron-builder --win",
     "build:all": "electron-builder --win --mac --linux",
-    "dist": "electron-builder --win"
+    "build:local": "electron-builder --win",
+    "dist": "electron-builder --win",
+    "release": "electron-builder --win --publish=always",
+    "release:win": "cd dist2 && electron-builder --win --publish always --config.publish.provider=github",
+    "release:dry": "cd dist2 && electron-builder --win --publish never --config.publish.provider=github",
+    "bump": "node scripts/bump-version.cjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zuhair321/vox.git"
   },
   "build": {
     "appId": "com.vox.desktop",
     "productName": "VOX",
+    "icon": "build-resources/icon-256.png",
     "asar": true,
     "asarUnpack": [
       "frontend/dist/**/*.node",
       "backend/**/*.node"
     ],
     "directories": {
-      "output": "./dist-v2",
+      "output": "./dist",
       "buildResources": "build-resources"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "zuhair321",
+      "repo": "vox",
+      "releaseType": "release"
     },
     "files": [
       "electron-main.js",
@@ -47,12 +60,43 @@
         "to": "nodejs"
       },
       {
-        "from": "backend",
-        "to": "backend"
+        "from": "tools/postgres",
+        "to": "postgres",
+        "filter": [
+          "pgsql/bin/**/*",
+          "pgsql/lib/**/*",
+          "pgsql/share/**/*",
+          "!**/*.map"
+        ]
       },
       {
-        "from": "scripts/installer.nsh",
-        "to": "installer.nsh"
+        "from": "frontend/dist",
+        "to": "frontend/dist"
+      },
+      {
+        "from": "backend",
+        "to": "backend",
+        "filter": [
+          "**/*",
+          "!**/*.log",
+          "!uploads/**/*",
+          "!vox.db",
+          "!prisma/vox.db",
+          "!**/*.map",
+          "!node_modules/.cache/**",
+          "!node_modules/@opentelemetry/**",
+          "!node_modules/@prisma/instrumentation/**",
+          "!node_modules/vite/**",
+          "!node_modules/vitest/**",
+          "!node_modules/@vitest/**",
+          "!node_modules/@esbuild/**",
+          "!node_modules/@rollup/**",
+          "!node_modules/rollup/**",
+          "!node_modules/tsx/**",
+          "!node_modules/pm2/**",
+          "!node_modules/@pm2/**",
+          "!node_modules/@types/**"
+        ]
       }
     ],
     "win": {
@@ -79,15 +123,20 @@
     },
     "mac": {
       "target": "dmg",
-      "icon": "build-resources/icon.ico"
+      "icon": "build-resources/icon-256.png"
     },
     "linux": {
       "target": "AppImage",
-      "icon": "build-resources/icon.ico"
+      "icon": "build-resources/icon-256.png"
     }
   },
   "devDependencies": {
     "electron": "^30.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "sharp": "^0.35.3"
+  },
+  "dependencies": {
+    "ws": "^8.21.1",
+    "electron-updater": "^6.1.7"
   }
 }
