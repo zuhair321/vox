@@ -202,3 +202,11 @@ RUN-VOX.bat
 \n[nodejs is portable node, must be ignored]\n
 tools/nodejs/
 tools/pg.zip
+
+# ── Dev session probe artifacts (CDP screenshots for live-renderer smoke) ─
+cdp-shot.png
+cdp-shot.b64.txt
+cdp-fullshot.png
+
+# ── Carrom preview directory (visual prototype scratch) ────────────────
+carrom-preview/
