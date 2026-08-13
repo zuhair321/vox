@@ -18,6 +18,8 @@ interface VoiceStore {
   joinInProgress: boolean;
   channelId: string | null;
   serverId: string | null;
+  /** Which media transport the active voice session is using. */
+  transport: 'mesh' | 'sfu' | null;
   joinedAt: number | null;
   localStream: MediaStream | null;
   peers: Map<string, RTCPeerConnection>;
@@ -66,6 +68,8 @@ interface VoiceStore {
   updateVoiceUser: (socketId: string, updates: Partial<VoiceUser>) => void;
   setUserAmplitude: (socketId: string, amplitude: number) => void;
   setChannel: (channelId: string, serverId: string) => void;
+  /** Set the active media transport. Pass null when leaving a channel. */
+  setTransport: (transport: 'mesh' | 'sfu' | null) => void;
   pendingPeers: Set<string>;
   pendingCandidates: Map<string, RTCIceCandidateInit[]>;
   clearAll: () => void;
@@ -81,6 +85,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   peers: new Map(),
   remoteStreams: new Map(),
   voiceUsers: [],
+  transport: null,
   localMuted: false,
   localDeafened: false,
   localSpeaking: false,
@@ -101,6 +106,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   }),
 
   setJoinInProgress: (progress: boolean) => set({ joinInProgress: progress }),
+
+  setTransport: (transport) => set({ transport }),
 
   clearChannel: () => {
     const { localStream, localScreenStream, peers, remoteStreams, remoteVideoStreams } = get();
@@ -125,6 +132,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       localSpeaking: false,
       localVideo: false,
       screenSharing: false,
+      transport: null,
     });
   },
 
@@ -273,7 +281,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       localSpeaking: false,
       localVideo: false,
       screenSharing: false,
-      seatPositions: {}
+      seatPositions: {},
+      transport: null,
     });
   },
 }));

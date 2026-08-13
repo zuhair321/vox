@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { deliverWebhooks } from '../services/webhook.service.js';
 import { sanitize } from '../middleware/sanitize.js';
 import { normalizeAttachments } from '../lib/attachments.js';
-import { isRateLimited } from '../lib/redis.js';
+import { isRateLimited, setStatusCache } from '../lib/redis.js';
 import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 import { getState } from '../services/chat.service.js';
 
@@ -197,6 +197,19 @@ export function registerHandlers(io, socket) {
     emitRealtimeEvent('voice:ice-candidate', to, { from: socket.id, candidate });
   });
 
+  // Spatial-audio seat position. The sender drags their seat in the
+  // SpatialVoiceCanvas; we relay it to everyone else in the voice room so the
+  // staged layout stays in sync across clients.
+  socket.on('voice:seat-update', ({ position } = {}) => {
+    const channelId = voiceChannelBySocket.get(socket.id);
+    const user = getSocketUser(socket);
+    if (!channelId || !user) return;
+    socket.to(`voice:${channelId}`).emit('voice:seat-update', {
+      userId: user.id,
+      position,
+    });
+  });
+
   socket.on('voice:mute', ({ muted }) => {
     const channelId = voiceChannelBySocket.get(socket.id);
     const user = getSocketUser(socket);
@@ -332,7 +345,17 @@ export function registerHandlers(io, socket) {
       emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
       io.to(`channel:${channelId}`).emit('message:new', { message });
 
-      // Deliver to registered outgoing webhooks (non-blocking)
+            // If this was a thread reply, broadcast a lightweight thread:reply
+      // so other clients update ThreadIndicator badges and any open
+      // ThreadPanel without re-fetching the whole channel.
+      if (parentId) {
+        try {
+          const replyCount = await prisma.message.count({ where: { parentId, deleted: false } });
+          io.to(`channel:${channelId}`).emit('thread:reply', { parentId, reply: message, replyCount });
+        } catch { /* non-fatal */ }
+      }
+
+// Deliver to registered outgoing webhooks (non-blocking)
       deliverWebhooks(channelId, message).catch(err => {
         console.error('[webhook] delivery error:', err.message);
       });
@@ -463,6 +486,14 @@ export function registerHandlers(io, socket) {
     socket.to(`channel:${channelId}`).emit('typing:start', { userId, username, channelId });
   });
 
+
+
+  // Thread typing — typing-dots inside open ThreadPanel.
+  socket.on('thread:typing', ({ channelId, parentId, typing }) => {
+    if (!channelId || !parentId) return;
+    socket.to(`channel:${channelId}`).emit('thread:typing', { parentId, userId, typing });
+  });
+
   socket.on('typing:stop', ({ channelId }) => {
     if (!userId) return;
     socket.to(`channel:${channelId}`).emit('typing:stop', { userId, channelId });
@@ -583,12 +614,16 @@ export function registerHandlers(io, socket) {
     const normalized = String(status || '').toUpperCase();
     const VALID = ['ONLINE', 'IDLE', 'DND', 'OFFLINE'];
     if (!VALID.includes(normalized)) return;
-    try {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { status: normalized },
-      });
-      // Scope to all server rooms this user is in (set during connect)
+      try {
+        // Write-through: cache the status so the connect presence broadcast
+        // (and any other reader) can serve Redis-first and skip a Postgres
+        // round-trip. Postgres stays the durable source of truth.
+        setStatusCache(userId, normalized).catch(() => {});
+        await prisma.user.update({
+          where: { id: userId },
+          data: { status: normalized },
+        });
+        // Scope to all server rooms this user is in (set during connect)
       const serverIds = socket.data.serverIds || [];
       const lowercase = normalized.toLowerCase();
       for (const serverId of serverIds) {
@@ -601,6 +636,7 @@ export function registerHandlers(io, socket) {
     handleVoiceLeave(io, socket);
     if (userId) {
       try {
+        setStatusCache(userId, 'OFFLINE').catch(() => {});
         await prisma.user.update({
           where: { id: userId },
           data: { status: 'OFFLINE' }

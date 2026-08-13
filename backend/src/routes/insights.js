@@ -95,3 +95,82 @@ insightsRouter.get('/servers/:id/insights', requireAuth, async (req, res, next) 
     });
   } catch (e) { next(e); }
 });
+
+
+// GET /api/servers/:id/insights/series?period=7d|30d|90d
+//
+// Returns a per-day timeseries for the requested period.
+// Used by ServerInsights.tsx to render the activity-over-time line chart.
+// All counts are inclusive of soft-deleted messages? No — we honour `deleted: false`.
+insightsRouter.get('/servers/:id/insights/series', requireAuth, async (req, res, next) => {
+  try {
+    const serverId = req.params.id;
+    await assertCanManage(serverId, req.user.id);
+
+    const periodKey = PERIOD_DAYS[String(req.query.period || '7d')] ? String(req.query.period || '7d') : '7d';
+    const days = PERIOD_DAYS[periodKey];
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const server = await prisma.server.findUnique({
+      where: { id: serverId },
+      include: { channels: { select: { id: true } } },
+    });
+    if (!server) throw new HttpError(404, 'Server not found.');
+
+    const channelIds = server.channels.map((c) => c.id);
+    const bucketStart = new Date(since);
+    bucketStart.setUTCHours(0, 0, 0, 0);
+
+    // Build empty per-day buckets in UTC so the chart renders a continuous axis.
+    const labels = [];
+    const messagesBucket = {};
+    const joinsBucket = {};
+    const peakBucket = {};
+    for (let i = 0; i < days; i++) {
+      const d = new Date(bucketStart.getTime() + i * 86400000);
+      const key = d.toISOString().slice(0, 10);
+      labels.push(key);
+      messagesBucket[key] = 0;
+      joinsBucket[key] = 0;
+      peakBucket[key] = 0;
+    }
+
+    // Per-day message counts. groupBy is cheaper than raw-fetch-and-reduce.
+    const msgAgg = await prisma.message.groupBy({
+      by: ['createdAt'],
+      where: {
+        channelId: { in: channelIds },
+        deleted: false,
+        createdAt: { gte: bucketStart },
+      },
+      _count: { _all: true },
+    }).catch(() => []);
+    msgAgg.forEach((row) => {
+      const key = row.createdAt.toISOString().slice(0, 10);
+      if (key in messagesBucket) messagesBucket[key] += row._count._all;
+    });
+
+    const memberAgg = await prisma.serverMember.findMany({
+      where: { serverId, joinedAt: { gte: bucketStart } },
+      select: { joinedAt: true },
+    });
+    memberAgg.forEach((row) => {
+      const key = row.joinedAt.toISOString().slice(0, 10);
+      if (key in joinsBucket) joinsBucket[key] += 1;
+    });
+
+    // Peak concurrent is a stand-in until a presence endpoint exists.
+    // For now we use "messages on that day" as a busy-day proxy — chart-friendly.
+    Object.keys(messagesBucket).forEach((key) => {
+      peakBucket[key] = messagesBucket[key];
+    });
+
+    res.json({
+      period: periodKey,
+      labels,
+      messages: labels.map((k) => messagesBucket[k]),
+      joins: labels.map((k) => joinsBucket[k]),
+      peak: labels.map((k) => peakBucket[k]),
+    });
+  } catch (e) { next(e); }
+});

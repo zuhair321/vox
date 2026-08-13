@@ -102,7 +102,9 @@ export function rateLimitMiddleware(options = {}) {
   };
 }
 
-// Error tracking middleware (placeholder for Sentry integration)
+// Error tracking middleware. Logs unhandled errors centrally; Sentry (when
+// SENTRY_DSN is set) captures these in src/server.js, so this is the local
+// fallback that always runs.
 export function errorTrackingMiddleware(err, req, res, next) {
   logger.error('Unhandled error:', {
     error: err.message,

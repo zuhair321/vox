@@ -83,3 +83,40 @@ notificationsRouter.delete('/push/unsubscribe', requireAuth, async (req, res, ne
     res.json({ ok: true });
   } catch (e) { next(e); }
 });
+
+
+// PUT /api/users/me/notifications/level
+// Body: { serverId?, channelId?, level: 'ALL'|'MENTIONS'|'NOTHING'|'DEFAULT' }
+// Establishes the user's effective notification preference for a server or channel.
+notificationsRouter.put('/users/me/notifications/level', requireAuth, async (req, res, next) => {
+  try {
+    const { serverId, channelId, level } = req.body || {};
+    if (!serverId && !channelId) throw new HttpError(400, 'serverId or channelId is required.');
+    const ALLOWED = ['ALL', 'MENTIONS', 'NOTHING', 'DEFAULT'];
+    if (!ALLOWED.includes(level)) throw new HttpError(400, 'level must be one of: ' + ALLOWED.join(', '));
+
+    if (serverId) {
+      const member = await prisma.serverMember.findUnique({
+        where: { serverId_userId: { serverId, userId: req.user.id } },
+      });
+      if (!member) throw new HttpError(403, 'Not a member.');
+    }
+    if (channelId) {
+      const ch = await prisma.channel.findUnique({ where: { id: channelId }, select: { serverId: true } });
+      if (ch && ch.serverId) {
+        const member = await prisma.serverMember.findUnique({
+          where: { serverId_userId: { serverId: ch.serverId, userId: req.user.id } },
+        });
+        if (!member) throw new HttpError(403, 'Not a member.');
+      }
+    }
+    const existing = await prisma.notificationSettings.findFirst({
+      where: { userId: req.user.id, serverId: serverId || null, channelId: channelId || null }
+    });
+    const data = { level, muted: level === 'NOTHING' };
+    const setting = existing
+      ? await prisma.notificationSettings.update({ where: { id: existing.id }, data })
+      : await prisma.notificationSettings.create({ data: { userId: req.user.id, serverId: serverId || null, channelId: channelId || null, ...data } });
+    res.json({ ok: true, setting });
+  } catch (e) { next(e); }
+});

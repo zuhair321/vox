@@ -11,3 +11,9 @@ data/
 
 # OS
 .DS_Store
+
+# SQLite artifacts (VOX uses Postgres — schema.sql + *.db are dead)
+*.db
+*.db-shm
+*.db-wal
+schema.sql

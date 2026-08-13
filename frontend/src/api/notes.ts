@@ -1,24 +1,21 @@
 import { api } from './client';
 
-export interface Note {
+export interface UserNote {
   id: string;
-  title: string;
-  content: string;
   userId: string;
+  targetId: string;
+  content: string;
   createdAt: string;
   updatedAt: string;
+  target?: { id: string; username: string; displayName: string; avatarUrl: string | null };
 }
 
-export const fetchUserNotes = () => api<Note[]>('/api/notes');
-export const createNote = (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt'>) =>
-  api('/api/notes', {
-    method: 'POST',
-    body: JSON.stringify(note),
+export const fetchMyNotes = () => api<{ notes: UserNote[] }>('/api/users/me/notes');
+export const getUserNote = (targetId: string) => api<{ note: { content: string; updatedAt: string } | null }>(`/api/users/${targetId}/notes`);
+export const setUserNote = (targetId: string, text: string) =>
+  api(`/api/users/${targetId}/notes`, {
+    method: 'PUT',
+    body: JSON.stringify({ text }),
   });
-export const updateNote = (noteId: string, note: Partial<Omit<Note, 'id' | 'userId' | 'createdAt'>>) =>
-  api(`/api/notes/${noteId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(note),
-  });
-export const deleteNote = (noteId: string) =>
-  api(`/api/notes/${noteId}`, { method: 'DELETE' });
+export const deleteUserNote = (targetId: string) =>
+  api(`/api/users/${targetId}/notes`, { method: 'DELETE' });

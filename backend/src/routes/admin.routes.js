@@ -130,8 +130,7 @@ router.get('/stats', requireAdmin, async (req, res) => {
       recentMessages: [],
     });
   } catch (e) {
-    console.error('Admin stats error:', e);
-    res.status(500).json({ error: 'Failed to fetch stats' });
+    next(e);
   }
 });
 
@@ -172,8 +171,7 @@ router.get('/activity', requireAdmin, async (req, res) => {
 
     res.json(activity);
   } catch (e) {
-    console.error('Activity error:', e);
-    res.json([]);
+    next(e);
   }
 });
 
@@ -214,8 +212,7 @@ router.get('/users', requireAdmin, async (req, res) => {
 
     res.json({ users, total, page: Number(page), pages: Math.ceil(total / take) });
   } catch (e) {
-    console.error('Users list error:', e);
-    res.status(500).json({ error: 'Failed to fetch users' });
+    next(e);
   }
 });
 
@@ -249,8 +246,7 @@ router.get('/users/:id', requireAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json({ user });
   } catch (e) {
-    console.error('User detail error:', e);
-    res.status(500).json({ error: 'Failed to fetch user' });
+    next(e);
   }
 });
 
@@ -270,8 +266,7 @@ router.patch('/users/:id', requireAdmin, async (req, res) => {
     });
     res.json({ user });
   } catch (e) {
-    console.error('User update error:', e);
-    res.status(500).json({ error: 'Failed to update user' });
+    next(e);
   }
 });
 
@@ -283,7 +278,7 @@ router.post('/users/:id/ban', requireAdmin, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to ban user' });
+    next(e);
   }
 });
 
@@ -295,7 +290,7 @@ router.delete('/users/:id/ban', requireAdmin, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to unban user' });
+    next(e);
   }
 });
 
@@ -322,7 +317,7 @@ router.get('/users/:id/sessions', requireAdmin, async (req, res) => {
     });
     res.json({ sessions });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to fetch sessions' });
+    next(e);
   }
 });
 
@@ -356,8 +351,7 @@ router.get('/servers', requireAdmin, async (req, res) => {
 
     res.json({ servers, total, page: Number(page), pages: Math.ceil(total / take) });
   } catch (e) {
-    console.error('Servers list error:', e);
-    res.status(500).json({ error: 'Failed to fetch servers' });
+    next(e);
   }
 });
 
@@ -391,8 +385,7 @@ router.get('/servers/:id', requireAdmin, async (req, res) => {
     if (!server) return res.status(404).json({ error: 'Server not found' });
     res.json({ server });
   } catch (e) {
-    console.error('Server detail error:', e);
-    res.status(500).json({ error: 'Failed to fetch server' });
+    next(e);
   }
 });
 
@@ -422,7 +415,7 @@ router.patch('/servers/:id', requireAdmin, async (req, res) => {
     });
     res.json({ server });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to update server' });
+    next(e);
   }
 });
 
@@ -464,8 +457,7 @@ router.get('/messages', requireAdmin, async (req, res) => {
 
     res.json({ messages, total, page: Number(page), pages: Math.ceil(total / take) });
   } catch (e) {
-    console.error('Messages list error:', e);
-    res.status(500).json({ error: 'Failed to fetch messages' });
+    next(e);
   }
 });
 
@@ -477,7 +469,7 @@ router.delete('/messages/:id', requireAdmin, async (req, res) => {
     });
     res.json({ ok: true });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to delete message' });
+    next(e);
   }
 });
 
@@ -507,8 +499,7 @@ router.get('/reports', requireAdmin, async (req, res) => {
 
     res.json({ reports, total, page: Number(page), pages: Math.ceil(total / take) });
   } catch (e) {
-    console.error('Reports list error:', e);
-    res.status(500).json({ error: 'Failed to fetch reports' });
+    next(e);
   }
 });
 
@@ -525,7 +516,7 @@ router.patch('/reports/:id', requireAdmin, async (req, res) => {
     });
     res.json({ report });
   } catch (e) {
-    res.status(500).json({ error: 'Failed to update report' });
+    next(e);
   }
 });
 
@@ -555,8 +546,7 @@ router.get('/audit', requireAdmin, async (req, res) => {
 
     res.json({ logs, total, page: Number(page), pages: Math.ceil(total / take) });
   } catch (e) {
-    console.error('Audit logs error:', e);
-    res.status(500).json({ error: 'Failed to fetch audit logs' });
+    next(e);
   }
 });
 
@@ -605,8 +595,7 @@ router.get('/health', requireAdmin, async (req, res) => {
       counts: { users: userCount, servers: serverCount, messages: messageCount, channels: channelCount },
     });
   } catch (e) {
-    console.error('Health check error:', e);
-    res.status(500).json({ error: 'Health check failed' });
+    next(e);
   }
 });
 
@@ -614,7 +603,7 @@ router.get('/health', requireAdmin, async (req, res) => {
 router.get('/config', requireAdmin, async (req, res) => {
   res.json({
     registrationOpen: true,
-    maxFileSize: 10 * 1024 * 1024,
+    maxFileSize: process.env.MAX_FILE_SIZE_MB ? Number(process.env.MAX_FILE_SIZE_MB) * 1024 * 1024 : 10 * 1024 * 1024,
     maintenanceMode: false,
   });
 });

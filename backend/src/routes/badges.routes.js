@@ -61,12 +61,14 @@ badgesRouter.post('/servers/:id/badges', requireAuth, requireServerAdmin(), asyn
     const { name, description, icon, type, color } = req.body || {};
     if (!name || !String(name).trim()) throw new HttpError(400, 'Badge name is required.');
     if (!icon || !String(icon).trim()) throw new HttpError(400, 'Badge icon is required.');
+    const trimmedIcon = String(icon).trim();
+    if (!/^https?:\/\//i.test(trimmedIcon)) throw new HttpError(400, 'Badge icon must be an http(s) URL.');
 
     const badge = await prisma.badge.create({
       data: {
         name: sanitize(String(name)).slice(0, 50),
         description: description ? sanitize(String(description)).slice(0, 200) : null,
-        icon: String(icon).slice(0, 500),
+        icon: trimmedIcon.slice(0, 500),
         type: type || 'CUSTOM',
         color: color || '#5865f2',
         serverId: req.params.id,

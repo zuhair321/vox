@@ -7,6 +7,7 @@ import { useDMStore } from '../stores/dmStore';
 import { useServerStore } from '../stores/serverStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useUiStore } from '../stores/uiStore';
+import { navigateTo } from './nav';
 
 const SESSION_KEYS = [
   'vox_notifications',
@@ -67,5 +68,10 @@ export function logout() {
     localStorage.removeItem(key);
   }
 
-  window.location.href = '/login';
+  // Use React Router so we stay inside the SPA. Under the packaged Electron
+  // app the renderer runs from a file:// URL, where a full reload to
+  // "/login" resolves to "file:///D:/login" and shows an ERR_FILE_NOT_FOUND
+  // black screen. navigateTo() also falls back to a hash route so it works
+  // before React Router is mounted.
+  navigateTo('/login');
 }

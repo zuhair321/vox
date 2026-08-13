@@ -7,10 +7,6 @@
   "scripts": {
     "start": "npx prisma generate && node server.js",
     "dev": "node server.js",
-    "cluster": "pm2 start ../ecosystem.config.cjs",
-    "cluster:restart": "pm2 restart vox-backend",
-    "cluster:stop": "pm2 stop vox-backend",
-    "cluster:logs": "pm2 logs vox-backend",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
@@ -18,7 +14,6 @@
     "prisma:seed": "node seed.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "loadtest": "k6 run ../loadtest/load-test.js",
     "prisma:studio": "prisma studio",
     "verify:routes": "node scripts/verify-routes.mjs",
     "db:setup": "prisma migrate dev --name init && prisma db seed",
@@ -32,6 +27,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@sentry/node": "^9.47.1",
     "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
@@ -41,6 +37,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
+    "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.2.0",
     "node-fetch": "^3.3.2",
@@ -52,12 +49,10 @@
     "resend": "^6.16.0",
     "sanitize-html": "^2.17.5",
     "socket.io": "^4.8.3",
+    "web-push": "^3.6.7",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^4.4.3"
-  },
-  "optionalDependencies": {
-    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

@@ -118,6 +118,8 @@ interface SettingsStore {
   voiceActivity: boolean;
   pushToTalk: boolean;
   pushToTalkKey: string;
+  voiceNoiseLevel: number;
+  videoDevice: string;
 
   toggle: (key: BooleanSettingKey) => void;
   setTheme: (theme: VoxTheme) => void;
@@ -128,6 +130,8 @@ interface SettingsStore {
   setInputVolume: (vol: number) => void;
   setOutputVolume: (vol: number) => void;
   setPushToTalkKey: (key: string) => void;
+  setVoiceNoiseLevel: (level: number) => void;
+  setVideoDevice: (device: string) => void;
 }
 
 const SETTINGS_KEY = 'vox_settings';
@@ -192,6 +196,8 @@ const DEFAULTS: SettingsStore = {
   voiceActivity: true,
   pushToTalk: false,
   pushToTalkKey: 'V',
+  voiceNoiseLevel: 0,
+  videoDevice: 'default',
   // no-ops for type
   toggle: () => {},
   setTheme: () => {},
@@ -202,6 +208,8 @@ const DEFAULTS: SettingsStore = {
   setInputVolume: () => {},
   setOutputVolume: () => {},
   setPushToTalkKey: () => {},
+  setVoiceNoiseLevel: () => {},
+  setVideoDevice: () => {},
 };
 
 function loadSaved(): Partial<SettingsStore> {
@@ -213,7 +221,7 @@ function loadSaved(): Partial<SettingsStore> {
 }
 
 function save(state: SettingsStore) {
-  const { toggle, setTheme, setFontSize, setSpamFilter, setInputDevice, setOutputDevice, setInputVolume, setOutputVolume, setPushToTalkKey, ...data } = state;
+  const { toggle, setTheme, setFontSize, setSpamFilter, setInputDevice, setOutputDevice, setInputVolume, setOutputVolume, setPushToTalkKey, setVoiceNoiseLevel, setVideoDevice, ...data } = state;
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(data)); } catch {}
 }
 
@@ -238,5 +246,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => {
     setInputVolume: (inputVolume) => set((state) => { const next = { ...state, inputVolume }; save(next); return next; }),
     setOutputVolume: (outputVolume) => set((state) => { const next = { ...state, outputVolume }; save(next); return next; }),
     setPushToTalkKey: (pushToTalkKey) => set((state) => { const next = { ...state, pushToTalkKey }; save(next); return next; }),
+    setVoiceNoiseLevel: (voiceNoiseLevel) => set((state) => { const next = { ...state, voiceNoiseLevel }; save(next); return next; }),
+    setVideoDevice: (videoDevice) => set((state) => { const next = { ...state, videoDevice }; save(next); return next; }),
   };
 });

@@ -16,12 +16,13 @@
 // Events received:  typing
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { env, isAllowedOrigin } from '../lib/env.js';
 import { getState } from '../services/chat.service.js';
 import { mapChannel, mapMessage, mapMember } from '../lib/mappers.js';
 import { registerHandlers } from './handlers.js';
-import { getPubSub } from '../lib/redis.js';
+import { setLocalIO } from '../lib/redis_bridge.js';
 
 let io = null;
 
@@ -37,27 +38,39 @@ export async function initSockets(server) {
   // ── Redis adapter for horizontal scaling ─────────────────
   // Bounded so a misconfigured/unreachable REDIS_URL can never block boot:
   // if pub/sub isn't ready within 3s we proceed in single-process mode.
-  let publisher = null;
-  let subscriber = null;
+  let adapter = null;
   try {
     const timeout = new Promise((resolve) =>
-      setTimeout(() => resolve({ publisher: null, subscriber: null }), 3000),
+      setTimeout(() => resolve(null), 3000),
     );
-    ({ publisher, subscriber } = await Promise.race([getPubSub(), timeout]));
+    adapter = await Promise.race([createSocketIOAdapter(), timeout]);
   } catch {
-    publisher = null;
-    subscriber = null;
+    adapter = null;
   }
-  if (publisher && subscriber) {
-    io.adapter(createAdapter(publisher, subscriber));
+  if (adapter) {
+    io.adapter(adapter);
     console.log('[socket.io] Redis adapter active');
   } else {
     console.log('[socket.io] Running in single-process mode (no Redis)');
   }
 
+  // Let the Redis bridge emit directly to local clients when there is no
+  // Phoenix/Redis subscriber (offline desktop + single-process deploys).
+  setLocalIO(io);
+
   // ── Auth middleware (runs once per connection) ────────────
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
+    // Accept the JWT from the handshake auth OR from the HttpOnly `vox_access`
+    // cookie. Socket.io sends cookies automatically when the client connects
+    // with `withCredentials`, so this lets the socket authenticate after a page
+    // reload without the frontend having to hold the token in JS memory
+    // (where an XSS bug could read it). Anonymous guests are still admitted.
+    let token = socket.handshake.auth?.token;
+    if (!token) {
+      const cookieHeader = socket.handshake.headers?.cookie;
+      const match = cookieHeader && cookieHeader.match(/(?:^|;\s*)vox_access=([^;]+)/);
+      if (match) token = decodeURIComponent(match[1]);
+    }
     if (!token) {
       // Admit as anonymous guest — keeps demo/desktop working without login.
       socket.data.user = null;
@@ -106,4 +119,21 @@ export function emitAll(event, payload) {
 
 export function getIO() {
   return io;
+}
+
+// Socket.io Redis adapter factory using ioredis.
+// This is separated from the cache/rate-limit Redis (redis npm v4) because
+// @socket.io/redis-adapter v8 requires ioredis-compatible clients.
+export async function createSocketIOAdapter() {
+  if (!process.env.REDIS_URL) return null;
+  try {
+    const publisher = new Redis({ url: process.env.REDIS_URL, maxRetriesPerRequest: null });
+    const subscriber = new Redis({ url: process.env.REDIS_URL, maxRetriesPerRequest: null });
+    await publisher.ping();
+    console.log('[socket.io] ioredis adapter ready');
+    return createAdapter(publisher, subscriber);
+  } catch (err) {
+    console.warn('[socket.io] ioredis adapter failed, falling back to single-process:', err.message);
+    return null;
+  }
 }

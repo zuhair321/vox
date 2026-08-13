@@ -21,8 +21,20 @@ import {
   ScreenQuality,
 } from '../../utils/webrtc';
 import { setupVoiceActivityDetection } from '../../utils/voiceActivityDetection';
-import { Mic, MicOff, Headphones, PhoneOff, Volume2, VolumeX, Camera, Monitor, Settings } from 'lucide-react';
+import { Mic, MicOff, Headphones, PhoneOff, Volume2, VolumeX, Camera, Monitor, Settings, Maximize2, Minimize2, Hand, Music } from 'lucide-react';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { applyNoiseSuppression } from '../../utils/noiseSuppression';
+import { startPushToTalk, stopPushToTalk } from '../../utils/pushToTalk';
+import { trackPeer, type PeerQuality } from '../../utils/connectionQuality';
+import { playJoinVoice, playLeaveVoice, playMuteSelf, playUnmuteSelf, playDeafen, playUndeafen } from '../../utils/sounds';
+import { classifyMediaError, type MediaErrorInfo } from '../../utils/mediaErrors';
+import MediaPermissionPanel, { type MediaKind } from './MediaPermissionPanel';
+import VoicePreviewModal from './VoicePreviewModal';
+import QualityBars from './QualityBars';
 import { useUiStore } from '../../stores/uiStore';
+import { connectSfu, applySfuMute, type SfuConnection } from '../../utils/livekitVoice';
+import { API_BASE } from '../../api/client';
+import NowPlayingBar from './NowPlayingBar';
 
 const VoiceChannelPanel: React.FC = () => {
   const voice = useVoiceStore();
@@ -30,9 +42,12 @@ const VoiceChannelPanel: React.FC = () => {
   const { selectedServer, selectedChannel } = useServerStore();
   const { addToast } = useUiStore();
   const voiceActivityCleanupRef = useRef<(() => void) | null>(null);
+  const sfuConnRef = useRef<SfuConnection | null>(null);
+  const [sfuServerReady, setSfuServerReady] = useState<boolean | null>(null);
   const [screenQuality, setScreenQuality] = useState<ScreenQuality>(
     () => (localStorage.getItem('vox_screen_quality') as ScreenQuality) || 'balanced'
   );
+  const [musicBarOpen, setMusicBarOpen] = useState(false);
   const [captureAudio, setCaptureAudio] = useState<boolean>(
     () => localStorage.getItem('vox_screen_audio') !== 'false'
   );
@@ -41,32 +56,100 @@ const VoiceChannelPanel: React.FC = () => {
     () => (localStorage.getItem('vox_voice_filter') as VoiceFilter) || 'none'
   );
   const [showFilterMenu, setShowFilterMenu] = useState(false);
-
-  // Join voice channel
-  const joinChannel = useCallback(async (channelId: string, serverId: string) => {
-    if (voice.connected) {
-      console.warn('[Voice] Already in a channel');
-      return;
+  const settings = useSettingsStore();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [pendingPreview, setPendingPreview] = useState<{ channelId: string; serverId: string; channelName: string; rtcMode: string } | null>(null);
+  const [peerQualityMap, setPeerQualityMap] = useState<Map<string, PeerQuality>>(new Map());
+  const [pttActive, setPttActive] = useState(false);
+  const [poppedOut, setPoppedOut] = useState(false);
+  const [videoError, setVideoError] = useState<MediaErrorInfo | null>(null);
+  const [videoErrorOpen, setVideoErrorOpen] = useState(false);
+  const [micError, setMicError] = useState<MediaErrorInfo | null>(null);
+  const [micErrorOpen, setMicErrorOpen] = useState(false);
+  // Helper: route a classified MediaErrorInfo to the right inline panel.
+  const showMediaError = (kind: MediaKind, info: MediaErrorInfo) => {
+    if (kind === 'microphone') {
+      setMicError(info);
+      setMicErrorOpen(true);
+    } else {
+      setVideoError(info);
+      setVideoErrorOpen(true);
     }
+  };
+  const noiseSuppressionCleanupRef = useRef<(() => void) | null>(null);
 
+  // Show preview modal first; user confirms → joinChannel runs.
+  // The optional `rtcMode` parameter lets the modal/popover label the join as
+  // SFU-backed (large stages, LiveKit-powered) versus the default mesh path.
+  const requestJoinChannel = useCallback((channelId: string, serverId: string, channelName: string, rtcMode: string = 'MESH') => {
+    if (voice.connected || voice.joinInProgress) return;
+    setPendingPreview({ channelId, serverId, channelName, rtcMode });
+    setPreviewOpen(true);
+  }, [voice.connected, voice.joinInProgress]);
+
+  // Join voice channel — preview-aware with noise suppression pipeline.
+  // Branches on rtcMode: 'SFU' routes through LiveKit (scales beyond 6 peers
+  // and exists server-side for presence); 'MESH' (default) keeps the existing
+  // full-mesh WebRTC fan-out.
+  const joinChannel = useCallback(async (channelId: string, serverId: string, rtcMode: string = 'MESH') => {
+    if (voice.connected || voice.joinInProgress) return;
     try {
       voice.setJoinInProgress(true);
-      const stream = await getMicrophoneStream();
-      voice.setLocalStream(stream);
-      
-      // Set up voice activity detection for local stream
+      // Detect on first join whether the backend has LiveKit configured — we
+      // hit the cheap /api/voice/config endpoint so we know whether SFU is
+      // even possible before attempting it.
+      if (sfuServerReady === null) {
+        try {
+          const res = await fetch(`${API_BASE}/api/voice/config`, {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          const data = await res.json().catch(() => ({}));
+          setSfuServerReady(Boolean(data?.sfuEnabled));
+        } catch {
+          setSfuServerReady(false);
+        }
+      }
+
+      const wantsSfu = rtcMode === 'SFU' && sfuServerReady === true;
+      if (wantsSfu) {
+        voice.setTransport('sfu');
+        const conn = await connectSfu(channelId, serverId, { camera: false });
+        sfuConnRef.current = conn;
+        playJoinVoice();
+        addToast('Connected via LiveKit SFU', 'success', { duration: 4000 });
+        return;
+      }
+
+      voice.setTransport('mesh');
+      const raw = await getMicrophoneStream();
+      // Apply spectral noise-suppression pipeline if user has set a level > 0
+      let processedStream: MediaStream = raw;
+      if (settings.voiceNoiseLevel && settings.voiceNoiseLevel > 0) {
+        const ns = applyNoiseSuppression(raw, settings.voiceNoiseLevel);
+        noiseSuppressionCleanupRef.current = ns.cleanup;
+        const dst = new MediaStream();
+        ns.stream.getAudioTracks().forEach(t => dst.addTrack(t));
+        processedStream = dst;
+      }
+      voice.setLocalStream(processedStream);
+
+      // Set up voice activity detection on processed stream
       const cleanup = setupVoiceActivityDetection(
-        stream,
+        processedStream,
         () => voice.setLocalSpeaking(true),
         () => voice.setLocalSpeaking(false),
         (amplitude) => voice.setUserAmplitude('local', amplitude)
       );
-      
+
       // Store cleanup function to be called when leaving
       voiceActivityCleanupRef.current = cleanup;
-      
+
       voice.setChannel(channelId, serverId);
       voice.setJoinedAt(Date.now());
+      setMicError(null);
+      setMicErrorOpen(false);
+      playJoinVoice();
       console.log('[Voice] Joined channel', channelId);
 
       // Emit join event
@@ -78,38 +161,72 @@ const VoiceChannelPanel: React.FC = () => {
           voice.setJoinInProgress(false);
         }
       });
-    } catch (err: any) {
-      const errorMsg = err?.message || String(err) || 'Unknown error';
-      console.error('[Voice] Error joining channel:', errorMsg);
-      addToast(`Could not access microphone: ${errorMsg}`, 'error');
+    } catch (err: unknown) {
+      const info = classifyMediaError(err);
+      console.error('[Voice] Error joining channel:', err);
+      addToast(info.title, info.kind === 'permission_denied' ? 'warning' : 'error');
+      // Inline recovery panel stays open below the toolbar; toast is just the brief signal.
+      showMediaError('microphone', info);
       voice.clearChannel();
+      voice.setTransport(null);
       voice.setJoinInProgress(false);
     }
-  }, [voice, socket, addToast]);
+  }, [voice, socket, addToast, settings.voiceNoiseLevel, sfuServerReady]);
 
-  // Leave voice channel
+  // Leave voice channel — full cleanup.
   const leaveChannel = useCallback(() => {
-    // Clean up voice activity detection
+    // SFU path: tear down the LiveKit room (which also emits voice:leave and
+    // stops local tracks). The disconnect helper wraps the entire tear-down.
+    if (sfuConnRef.current) {
+      const conn = sfuConnRef.current;
+      sfuConnRef.current = null;
+      conn.disconnect().catch(() => {});
+      playLeaveVoice();
+      setPeerQualityMap(new Map());
+      return;
+    }
     if (voiceActivityCleanupRef.current) {
       voiceActivityCleanupRef.current();
       voiceActivityCleanupRef.current = null;
     }
-    
+    if (noiseSuppressionCleanupRef.current) {
+      noiseSuppressionCleanupRef.current();
+      noiseSuppressionCleanupRef.current = null;
+    }
+    stopPushToTalk();
+    setPttActive(false);
     socket.socket?.emit('voice:leave');
     voice.clearChannel();
+    voice.setTransport(null);
+    playLeaveVoice();
+    setPeerQualityMap(new Map());
   }, [voice, socket]);
 
-  // Mute toggle
+  // Mute toggle — disabled while push-to-talk owns mute state.
   const toggleMute = useCallback(() => {
-    voice.setLocalMuted(!voice.localMuted);
-    socket.socket?.emit('voice:mute', { muted: !voice.localMuted });
-  }, [voice, socket]);
+    if (settings.pushToTalk) return;
+    const next = !voice.localMuted;
+    voice.setLocalMuted(next);
+    socket.socket?.emit('voice:mute', { muted: next });
+    // On SFU, also push the new mute state into the LiveKit LocalAudioTrack so
+    // other participants actually stop hearing us. Mesh path doesn't need this
+    // because RTCPeerConnection tracks are muted separately per-peer.
+    if (voice.transport === 'sfu') applySfuMute();
+    if (next) playMuteSelf(); else playUnmuteSelf();
+  }, [voice, socket, settings.pushToTalk]);
 
   // Deafen toggle
   const toggleDeafen = useCallback(() => {
-    voice.setLocalDeafened(!voice.localDeafened);
-    socket.socket?.emit('voice:deafen', { deafened: !voice.localDeafened });
-  }, [voice, socket]);
+    if (settings.pushToTalk) return;
+    const next = !voice.localDeafened;
+    voice.setLocalDeafened(next);
+    socket.socket?.emit('voice:deafen', { deafened: next });
+    // On SFU, deafen = mute both directions; apply the muted side only here
+    // (the local-track reflection is handled by the mute flag, deafen still
+    // mutes incoming audio via the <audio> volume element).
+    if (voice.transport === 'sfu' && next) applySfuMute();
+    if (next) playDeafen(); else playUndeafen();
+  }, [voice, socket, settings.pushToTalk]);
 
   // Video toggle
   const toggleVideo = useCallback(async () => {
@@ -137,9 +254,16 @@ const VoiceChannelPanel: React.FC = () => {
         voice.setLocalStream(stream);
       }
       voice.setLocalVideo(true);
+      setVideoError(null);
+      setVideoErrorOpen(false);
       socket.socket?.emit('voice:video', { video: true });
-    } catch (err: any) {
-      addToast('Could not access camera.', 'error');
+    } catch (err: unknown) {
+      const info = classifyMediaError(err);
+      // Always show a single toast for high-level signal; the inline panel
+      // stays open until the user retries or dismisses it.
+      addToast(info.title, info.kind === 'permission_denied' ? 'warning' : 'error');
+      setVideoError(info);
+      setVideoErrorOpen(true);
     }
   }, [voice, socket, addToast]);
 
@@ -190,11 +314,38 @@ const VoiceChannelPanel: React.FC = () => {
         socket.socket?.emit('voice:screen', { screen: false });
       });
     } catch (err: any) {
+      // User-cancelled picker (AbortError) is expected and silent.
       if (err?.name !== 'AbortError' && err?.name !== 'NotAllowedError') {
-        addToast('Could not share screen.', 'error');
+        const info = classifyMediaError(err);
+        addToast(info.kind === 'unsupported' ? 'Screen sharing is not supported in this runtime.' : (info.short || 'Could not share screen.'), 'error');
       }
     }
   }, [voice, socket, addToast, screenQuality, captureAudio]);
+
+  // ── Push-to-Talk ────────────────────────────────────────────────────────
+  // When settings.pushToTalk is on, the user is muted by default. Pressing the
+  // bound key temporarily unmutes them (until released).
+  useEffect(() => {
+    if (!voice.connected || !settings.pushToTalk) {
+      stopPushToTalk();
+      setPttActive(false);
+      return;
+    }
+    if (!voice.localMuted) {
+      voice.setLocalMuted(true);
+      socket.socket?.emit('voice:mute', { muted: true });
+    }
+    const cleanup = startPushToTalk({
+      key: settings.pushToTalkKey || 'V',
+      active: (active: boolean) => {
+        setPttActive(active);
+        voice.setLocalMuted(!active);
+        socket.socket?.emit('voice:mute', { muted: !active });
+        if (active) playUnmuteSelf(); else playMuteSelf();
+      },
+    });
+    return cleanup;
+  }, [voice.connected, settings.pushToTalk, settings.pushToTalkKey, voice, socket]);
 
   // Set up voice activity detection with amplitude tracking
   useEffect(() => {
@@ -235,6 +386,12 @@ const VoiceChannelPanel: React.FC = () => {
 
     const handleUserLeft = (socketId: string) => {
       voice.removeVoiceUser(socketId);
+      setPeerQualityMap(prev => {
+        if (!prev.has(socketId)) return prev;
+        const next = new Map(prev);
+        next.delete(socketId);
+        return next;
+      });
     };
 
     const createPeerHandler = (peerSocketId: string) => {
@@ -253,10 +410,21 @@ const VoiceChannelPanel: React.FC = () => {
         }
       );
       voice.addPeer(peerSocketId, pc);
+      trackPeer(peerSocketId, pc, (q) => {
+        setPeerQualityMap(prev => {
+          const m = new Map(prev);
+          m.set(peerSocketId, q);
+          return m;
+        });
+      });
       return pc;
     };
 
     const handleOffer = ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
+      // On the SFU path LiveKit carries the media; ignore mesh offers so we
+      // don't burn CPU/ports building per-peer RTCPeerConnections that aren't
+      // actually used.
+      if (voice.transport === 'sfu') return;
       // Create peer connection for the offer
       const pc = createPeerHandler(from);
 
@@ -278,6 +446,7 @@ const VoiceChannelPanel: React.FC = () => {
     };
 
     const handleAnswer = ({ from, answer }: { from: string; answer: RTCSessionDescriptionInit }) => {
+      if (voice.transport === 'sfu') return;
       const pc = voice.peers.get(from);
       if (pc) {
         setRemoteDescription(pc, answer);
@@ -285,6 +454,7 @@ const VoiceChannelPanel: React.FC = () => {
     };
 
     const handleIceCandidate = ({ from, candidate }: { from: string; candidate: RTCIceCandidateInit }) => {
+      if (voice.transport === 'sfu') return;
       const pc = voice.peers.get(from);
       if (pc) {
         addIceCandidate(pc, candidate);
@@ -373,14 +543,75 @@ const VoiceChannelPanel: React.FC = () => {
   }, [socket.socket, voice.connected, voice.localStream, voice.peers, voice]);
 
   // ── JSX ────────────────────────────────────────────────────────────────
+  // While the preview modal is open, render ONLY the modal so the panel does
+  // not flash a "disconnected" state.
+  if (pendingPreview && previewOpen) {
+    return (
+      <VoicePreviewModal
+        open={previewOpen}
+        channelName={pendingPreview.channelName}
+        onClose={() => { setPreviewOpen(false); setPendingPreview(null); }}
+        onJoin={() => {
+          const target = pendingPreview;
+          setPreviewOpen(false);
+          setPendingPreview(null);
+          if (target) {
+            voice.setJoinInProgress(true);
+            void joinChannel(target.channelId, target.serverId, target.rtcMode);
+          }
+        }}
+      />
+    );
+  }
+
   if (!voice.connected) return null;
 
   const channelName = selectedChannel?.name || 'Voice Channel';
-  const participantCount = voice.peers.size + 1;
+  // SFU participants include ourselves (1) plus everyone in the LiveKit room;
+  // Mesh participants include ourselves (1) plus one RTCPeerConnection per peer.
+  const participantCount = voice.transport === 'sfu'
+    ? voice.voiceUsers.length + 1
+    : voice.peers.size + 1;
   const hasVideo = voice.localVideo || voice.screenSharing || voice.remoteVideoStreams.size > 0 || voice.remoteScreenStreams.size > 0;
+  const isSfu = voice.transport === 'sfu';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        position: poppedOut ? 'fixed' : 'static',
+        top: poppedOut ? 80 : 'auto',
+        left: poppedOut ? 24 : 'auto',
+        width: poppedOut ? 320 : 'auto',
+        zIndex: poppedOut ? 9998 : 'auto',
+        background: poppedOut ? 'var(--dark-matter)' : 'transparent',
+        border: poppedOut ? '1px solid var(--rim)' : 'none',
+        borderRadius: poppedOut ? 12 : 0,
+        boxShadow: poppedOut ? '0 16px 48px rgba(0,0,0,0.55)' : 'none',
+        cursor: poppedOut ? 'move' : 'default',
+        userSelect: poppedOut ? 'none' : 'auto',
+      }}
+      onMouseDown={poppedOut ? (e) => {
+        const startX = e.clientX - 24;
+        const startY = e.clientY - 80;
+        const onMove = (ev: MouseEvent) => {
+          // pin to viewport bounds
+          const maxX = window.innerWidth - 320;
+          const maxY = window.innerHeight - 100;
+          const nx = Math.max(8, Math.min(maxX, ev.clientX - startX));
+          const ny = Math.max(8, Math.min(maxY, ev.clientY - startY));
+          (e.currentTarget as HTMLElement).style.left = nx + 'px';
+          (e.currentTarget as HTMLElement).style.top = ny + 'px';
+        };
+        const onUp = () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      } : undefined}
+    >
       {/* Video grid — only shown when there are active video sources */}
       {hasVideo && <VoiceVideoGrid />}
       {/* Voice control bar */}
@@ -418,7 +649,50 @@ const VoiceChannelPanel: React.FC = () => {
           >
             {channelName}
           </span>
+          {/* Transport badge: SFU = LiveKit-powered (scales to large groups),
+              mesh = default small-group WebRTC mesh. */}
+          {isSfu && (
+            <span
+              title="LiveKit SFU — scales beyond mesh's 6-peer limit"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '1px 6px',
+                background: 'rgba(110, 86, 207, 0.18)',
+                border: '1px solid rgba(110, 86, 207, 0.45)',
+                borderRadius: '4px',
+                fontSize: '9px',
+                fontWeight: 700,
+                color: '#a99bf5',
+                letterSpacing: '0.08em',
+                marginLeft: 4,
+              }}
+            >
+              SFU
+            </span>
+          )}
           {/* Go Live badge */}
+          {/* Pop-out / minimize toggle */}
+          <button
+            type="button"
+            onClick={() => setPoppedOut(v => !v)}
+            title={poppedOut ? 'Dock panel' : 'Pop out'}
+            aria-label="Pop out panel"
+            style={{
+              background: poppedOut ? 'var(--void-purple)' : 'transparent',
+              border: '1px solid var(--rim)',
+              borderRadius: '4px',
+              color: poppedOut ? '#fff' : 'var(--ash)',
+              width: 22, height: 22,
+              cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = poppedOut ? 'var(--void-purple)' : 'transparent')}
+          >
+            {poppedOut ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+          </button>
           {voice.screenSharing && (
             <span
               style={{
@@ -475,16 +749,33 @@ const VoiceChannelPanel: React.FC = () => {
             height: 36,
             borderRadius: '50%',
             border: 'none',
-            background: voice.localMuted ? 'var(--blood)' : 'var(--bg-modifier-accent)',
-            color: voice.localMuted ? '#fff' : 'var(--text-secondary)',
+            background: (settings.pushToTalk && pttActive)
+            ? 'var(--toxic)'
+            : voice.localMuted ? 'var(--blood)' : 'var(--bg-modifier-accent)',
+            color: (settings.pushToTalk && pttActive) || voice.localMuted ? '#fff' : 'var(--text-secondary)',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'background 0.15s',
+            boxShadow: (settings.pushToTalk && pttActive) ? '0 0 12px var(--toxic)' : 'none',
           }}
         >
           {voice.localMuted ? <MicOff size={16} /> : <Mic size={16} />}
+          {settings.pushToTalk && (
+            <span style={{
+              position: 'absolute',
+              bottom: '-2px', right: '-2px',
+              background: pttActive ? 'var(--toxic)' : 'var(--obsidian)',
+              color: pttActive ? '#0e1411' : 'var(--ash)',
+              fontSize: 8, fontWeight: 700,
+              padding: '1px 4px', borderRadius: 4,
+              border: '1px solid var(--rim)',
+              letterSpacing: '0.04em',
+            }}>
+              {pttActive ? 'LIVE' : settings.pushToTalkKey?.toUpperCase() || 'V'}
+            </span>
+          )}
         </button>
 
         {/* Deafen */}
@@ -583,6 +874,31 @@ const VoiceChannelPanel: React.FC = () => {
           )}
         </div>
 
+        {/* Inline camera permission error */}
+        <MediaPermissionPanel
+          kind="microphone"
+          open={micErrorOpen}
+          error={micError}
+          onRetry={async () => {
+            if (!pendingPreview) { setMicErrorOpen(false); return; }
+            await voice.clearAll();
+            requestJoinChannel(
+              pendingPreview.channelId,
+              pendingPreview.serverId,
+              pendingPreview.channelName,
+              pendingPreview.rtcMode,
+            );
+          }}
+          onDismiss={() => setMicErrorOpen(false)}
+        />
+
+        <MediaPermissionPanel
+          kind="camera"
+          open={videoErrorOpen}
+          error={videoError}
+          onRetry={() => toggleVideo()}
+          onDismiss={() => setVideoErrorOpen(false)}
+        />
         {/* Video toggle */}
         <button
           type="button"
@@ -754,6 +1070,21 @@ const VoiceChannelPanel: React.FC = () => {
             transition: 'background 0.15s',
           }}
         >
+                    <button
+            type="button"
+            onClick={() => setMusicBarOpen((v) => !v)}
+            title={'Music queue (' + (musicBarOpen ? 'hide' : 'show') + ')'}
+            aria-label="Music queue"
+            style={{
+              width: 36, height: 36, borderRadius: '50%', border: 'none',
+              background: musicBarOpen ? 'var(--gold)' : 'transparent',
+              color: musicBarOpen ? '#0E0E12' : 'var(--gold)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+          >
+            <Music size={16} />
+          </button>
           <PhoneOff size={16} />
         </button>
       </div>

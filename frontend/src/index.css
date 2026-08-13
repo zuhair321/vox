@@ -342,20 +342,29 @@ h1, h2, h3, h4, h5, h6, .title {
   50% { box-shadow: 0 0 0 4px rgba(143, 207, 155, 0); }
 }
 
-/* Scrollbar */
+/* Scrollbar (Discord-thin) */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--void);
+  background: transparent;
+  margin: 4px 2px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--phantom);
-  border: 1px solid var(--rim);
+  background: rgba(140, 149, 163, 0.18);
+  border-radius: 6px;
+  transition: background 0.2s ease;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--ghost);
+  background: rgba(140, 149, 163, 0.45);
+}
+::-webkit-scrollbar-thumb:active {
+  background: rgba(216, 74, 90, 0.55);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(140, 149, 163, 0.18) transparent;
 }
 
 /* App Layout — Gothic Black */
@@ -530,6 +539,8 @@ h1, h2, h3, h4, h5, h6, .title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.4;
+  padding: 1px 0;
 }
 
 .vox-user-profile strong {
@@ -540,6 +551,7 @@ h1, h2, h3, h4, h5, h6, .title {
   color: var(--shadow);
   font-size: 11px;
   font-style: normal;
+  margin-top: 2px;
 }
 
 .vox-panel-icon {
@@ -2791,4 +2803,217 @@ button[aria-label="Back"]:hover {
 .message-input-wrapper {
   position: relative;
   overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Global Hover States & Micro-Interactions (Discord-level polish)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Smooth transitions on ALL interactive elements */
+button, a, input, select, textarea, [role="button"] {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+
+/* Better focus rings */
+:focus-visible {
+  outline: 2px solid var(--discord-blurple);
+  outline-offset: 2px;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rim);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--shadow);
+}
+
+/* Card hover effects */
+.vox-card {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.vox-card:hover {
+  border-color: rgba(216, 74, 90, 0.3);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Button hover lift effect */
+.angular-button {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.angular-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.angular-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Input focus glow */
+.angular-input:focus {
+  border-color: var(--chaos) !important;
+  box-shadow: 0 0 0 3px var(--chaos-glow);
+}
+
+/* Settings row hover */
+.settings-row {
+  transition: background-color 0.12s ease;
+}
+
+.settings-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Member row hover */
+.member-row-polished {
+  transition: background-color 0.12s ease, transform 0.1s ease;
+}
+
+.member-row-polished:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+  transform: translateX(2px);
+}
+
+/* Channel row hover */
+.channel-row, [class*="channel-row"] {
+  transition: background-color 0.12s ease;
+}
+
+.channel-row:hover, [class*="channel-row"]:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Server icon hover in rail */
+.server-icon, [class*="server-icon"] {
+  transition: border-radius 0.2s ease, background-color 0.15s ease, transform 0.15s ease;
+}
+
+.server-icon:hover, [class*="server-icon"]:hover {
+  border-radius: 35% !important;
+  transform: scale(1.05);
+}
+
+/* Status dot pulse animation */
+.status-dot.online {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 165, 92, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(59, 165, 92, 0); }
+}
+
+/* Toast slide-in animation */
+.toast {
+  animation: toast-slide-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes toast-slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Emoji hover scale */
+.emoji-btn:hover, [class*="emoji"]:hover {
+  transform: scale(1.2);
+}
+
+/* Avatar hover glow */
+.avatar-glow:hover {
+  box-shadow: 0 0 16px rgba(216, 74, 90, 0.4);
+}
+
+/* Settings tab active indicator */
+.settings-tab.active, .settings-tab.active {
+  position: relative;
+}
+
+.settings-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--chaos);
+  border-radius: 1px;
+}
+
+/* Smooth page transitions */
+.settings-page, .main-content {
+  animation: page-fade-in 0.2s ease;
+}
+
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Modal backdrop blur */
+.modal-backdrop, .confirm-backdrop {
+  backdrop-filter: blur(4px);
+}
+
+/* Tooltip styling */
+[title] {
+  position: relative;
+}
+
+/* Voice channel speaking indicator */
+.speaking-indicator {
+  animation: speaking-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes speaking-glow {
+  from { box-shadow: 0 0 0 0 rgba(59, 165, 92, 0.6); }
+  to { box-shadow: 0 0 12px 4px rgba(59, 165, 92, 0.3); }
+}
+
+/* Notification badge bounce */
+.notification-badge {
+  animation: badge-bounce 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes badge-bounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Message hover toolbar fade-in */
+.message-actions {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.message-bubble:hover .message-actions {
+  opacity: 1;
+}
+
+/* Typing indicator dots */
+.typing-dot {
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-4px); }
 }

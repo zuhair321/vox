@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
@@ -17,6 +18,9 @@ customPowersRouter.post('/servers/:serverId/custom-powers', requireAuth, async (
     }
 
     const { name, description, grants, grantableBy, maxHolders, icon } = req.body;
+    if (icon && typeof icon === 'string' && !/^https?:\/\//i.test(icon.trim())) {
+      throw new HttpError(400, 'Power icon must be an http(s) URL.');
+    }
     const power = await prisma.customPower.create({
       data: {
         serverId,

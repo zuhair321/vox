@@ -60,7 +60,6 @@ const ServerProfile: React.FC = () => {
 
   // DEBUG — remove after fix
   if (typeof window !== 'undefined') {
-    console.log('[ServerProfile] banner raw:', server.banner, '| icon raw:', server.icon);
   }
 
   const bannerUrl = server.banner
@@ -73,7 +72,6 @@ const ServerProfile: React.FC = () => {
 
   // DEBUG — remove after fix
   if (typeof window !== 'undefined') {
-    console.log('[ServerProfile] bannerUrl:', bannerUrl, '| iconUrl:', iconUrl);
   }
 
   const effectiveBannerBg = bannerUrl ? undefined : serverGradient;

@@ -104,6 +104,16 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
       }
 
       if (verdict.blocked) {
+        // Notify the author in realtime (the frontend listens for this to show
+        // a toast). The HTTP 403 already returns the same info, but the socket
+        // event lets the UI react even for messages sent via the socket path.
+        const io = getIO();
+        if (io) {
+          io.to(`user:${req.user.id}`).emit('automod:blocked', {
+            reason: verdict.reason,
+            timedOut: !!verdict.timedOut,
+          });
+        }
         return res.status(403).json({
           error: `Message blocked by auto-mod: ${verdict.reason}.`,
           automod: true,
@@ -150,6 +160,21 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
     const io = getIO();
     io.to(`channel:${channelId}`).emit('message:new', { message });
 
+    // Mirror the thread:reply broadcast from sockets/handlers.js for REST sends.
+    // This keeps the thread side panel live across reloads / retries / mobile.
+    if (message.parentId && io) {
+      try {
+        const replyCount = await prisma.message.count({
+          where: { parentId: message.parentId, deleted: false },
+        });
+        io.to(`channel:${channelId}`).emit('thread:reply', {
+          parentId: message.parentId,
+          reply: message,
+          replyCount,
+        });
+      } catch (_) { /* non-fatal */ }
+    }
+
     invalidateChannelRecentCache(channelId).catch(() => {});
 
     // Best-effort mention notifications (email), async + non-blocking.
@@ -176,6 +201,19 @@ messageRouter.post('/messages', requireAuth, messageLimiter, async (req, res, ne
     emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
     const io = getIO();
     io.to(`channel:${channelId}`).emit('message:new', { message });
+
+    if (message.parentId && io) {
+      try {
+        const replyCount = await prisma.message.count({
+          where: { parentId: message.parentId, deleted: false },
+        });
+        io.to(`channel:${channelId}`).emit('thread:reply', {
+          parentId: message.parentId,
+          reply: mapped,
+          replyCount,
+        });
+      } catch (_) { /* non-fatal */ }
+    }
     res.status(201).json(mapped);
   } catch (e) { next(e); }
 });
@@ -537,7 +575,7 @@ messageRouter.post('/messages/:id/read', requireAuth, async (req, res, next) => 
     const messageId = req.params.id;
     const message = await prisma.message.findUnique({
       where: { id: messageId },
-      include: { channel: true },
+      select: { id: true, deleted: true, channelId: true },
     });
     if (!message || message.deleted) throw new HttpError(404, 'Message not found');
 
@@ -546,10 +584,10 @@ messageRouter.post('/messages/:id/read', requireAuth, async (req, res, next) => 
       SELECT 1 FROM "Channel" c
       WHERE c.id = ${message.channelId}
       AND (
-        c.serverId IS NULL
+        c."serverId" IS NULL
         OR EXISTS (
           SELECT 1 FROM "ServerMember" sm
-          WHERE sm.serverId = c.serverId AND sm.userId = ${req.user.id}
+          WHERE sm."serverId" = c."serverId" AND sm."userId" = ${req.user.id}
         )
       )
     `;
@@ -581,7 +619,7 @@ messageRouter.get('/messages/:id/read', requireAuth, async (req, res, next) => {
     const messageId = req.params.id;
     const message = await prisma.message.findUnique({
       where: { id: messageId },
-      include: { channel: true },
+      select: { id: true, deleted: true, channelId: true },
     });
     if (!message || message.deleted) throw new HttpError(404, 'Message not found');
 
@@ -590,10 +628,10 @@ messageRouter.get('/messages/:id/read', requireAuth, async (req, res, next) => {
       SELECT 1 FROM "Channel" c
       WHERE c.id = ${message.channelId}
       AND (
-        c.serverId IS NULL
+        c."serverId" IS NULL
         OR EXISTS (
           SELECT 1 FROM "ServerMember" sm
-          WHERE sm.serverId = c.serverId AND sm.userId = ${req.user.id}
+          WHERE sm."serverId" = c."serverId" AND sm."userId" = ${req.user.id}
         )
       )
     `;
@@ -611,13 +649,14 @@ messageRouter.get('/messages/:id/read', requireAuth, async (req, res, next) => {
           }
         }
       },
-      orderBy: { readAt: 'desc' }
+      orderBy: { readAt: 'desc' },
+      take: 50,
     });
 
     const formattedReads = reads.map(r => ({
       userId: r.user.id,
       username: r.user.username,
-      avatar: r.user.avatarUrl || null,
+      avatarUrl: r.user.avatarUrl || null,
       status: 'read',
       readAt: r.readAt.toISOString()
     }));
@@ -625,3 +664,134 @@ messageRouter.get('/messages/:id/read', requireAuth, async (req, res, next) => {
     res.json({ reads: formattedReads });
   } catch (e) { next(e); }
 });
+
+
+// Thread support — single-message fetch with reply metadata.
+// Used by MessageBubble to render the ThreadIndicator without loading the full channel.
+messageRouter.get('/messages/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const message = await prisma.message.findUnique({
+      where: { id },
+      include: { author: true, reactions: true },
+    });
+    if (!message || message.deleted) throw new HttpError(404, "Message not found");
+    // Access check (same rule shape as POST /messages/:id/read).
+    const hasAccess = await prisma.$queryRaw`
+      SELECT 1 FROM "Channel" c
+      WHERE c.id = ${message.channelId}
+      AND (c."serverId" IS NULL OR EXISTS (
+        SELECT 1 FROM "ServerMember" sm WHERE sm."serverId" = c."serverId" AND sm."userId" = ${req.user.id}
+      ))`;
+    if (!hasAccess.length) throw new HttpError(403, "No access to this message");
+    // Reply aggregate.
+    const replies = await prisma.message.findMany({
+      where: { parentId: id, deleted: false },
+      orderBy: { createdAt: "asc" },
+      include: { author: true, reactions: true },
+      take: 50,
+    });
+    const replyCount = await prisma.message.count({ where: { parentId: id, deleted: false } });
+    const lastReply = replies[replies.length - 1] || null;
+    // Unread: replies newer than my last "thread-mark-read" receipt.
+    // Thread-unread piggybacks on MessageRead keyed by the LATEST reply id as the messageId.
+    // We treat "marked read up to <reply>" as inserting a MessageRead row keyed to that reply id.
+    let lastReadAt = null;
+    if (lastReply) {
+      const last = await prisma.messageRead.findFirst({
+        where: { userId: req.user.id, messageId: lastReply.id },
+        orderBy: { readAt: "desc" },
+      });
+      if (last) lastReadAt = last.readAt.toISOString();
+    }
+    const unreadCount = lastReadAt
+      ? replies.filter((r) => new Date(r.createdAt) > new Date(lastReadAt)).length
+      : replies.length;
+    res.json({
+      message: mapMessage(message),
+      replyCount,
+      lastReplyAt: lastReply ? lastReply.createdAt.toISOString() : null,
+      lastReplyAuthor: lastReply ? (lastReply.author?.displayName || lastReply.author?.username || "?") : null,
+      unreadCount,
+      hasMore: replyCount > replies.length,
+    });
+  } catch (e) { next(e); }
+});
+
+// GET /api/messages/:id/replies — paginated thread fetch.
+messageRouter.get('/messages/:id/replies', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const { before, limit } = req.query;
+    const parent = await prisma.message.findUnique({ where: { id }, select: { id: true, channelId: true, deleted: true } });
+    if (!parent || parent.deleted) throw new HttpError(404, "Parent message not found");
+    const hasAccess = await prisma.$queryRaw`
+      SELECT 1 FROM "Channel" c WHERE c.id = ${parent.channelId} AND (c."serverId" IS NULL OR EXISTS (SELECT 1 FROM "ServerMember" sm WHERE sm."serverId" = c."serverId" AND sm."userId" = ${req.user.id}))`;
+    if (!hasAccess.length) throw new HttpError(403, "No access");
+    const cap = Math.min(Number(limit) || 50, 100);
+    const replies = await prisma.message.findMany({
+      where: { parentId: id, deleted: false,...(before ? { createdAt: { lt: new Date(before) } } : {}) },
+      orderBy: { createdAt: "asc" },
+      include: { author: true, reactions: true },
+      take: cap,
+    });
+    res.json({ replies, hasMore: replies.length === cap });
+  } catch (e) { next(e); }
+});
+
+// POST /api/messages/:id/thread/mark-read — record that the caller has read
+// the thread up to and including the given reply id. Idempotent.
+messageRouter.post('/messages/:id/thread/mark-read', requireAuth, async (req, res, next) => {
+  try {
+    const parentId = req.params.id;
+    const seenMessageId = String(req.body?.messageId || "").trim();
+    if (!seenMessageId) throw new HttpError(400, "messageId is required");
+    const parent = await prisma.message.findUnique({ where: { id: parentId }, select: { id: true, channelId: true, deleted: true } });
+    if (!parent || parent.deleted) throw new HttpError(404, "Parent message not found");
+    // Confirm seenMessageId is in the thread (defensive).
+    const seen = await prisma.message.findUnique({ where: { id: seenMessageId }, select: { id: true, parentId: true, deleted: true } });
+    if (!seen || seen.deleted || seen.parentId !== parentId) throw new HttpError(400, "messageId is not a reply in this thread");
+    await prisma.messageRead.upsert({
+      where: { messageId_userId: { messageId: seenMessageId, userId: req.user.id } },
+      update: { readAt: new Date() },
+      create: { messageId: seenMessageId, userId: req.user.id, readAt: new Date() },
+    });
+    res.json({ ok: true, readAt: new Date().toISOString() });
+  } catch (e) { next(e); }
+});
+
+/* ╔══════════════════════════════════════════════════════════════════════╗
+   ║  EDIT HISTORY                                                        ║
+   ║  GET  /api/messages/:id/history  → revisions in chronological order  ║
+   ║  Also augments the existing edit handler so each save appends to the ║
+   ║  Message.editHistory JSON column with { body, editedAt }.           ║
+   ╚══════════════════════════════════════════════════════════════════════╝ */
+
+import { recordEditForHistory } from '../services/chat.service.js';
+
+messageRouter.get('/messages/:id/history', async (req, res, next) => {
+  try {
+    const msg = await prisma.message.findUnique({
+      where: { id: req.params.id },
+      select: { editHistory: true, body: true, edited: true, userId: true },
+    });
+    if (!msg) throw new HttpError(404, 'Message not found.');
+    const history = Array.isArray(msg.editHistory) ? msg.editHistory : [];
+    // current version is the live `body`; older versions are in history.
+    res.json({ history: history.concat([{ body: msg.body, editedAt: new Date().toISOString(), current: true }]) });
+  } catch (e) { next(e); }
+});
+
+// Augment the canonical edit handler(s). We attach a wrapper using monkey-patching.
+const _origUpdate = prisma.message.update.bind(prisma.message);
+prisma.message.update = function patchedUpdate(args) {
+  if (args && args.data && typeof args.data.body === 'string' && args.data.edited === true) {
+    return _origUpdate(args).then(async (updated) => {
+      try {
+        await recordEditForHistory(updated.id, updated.body);
+      } catch (_) { /* history capture is best-effort */ }
+      return updated;
+    });
+  }
+  return _origUpdate(args);
+};

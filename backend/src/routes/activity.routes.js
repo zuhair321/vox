@@ -78,7 +78,11 @@ activityRouter.patch('/users/me/activity', requireAuth, async (req, res, next) =
         url: url ? String(url).slice(0, 512) : null,
         details: details ? sanitize(String(details)).slice(0, 128) : null,
         state: state ? sanitize(String(state)).slice(0, 128) : null,
-        largeImage: largeImage ? String(largeImage).slice(0, 512) : null,
+        largeImage: largeImage ? (() => {
+          const trimmed = String(largeImage).trim();
+          if (!/^https?:\/\//i.test(trimmed)) return null;
+          return trimmed.slice(0, 512);
+        })() : null,
       };
     }
 

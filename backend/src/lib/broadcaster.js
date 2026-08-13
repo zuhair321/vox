@@ -1,4 +1,6 @@
-import { getIO } from '../sockets/index.js';
+// NOTE: no import of sockets/index.js here — getIO is unused (all functions
+// take the io instance as a parameter) and statically importing it dragged the
+// whole socket.io + chat.service chain (~2s+) into every module's load path.
 import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 
 const FLUSH_MS = 100;
@@ -59,4 +61,50 @@ export function broadcast(io, room, event, payload) {
 
 export function batchBroadcast(io, room, event, payload) {
   emitRealtimeEvent(event, room, payload);
+}
+
+
+// Fire web-push notifications to channel members after a message is broadcast.
+// Best-effort: catches its own errors so it never breaks the realtime path.
+export async function broadcastPushForMessage(message, opts = {}) {
+  try {
+    if (!message || !message.channelId) return;
+    const { prisma } = await import('./prisma.js');
+    const { sendPushToUser, shouldNotify } = await import('../services/pushDelivery.service.js');
+
+    const ch = await prisma.channel.findUnique({
+      where: { id: message.channelId },
+      select: { serverId: true, name: true },
+    });
+    if (!ch || !ch.serverId) return;
+
+    const members = await prisma.serverMember.findMany({
+      where: { serverId: ch.serverId, userId: { not: null } },
+      select: { userId: true },
+    });
+    const author = message.userId || null;
+    const title = (message.author && (message.author.displayName || message.author.username)) || 'VOX';
+    const previewBody = (message.body || '').slice(0, 160);
+
+    const mentionUserIds = Array.isArray(message.mentions) ? message.mentions.map((m) => m.userId).filter(Boolean) : [];
+    for (const m of members) {
+      const userId = m.userId;
+      if (!userId || userId === author) continue;
+      const yes = await shouldNotify(userId, {
+        channelId: message.channelId,
+        serverId: ch.serverId,
+        mentionedUserIds: mentionUserIds,
+        mentionedType: opts.mentionedType || null,
+      });
+      if (!yes) continue;
+      await sendPushToUser(userId, {
+        title,
+        body: previewBody,
+        tag: 'vox-' + message.channelId,
+        url: '/channels/' + ch.serverId + '/' + message.channelId,
+      });
+    }
+  } catch (err) {
+    console.warn('[broadcaster] push hook error:', err && err.message);
+  }
 }

@@ -326,7 +326,6 @@ const ScreenShareOverlay: React.FC = () => {
                     await document.exitPictureInPicture();
                   }
                 } catch (err) {
-                  console.warn('[PiP] failed:', err);
                 }
               }}
               title="Picture-in-Picture"

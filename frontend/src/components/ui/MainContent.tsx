@@ -8,6 +8,7 @@ import ThreadPanel from '../chat/ThreadPanel';
 import PinnedMessages from '../chat/PinnedMessages';
 import SearchPanel from '../search/SearchPanel';
 import NotificationBell from './NotificationBell';
+import NotificationLevelPicker from '../chat/NotificationLevelPicker';
 
 const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
   const { selectedChannel } = useServerStore();
@@ -101,6 +102,7 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
           >
             🔍
           </button>
+          <NotificationLevelPicker serverId={selectedChannel?.serverId} channelId={selectedChannel?.id} />
           <NotificationBell />
           <button
             type="button"

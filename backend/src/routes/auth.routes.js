@@ -13,6 +13,18 @@ import { setAuthCookies, clearAuthCookies } from '../services/auth.service.js';
 
 export const authRouter = Router();
 
+// Never return JWTs to the renderer. Tokens are delivered only as HttpOnly
+// cookies; this keeps access and refresh credentials out of JavaScript.
+function sessionPayload(result) {
+  const payload = { user: result.user };
+  if (result.loginAlert) payload.loginAlert = result.loginAlert;
+  if (result.twoFactorRequired) {
+    payload.twoFactorRequired = true;
+    payload.tempToken = result.tempToken;
+  }
+  return payload;
+}
+
 // Throttle login/register to slow brute-force attempts.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
@@ -60,7 +72,7 @@ authRouter.post('/register', authLimiter, async (req, res, next) => {
     const userAgent = req.headers['user-agent'] || null;
     const result = await auth.register(data, { deviceInfo, ipAddress, userAgent });
     setAuthCookies(res, result.tokens.access, result.tokens.refresh);
-    res.status(201).json(result);
+    res.status(201).json(sessionPayload(result));
   } catch (e) { next(e); }
 });
 
@@ -72,10 +84,10 @@ authRouter.post('/login', authLimiter, async (req, res, next) => {
     const userAgent = req.headers['user-agent'] || null;
     const result = await auth.login(data, { deviceInfo, ipAddress, userAgent });
     if (result.twoFactorRequired) {
-      return res.json(result);
+      return res.json(sessionPayload(result));
     }
     setAuthCookies(res, result.tokens.access, result.tokens.refresh);
-    res.json(result);
+    res.json(sessionPayload(result));
   } catch (e) { next(e); }
 });
 
@@ -85,7 +97,7 @@ authRouter.post('/2fa/login', authLimiter, async (req, res, next) => {
     if (!tempToken || !code) throw new HttpError(400, 'tempToken and code are required.');
     const result = await auth.completeTwoFactorLogin(tempToken, code);
     setAuthCookies(res, result.tokens.access, result.tokens.refresh);
-    res.json(result);
+    res.json(sessionPayload(result));
   } catch (e) { next(e); }
 });
 
@@ -95,7 +107,7 @@ authRouter.post('/refresh', sensitiveLimiter, async (req, res, next) => {
     if (!refreshToken) throw new HttpError(400, 'refreshToken is required.');
     const result = await auth.refreshTokens(refreshToken);
     setAuthCookies(res, result.tokens.access, result.tokens.refresh);
-    res.json(result);
+    res.json(sessionPayload(result));
   } catch (e) { next(e); }
 });
 

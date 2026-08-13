@@ -390,4 +390,28 @@ export async function initRedis() {
   await Promise.all([getCache(), getPubSub()]);
 }
 
+// ── User status cache (Redis-first presence) ──────────────────
+// Write-through cache for the hot presence path. `status:update` and
+// `disconnect` fire on every connect/idle toggle; caching the last-known
+// status in Redis lets the connect presence broadcast skip a redundant
+// Postgres round-trip when Redis is present. Postgres remains the durable
+// source of truth — this only short-circuits the read on connect.
+const STATUS_KEY = (userId) => `vox:status:${userId}`;
+const STATUS_TTL = 60 * 60 * 24; // 24h — status is re-affirmed each session
+
+export async function setStatusCache(userId, status) {
+  const client = await getCache();
+  if (!client || !userId) return;
+  try { await client.setEx(STATUS_KEY(userId), STATUS_TTL, String(status)); } catch { /* ignore */ }
+}
+
+export async function getStatusCache(userId) {
+  const client = await getCache();
+  if (!client || !userId) return null;
+  try {
+    const v = await client.get(STATUS_KEY(userId));
+    return v ? String(v) : null;
+  } catch { return null; }
+}
+
 export { getPubSub, getCache };

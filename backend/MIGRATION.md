@@ -7,9 +7,12 @@ cache, and file storage all live on your server.
 
 ## 1. Database — PostgreSQL (replaces SQLite)
 
-The Prisma schema (`prisma/schema.prisma`) now uses `provider = "postgresql"`.
-SQLite still works for zero-setup local dev (switch the provider back to
-`sqlite` and set `DATABASE_URL="file:./vox.db"`).
+The Prisma schema (`prisma/schema.prisma`) uses `provider = "postgresql"`.
+SQLite is NOT supported — the schema uses Postgres-only types (`Json`, `BigInt`,
+arrays). The desktop app bundles an **embedded PostgreSQL** that starts
+automatically, so end users need no database setup at all. For self-hosted
+deployments point `DATABASE_URL` (or `vox-db.txt` / `VOX_DB_URL`) at any
+PostgreSQL instance.
 
 Free Postgres options:
 - **Supabase** (free tier) — postgres + auth UI
@@ -31,7 +34,8 @@ npx prisma migrate deploy
 npx prisma db push
 ```
 
-`better-sqlite3` is now an `optionalDependency`; `pg` is used for Postgres.
+The desktop app uses the bundled portable PostgreSQL binary (tools/postgres),
+shipped via electron-builder extraResources; `pg` is the runtime driver.
 
 ## 2. Cache / Rate limiting / Sockets — Redis (required for scaling)
 

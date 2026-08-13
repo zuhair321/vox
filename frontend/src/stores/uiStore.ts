@@ -34,6 +34,19 @@ interface UiStore {
   threadMessageId: string | null;
   setThreadMessageId: (id: string | null) => void;
 
+  /** Unread reply count per parent message id. Maintained by socket events.
+   *  Cleared when the thread panel is opened and `markThreadRead` succeeds. */
+  threadUnread: Record<string, number>;
+  bumpThreadUnread: (parentId: string, by?: number) => void;
+  clearThreadUnread: (parentId: string) => void;
+  bulkSetThreadUnread: (m: Record<string, number>) => void;
+
+  /** Map of `${channelId}:${parentId}` → Set of userIds currently typing.
+   *  The ThreadPanel watches this for typing dots. */
+  threadTyping: Record<string, Record<string, number>>;
+  bumpThreadTyping: (key: string, userId: string) => void;
+  clearThreadTyping: (key: string, userId: string) => void;
+
   // Pinned panel
   showPinnedPanel: boolean;
   setShowPinnedPanel: (show: boolean) => void;
@@ -100,6 +113,40 @@ export const useUiStore = create<UiStore>((set) => ({
 
   threadMessageId: null,
   setThreadMessageId: (id) => set({ threadMessageId: id }),
+
+  threadUnread: {},
+  bumpThreadUnread: (parentId, by = 1) =>
+    set((s) => ({ threadUnread: { ...s.threadUnread, [parentId]: (s.threadUnread[parentId] || 0) + by } })),
+  clearThreadUnread: (parentId) =>
+    set((s) => {
+      const next = { ...s.threadUnread };
+      delete next[parentId];
+      return { threadUnread: next };
+    }),
+  bulkSetThreadUnread: (m) => set({ threadUnread: { ...m } }),
+
+  threadTyping: {},
+  bumpThreadTyping: (key, userId) =>
+    set((s) => ({
+      threadTyping: {
+        ...s.threadTyping,
+        [key]: { ...(s.threadTyping[key] || {}), [userId]: Date.now() },
+      },
+    })),
+  clearThreadTyping: (key, userId) =>
+    set((s) => {
+      const cur = s.threadTyping[key];
+      if (!cur) return {};
+      const next = { ...cur };
+      delete next[userId];
+      const merged = { ...s.threadTyping };
+      if (Object.keys(next).length === 0) {
+        delete merged[key];
+      } else {
+        merged[key] = next;
+      }
+      return { threadTyping: merged };
+    }),
 
   showPinnedPanel: false,
   setShowPinnedPanel: (show) => set({ showPinnedPanel: show }),

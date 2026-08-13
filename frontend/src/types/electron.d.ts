@@ -26,6 +26,8 @@ export interface ElectronUpdaterAPI {
 
 export interface ElectronAPI {
   notify: (title: string, body: string) => void;
+  /** Open the OS-level privacy/settings page for the given device kind. */
+  openDeviceSettings: (kind: 'microphone' | 'camera') => Promise<string | null>;
   flashFrame: () => void;
   openExternal: (url: string) => void;
   onFocusChange: (callback: (focused: boolean) => void) => void;
@@ -44,6 +46,7 @@ export interface ElectronAPI {
 declare global {
   interface Window {
     electronAPI?: ElectronAPI;
+    __VOX_CONFIG?: { apiBase?: string };
   }
 }
 

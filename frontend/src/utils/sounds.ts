@@ -30,3 +30,21 @@ export const playNotification = () => playTone(1200, 0.15, 0.08);
 export const playJoinVoice = () => playTone(440, 0.2, 0.06);
 export const playLeaveVoice = () => playTone(330, 0.2, 0.06);
 export const playError = () => playTone(200, 0.3, 0.08);
+
+// Multi-tone Discord-style voice sounds
+export const playMuteSelf = () => {
+  playTone(680, 0.04, 0.06);
+  setTimeout(() => playTone(420, 0.06, 0.06), 40);
+};
+export const playUnmuteSelf = () => {
+  playTone(420, 0.05, 0.06);
+  setTimeout(() => playTone(680, 0.07, 0.06), 50);
+};
+export const playDeafen = () => {
+  playTone(520, 0.05, 0.05);
+  setTimeout(() => playTone(280, 0.10, 0.06), 50);
+};
+export const playUndeafen = () => {
+  playTone(280, 0.07, 0.06);
+  setTimeout(() => playTone(520, 0.06, 0.05), 70);
+};

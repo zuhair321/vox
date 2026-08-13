@@ -12,6 +12,7 @@ import ContextMenu from '../ui/ContextMenu';
 import StatusPicker from '../ui/StatusPicker';
 import VoiceTimer from '../voice/VoiceTimer';
 import { getMicrophoneStream } from '../../utils/webrtc';
+import { classifyMediaError } from '../../utils/mediaErrors';
 import ChannelSettings from '../server/ChannelSettings';
 import ServerLogo from './ServerLogo';
 
@@ -96,6 +97,10 @@ const VoiceChannelRow: React.FC<{
         className="channel-item ripple-container voice-channel-item"
         onClick={() => {
           if (isInThisChannel) return;
+          // All voice channels in this build go through the mesh WebRTC path.
+          // Mesh scales fine to ~6 participants; a LiveKit SFU path is
+          // scaffolded in livekitVoice.ts but not wired end-to-end yet.
+          voice.setTransport('mesh');
           getMicrophoneStream()
             .then(stream => {
               voice.setLocalStream(stream);
@@ -103,7 +108,13 @@ const VoiceChannelRow: React.FC<{
               voice.setJoinedAt(Date.now());
               socket.socket?.emit('voice:join', { channelId: channel.id, serverId: selectedServer.id });
             })
-            .catch(() => addToast('Microphone access denied.', 'error'));
+            .catch((err: unknown) => {
+              const m = classifyMediaError(err);
+              addToast(`${m.title}. ${m.fix}`, m.kind === 'permission_denied' ? 'warning' : 'error', { duration: 6000 });
+              if (m.kind === 'permission_denied' && m.steps.length > 0) {
+                addToast(m.steps[0], 'info', { duration: 7000 });
+              }
+            });
         }}
         onContextMenu={(e) => { e.preventDefault(); channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel)); }}
         style={{
@@ -117,6 +128,23 @@ const VoiceChannelRow: React.FC<{
       >
         <span style={{ color: isInThisChannel ? 'var(--toxic)' : 'var(--shadow)' }}>🔊</span>
         <span style={{ flex: 1 }}>{channel.name}</span>
+        {channel.rtcMode === 'SFU' && (
+          <span
+            title="LiveKit SFU — scales beyond mesh's 6-peer limit"
+            style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              color: 'var(--abyss)',
+              background: 'linear-gradient(135deg, #74d6ff 0%, #4baeff 100%)',
+              padding: '1px 5px',
+              borderRadius: '4px',
+              lineHeight: '14px',
+            }}
+          >
+            SFU
+          </span>
+        )}
         {hasParticipants && <span style={{ fontSize: '10px', color: 'var(--shadow)', background: 'var(--phantom)', padding: '1px 6px', borderRadius: '8px' }}>{channelUsers.length}</span>}
         {isInThisChannel && voice.localMuted && <MicOff size={12} style={{ color: 'var(--blood)' }} />}
         {isInThisChannel && voice.localDeafened && <VolumeX size={12} style={{ color: 'var(--blood)' }} />}

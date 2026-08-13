@@ -251,7 +251,7 @@ dmRouter.delete('/dm/:dmId/messages/:messageId', requireAuth, async (req, res, n
       io.to(`user:${deleted.senderId}`).emit('dm:deleted', { messageId: deleted.id, dmId: deleted.dmId });
       io.to(`user:${deleted.recipientId}`).emit('dm:deleted', { messageId: deleted.id, dmId: deleted.dmId });
     }
-    emitRealtimeEvent('dm:deleted', dmId, { messageId: deleted.id, dmId: deleted.dmId });
+    emitRealtimeEvent('dm:deleted', deleted.dmId, { messageId: deleted.id, dmId: deleted.dmId });
 
     res.json({ ok: true, message: deleted });
   } catch (e) { next(e); }

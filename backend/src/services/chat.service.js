@@ -27,6 +27,35 @@ const CHANNEL_RECENT_TTL = 300;
 
 let nitroClaimed = false;
 let databaseAvailable = true;
+let databaseDownSince = 0;
+const DB_RETRY_INTERVAL = 30_000;
+
+function useFallback(error) {
+  if (databaseAvailable) {
+    if (!global.__voxFallbackWarned) {
+      console.warn('[vox] database unavailable; using in-memory demo state:', error.message);
+      global.__voxFallbackWarned = true;
+    }
+  }
+  databaseAvailable = false;
+  databaseDownSince = Date.now();
+}
+
+async function ensureDatabaseAvailable() {
+  if (databaseAvailable) return true;
+  if (Date.now() - databaseDownSince < DB_RETRY_INTERVAL) return false;
+  try {
+    const { prisma } = await import('../lib/prisma.js');
+    await prisma.$queryRaw`SELECT 1`;
+    databaseAvailable = true;
+    global.__voxFallbackWarned = false;
+    console.log('[vox] database recovered, switching back to live data');
+    return true;
+  } catch {
+    databaseDownSince = Date.now();
+    return false;
+  }
+}
 
 const fallbackChannels = [
   { id: 'welcome', name: 'welcome', topic: 'Arrival chamber for new voices', type: 'TEXT', position: 0 },
@@ -48,17 +77,6 @@ let fallbackMessages = [
   { id: 'local-3', channelId: 'ship-room', author: fallbackMembers[2], authorOverride: null, body: 'Backend heartbeat is wired in. If the database is offline, VOX keeps a local echo.', createdAt: new Date(Date.now() - 1000 * 60 * 5), reactions: [{ emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }, { emoji: 'check' }] },
 ];
 
-function useFallback(error) {
-  if (databaseAvailable) {
-    // Only warn once to reduce spam
-    if (!global.__voxFallbackWarned) {
-      console.warn('[vox] database unavailable; using in-memory demo state:', error.message);
-      global.__voxFallbackWarned = true;
-    }
-  }
-  databaseAvailable = false;
-}
-
 function createFallbackMessage({ channelId, author, body, user, attachments }) {
   const channel = fallbackChannels.find((item) => item.id === channelId);
   if (!channel) throw new HttpError(404, 'Channel not found.');
@@ -79,7 +97,7 @@ function createFallbackMessage({ channelId, author, body, user, attachments }) {
 
 // ── Channels ──────────────────────────────────────────────────
 export async function getChannels(serverId) {
-  if (!databaseAvailable) return fallbackChannels;
+  if (!await ensureDatabaseAvailable()) return fallbackChannels;
   const cacheKey = serverId ? `${CHANNELS_CACHE_KEY}:${serverId}` : CHANNELS_CACHE_KEY;
   const cached = await cacheGet(cacheKey);
   if (cached) return cached;
@@ -99,7 +117,7 @@ export async function invalidateChannelsCache(serverId) {
 
 // ── Online Members ─────────────────────────────────────────────
 export async function getOnlineMembers(serverId) {
-  if (!databaseAvailable) return fallbackMembers;
+  if (!await ensureDatabaseAvailable()) return fallbackMembers;
   const cacheKey = serverId ? `${MEMBERS_CACHE_KEY}:${serverId}` : MEMBERS_CACHE_KEY;
   const cached = await cacheGet(cacheKey);
   if (cached) return cached;
@@ -148,7 +166,7 @@ export async function invalidateChannelRecentCachePattern(channelId) {
 // When userId is provided, scopes to channels the user can access.
 // Hot-channel cache: 50 most recent messages per channel, 5min TTL.
 export async function getRecentMessages(limit = 50, userId = null) {
-  if (!databaseAvailable) return fallbackMessages.slice(-limit);
+  if (!await ensureDatabaseAvailable()) return fallbackMessages.slice(-limit);
 
   return prismaReplica.message.findMany({
     where: { deleted: false },
@@ -159,7 +177,7 @@ export async function getRecentMessages(limit = 50, userId = null) {
 }
 
 export async function getRecentMessagesForChannel(channelId, limit = 50) {
-  if (!databaseAvailable) return [];
+  if (!await ensureDatabaseAvailable()) return [];
 
   const key = channelRecentKey(channelId);
   const cached = await cacheGet(key);
@@ -180,7 +198,7 @@ export async function getRecentMessagesForChannel(channelId, limit = 50) {
 // `cursorId` = id of the oldest message already on the client.
 // `limit`   = batch size (default 50, max 100).
 export async function getMessagesBefore(cursorId, limit = 50) {
-  if (!databaseAvailable) return fallbackMessages.slice(-limit);
+  if (!await ensureDatabaseAvailable()) return fallbackMessages.slice(-limit);
   const safeLimit = Math.min(parseInt(limit, 10) || 50, 100);
 
   const cursorMsg = await prismaReplica.message.findUnique({ 
@@ -218,10 +236,20 @@ export async function getState(userId) {
         if (cached) return cached;
       }
 
+      if (!await ensureDatabaseAvailable()) {
+        return {
+          channels: fallbackChannels,
+          members: fallbackMembers,
+          recentMessages: fallbackMessages.slice(-50),
+          nitroClaimed,
+          messagesCount: fallbackMessages.length,
+        };
+      }
+
       let channels, members, recentMessages, messagesCount;
 
       try {
-        if (userId && databaseAvailable) {
+        if (userId) {
           // Fetch member servers first (needed to scope everything else)
           const memberServerIds = (await prisma.serverMember.findMany({
             where: { userId },
@@ -274,7 +302,7 @@ export async function getState(userId) {
           // Unauthenticated: public channels + total count
           const [chResults, msgCount] = await Promise.all([
             getChannels(),
-            databaseAvailable ? prisma.message.count() : Promise.resolve(fallbackMessages.length),
+            prisma.message.count(),
           ]);
           channels = chResults;
           messagesCount = msgCount;
@@ -328,7 +356,7 @@ export async function createMessage({ channelId, author, body, user, attachments
   const atts = Array.isArray(attachments) ? attachments : [];
   if (!text && atts.length === 0) throw new HttpError(400, 'Message body or attachment is required.');
 
-  if (!databaseAvailable) {
+  if (!await ensureDatabaseAvailable()) {
     return createFallbackMessage({ channelId, author, body: text, user, attachments: atts });
   }
 
@@ -350,6 +378,11 @@ export async function createMessage({ channelId, author, body, user, attachments
 
     const message = await prisma.message.create({ data, include: MESSAGE_INCLUDE_CREATE });
     await invalidateChannelRecentCache(channelId);
+    // Fire-and-forget push delivery to other channel members.
+    try {
+      const { broadcastPushForMessage } = await import('../lib/broadcaster.js');
+      broadcastPushForMessage(message, { mentionedType: detectMentionType(text) });
+    } catch (_) { /* push is best-effort */ }
     return message;
   } catch (error) {
     if (error instanceof HttpError) throw error;
@@ -357,3 +390,34 @@ export async function createMessage({ channelId, author, body, user, attachments
     return createFallbackMessage({ channelId, author, body: text, user, attachments: atts });
   }
 }
+
+
+// ── Edit-history capture ──────────────────────────────────────────────────────
+// When a message is updated with a new body, we need to save the PREVIOUS body
+// into the editHistory JSON column. This is invoked from the message routes
+// once prisma.message.update has produced the final row.
+export async function recordEditForHistory(messageId, newBody) {
+  // We can't fetch the BEFORE state from inside `after` cleanly without an
+  // extra round trip, so we read what the database stored *before* our patch
+  // by selecting editHistory then push the new body as the latest revision.
+  const msg = await prisma.message.findUnique({
+    where: { id: messageId },
+    select: { editHistory: true, body: true, edited: true },
+  });
+  if (!msg) return;
+  // Walking: history list stores every revision EXCEPT the live body. The live
+  // body is always the most recent version. So we move the current `body` into
+  // history when the body has actually changed.
+  const history = Array.isArray(msg.editHistory) ? msg.editHistory : [];
+  // Only record if body has changed
+  if (history.length === 0 || history[history.length - 1].body !== newBody) {
+    history.push({ body: msg.body, editedAt: new Date().toISOString() });
+    // Cap history at 25 entries to avoid runaway growth
+    const capped = history.slice(-25);
+    await prisma.message.update({
+      where: { id: messageId },
+      data: { editHistory: capped },
+    });
+  }
+}
+

@@ -16,7 +16,7 @@ turboRouter.get('/status', requireAuth, async (req, res, next) => {
     
     if (!user) {
       return res.json({
-        hasTurbo: true, // Default to true for everyone
+        hasTurbo: false,
         turboSince: null,
         features: getTurboFeatures()
       });
@@ -85,7 +85,7 @@ turboRouter.post('/enable-all', requireAuth, async (req, res, next) => {
       where: { id: req.user.id },
     });
     
-    if (user.role !== 'ADMIN') {
+    if (!['FOUNDER', 'ADMIN'].includes(user.role)) {
       throw new HttpError(403, 'Only admins can enable Turbo for all users.');
     }
     

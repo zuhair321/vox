@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { useParams } from 'react-router-dom';
 import { useServerStore } from '../stores/serverStore';
 import { fetchInsights } from '../api/insights';
+import { fetchInsightsSeries } from '../api/insights';
+import { LineChart, BarChart } from '../utils/charts';
 import type { ServerInsight } from '../api/insights';
 
 const PERIODS = ['7d', '30d', '90d'] as const;
@@ -11,6 +13,7 @@ const ServerInsights: React.FC = () => {
   const { serverId } = useParams<{ serverId: string }>();
   const { selectedServer } = useServerStore();
   const [insights, setInsights] = useState<ServerInsight | null>(null);
+  const [series, setSeries] = useState<{ labels: string[]; messages: number[]; joins: number[]; peak: number[] } | null>(null);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
   const [loading, setLoading] = useState(false);
 
@@ -19,9 +22,12 @@ const ServerInsights: React.FC = () => {
     if (!id) return;
     let alive = true;
     setLoading(true);
-    fetchInsights(id, period)
-      .then((data: ServerInsight) => {
-        if (alive) setInsights(data);
+    Promise.all([fetchInsights(id, period), fetchInsightsSeries(id, period)])
+      .then(([data, ser]: [ServerInsight, any]) => {
+        if (alive) {
+          setInsights(data);
+          setSeries(ser && (ser.messages || ser.joins || ser.peak) ? ser : null);
+        }
       })
       .catch(() => {
         if (alive) setInsights(null);
@@ -82,6 +88,20 @@ const ServerInsights: React.FC = () => {
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="skeleton" style={{ height: '100px' }} />
           ))}
+        </div>
+      )}
+
+
+      {series && (
+        <div style={{ marginBottom: 24, padding: 18, border: '1px solid var(--rim)', borderRadius: 10, background: 'rgba(255,255,255,0.03)' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+            <div style={{ fontFamily: 'var(--serif)', color: 'var(--gold)', letterSpacing: '0.06em', fontSize: 14 }}>ACTIVITY OVER TIME</div>
+            <div style={{ fontSize: 11, color: 'var(--shadow)' }}>last {period === '7d' ? 7 : period === '30d' ? 30 : 90} days</div>
+          </div>
+          <LineChart
+            labels={series.labels}
+            series={[{ label: 'Messages', values: series.messages, color: 'var(--gold)' }, { label: 'Joins', values: series.joins, color: 'var(--teal, #4aa3a3)' }, { label: 'Peak concurrent', values: series.peak, color: '#b06' }]}
+          />
         </div>
       )}
 

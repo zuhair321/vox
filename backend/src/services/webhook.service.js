@@ -36,7 +36,7 @@ export async function deliverWebhooks(channelId, message) {
     author: {
       id: message.author?.id || null,
       username: message.author?.username || message.authorOverride || 'Webhook',
-      avatar: message.author?.avatarUrl
+      avatarUrl: message.author?.avatarUrl
         ? (message.author.avatarUrl.startsWith('http')
           ? message.author.avatarUrl
           : `${env.apiBase}${message.author.avatarUrl}`)

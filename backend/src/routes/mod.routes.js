@@ -29,7 +29,7 @@ modRouter.post('/servers/:id/timeout/:userId', requireAuth, async (req, res, nex
     if (target.role === 'FOUNDER' && me.role !== 'FOUNDER') {
       throw new HttpError(403, 'Cannot timeout the server owner.');
     }
-    if (target.role === 'ADMIN' && me.role === 'FOUNDER' === false && me.role !== 'ADMIN') {
+    if (target.role === 'ADMIN' && me.role !== 'FOUNDER' && me.role !== 'ADMIN') {
       throw new HttpError(403, 'Cannot timeout an admin.');
     }
 

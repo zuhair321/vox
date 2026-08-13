@@ -34,7 +34,6 @@ class NotificationService {
         ...options,
       });
     } catch (e) {
-      console.warn('Notification failed:', e);
     }
   }
 

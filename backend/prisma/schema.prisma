@@ -1,17 +1,14 @@
-// Prisma Schema for VOX Backend — PostgreSQL (production) / SQLite (dev)
+// Prisma Schema for VOX Backend — PostgreSQL (single source of truth)
 //
-// The provider is "postgresql" for production. To run locally with zero setup,
-// you can switch the provider to "sqlite" and set
-// DATABASE_URL="file:./vox.db" (see backend/.env.example). The schema is written
-// to be compatible with both engines: it avoids SQLite-only constructs
-// (no String[] scalar lists) so the same models map cleanly to Postgres.
+// Provider is "postgresql" and the migration history (prisma/migrations/*) is
+// Postgres-only (migration_lock.toml = "postgresql"). This is the canonical
+// database for both local dev (Docker Postgres) and production (Supabase /
+// Railway / Neon). There is NO SQLite mode anymore — keeping two DB engines in
+// sync was the source of the old ambiguity, so it was removed.
 //
-// Migrating:
-//   1. Set provider = "postgresql" (already the default) and DATABASE_URL to your
-//      Postgres connection string.
-//   2. npx prisma migrate dev --name init   (creates the DB + migration)
-//      or  npx prisma db push                (no migration history, quick start)
-//   3. For production: npx prisma migrate deploy
+// Dev (one command):  docker compose up -d   ->  Postgres on :5432
+// Migrate:            npx prisma migrate deploy
+// Quick start (no history): npx prisma db push
 
 generator client {
   provider = "prisma-client-js"
@@ -34,6 +31,20 @@ model User {
   color            String    @default("#5865f2")
   status           String    @default("OFFLINE")
   activity         String?
+  /// X25519 public key (base64, 32 bytes) for E2E DM envelope.
+  /// Paired with a per-user private key the renderer keeps and the
+  /// main process never reads. See frontend/src/utils/dmCrypto.ts.
+  publicKey        String?
+  publicKeyFingerprint String? /// SHA-256 of the public key, used for trust UI.
+  /// When this row was last bumped the device's pubkey (used to invalidate stale ciphertexts).
+  keyRotatedAt     DateTime?
+  isBot            Boolean       @default(false)
+  botTokenHash     String?
+  botPrefix        String?
+  botDescription   String?
+  botPublicKey     String?
+  botCreatedAt     DateTime  @default(now())
+
   twoFactorSecret  String?
   twoFactorEnabled Boolean   @default(false)
   createdAt        DateTime  @default(now())
@@ -85,6 +96,7 @@ model User {
   moderationLogs    ModerationLog[] @relation("ModerationLogModerator")
   appealReviews     Appeal[] @relation("AppealReviewer")
   appealMessages    AppealMessage[]
+  messageReads      MessageRead[]
 }
 
 // ─── Server ──────────────────────────────────────────────────────
@@ -233,10 +245,12 @@ model Message {
   attachments    Json?
   deleted        Boolean  @default(false)
   edited         Boolean  @default(false)
+  editHistory    Json?
   parentId       String?
   pinned         Boolean  @default(false)
   isForumPost    Boolean  @default(false)
   tags           Json?
+  searchVector   Unsupported("tsvector")?
 
   channel        Channel    @relation(fields: [channelId], references: [id], onDelete: Cascade)
   author         User?      @relation("MessageAuthor", fields: [userId], references: [id])
@@ -496,6 +510,7 @@ model CustomEmoji {
   serverId  String
   name      String
   url       String
+  animated  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   server Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
@@ -566,8 +581,11 @@ model MessageRead {
   userId    String
   readAt    DateTime @default(now())
 
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([messageId])
   @@index([userId])
+  @@index([messageId, readAt])
   @@unique([messageId, userId])
 }
 
@@ -807,6 +825,8 @@ model NotificationSettings {
   userId     String
   serverId   String?
   channelId  String?
+  /// ALL | MENTIONS | NOTHING | DEFAULT (inherit from server).
+  level      String   @default("DEFAULT")
   muted      Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -816,6 +836,15 @@ model NotificationSettings {
   // A row is either a server-level mute or a channel-level mute.
   @@unique([userId, serverId, channelId])
   @@index([userId])
+}
+
+// ─── AppConfig (singleton KV — VAPID keys live here once first push lands)
+model AppConfig {
+  id           String   @id @default("singleton")
+  vapidPublic  String?
+  vapidPrivate String?
+  vapidSubject String?
+  updatedAt    DateTime @updatedAt
 }
 
 model Feedback {

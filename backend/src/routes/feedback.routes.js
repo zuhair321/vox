@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 
@@ -38,7 +39,7 @@ router.post('/feedback', async (req, res, next) => {
 });
 
 // Get feedback (admin only - for reviewing tester feedback)
-router.get('/feedback', async (req, res, next) => {
+router.get('/feedback', requireAuth, async (req, res, next) => {
   try {
     const { category, rating, limit = 50 } = req.query;
     
@@ -59,7 +60,7 @@ router.get('/feedback', async (req, res, next) => {
 });
 
 // Get feedback stats
-router.get('/feedback/stats', async (req, res, next) => {
+router.get('/feedback/stats', requireAuth, async (req, res, next) => {
   try {
     const total = await prisma.feedback.count();
     const byCategory = await prisma.feedback.groupBy({

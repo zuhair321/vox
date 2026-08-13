@@ -88,7 +88,6 @@ export async function addIceCandidate(
   try {
     await pc.addIceCandidate(new RTCIceCandidate(candidate));
   } catch (e) {
-    console.warn('[WebRTC] Failed to add ICE candidate:', e);
   }
 }
 

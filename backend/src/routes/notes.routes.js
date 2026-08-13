@@ -14,7 +14,7 @@ notesRouter.get('/users/:id/notes', requireAuth, async (req, res, next) => {
     const note = await prisma.userNote.findUnique({
       where: { userId_targetId: { userId: req.user.id, targetId } },
     });
-    res.json({ note: note ? { text: note.text, updatedAt: note.updatedAt } : null });
+    res.json({ note: note ? { content: note.content, updatedAt: note.updatedAt } : null });
   } catch (e) { next(e); }
 });
 
@@ -34,11 +34,11 @@ notesRouter.put('/users/:id/notes', requireAuth, async (req, res, next) => {
 
     const note = await prisma.userNote.upsert({
       where: { userId_targetId: { userId: req.user.id, targetId } },
-      create: { userId: req.user.id, targetId, text: sanitized },
-      update: { text: sanitized },
+      create: { userId: req.user.id, targetId, content: sanitized },
+      update: { content: sanitized },
     });
 
-    res.json({ note: { text: note.text, updatedAt: note.updatedAt } });
+    res.json({ note: { content: note.content, updatedAt: note.updatedAt } });
   } catch (e) { next(e); }
 });
 

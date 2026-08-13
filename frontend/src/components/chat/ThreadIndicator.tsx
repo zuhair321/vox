@@ -7,6 +7,8 @@ interface ThreadIndicatorProps {
   lastReplyAvatar?: string | null;
   lastReplyTime: string;
   onClick: () => void;
+  /** Unread reply count for this parent (live, from uiStore). Default 0. */
+  unreadCount?: number;
 }
 
 const ThreadIndicator: React.FC<ThreadIndicatorProps> = ({
@@ -14,6 +16,7 @@ const ThreadIndicator: React.FC<ThreadIndicatorProps> = ({
   lastReplyAvatar,
   lastReplyTime,
   onClick,
+  unreadCount = 0,
 }) => {
   if (replyCount <= 0) return null;
 
@@ -63,6 +66,26 @@ const ThreadIndicator: React.FC<ThreadIndicatorProps> = ({
       >
         {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
       </span>
+      {unreadCount > 0 && (
+        <span
+          title={unreadCount + ' new ' + (unreadCount === 1 ? 'reply' : 'replies')}
+          style={{
+            background: 'var(--chaos)',
+            color: '#0b0d11',
+            fontWeight: 800,
+            fontSize: '9px',
+            padding: '1px 6px',
+            borderRadius: '7px',
+            fontFamily: "'Share Tech Mono', monospace",
+            letterSpacing: '0.05em',
+            minWidth: '14px',
+            textAlign: 'center',
+            boxShadow: '0 0 6px rgba(216,74,90,0.4)',
+          }}
+        >
+          +{unreadCount}
+        </span>
+      )}
       {avatarUrl && (
         <div
           className="octagon"

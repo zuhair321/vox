@@ -84,11 +84,26 @@ searchRouter.get('/search', requireAuth, searchLimiter, async (req, res, next) =
       return res.json({ results: [], count: 0 });
     }
 
-    // PostgreSQL full-text search via $queryRaw with ILIKE.
+    // PostgreSQL full-text search (Discord-grade): use the GIN-indexed
+    // tsvector with websearch_to_tsquery for token + phrase matching, ranked
+    // by ts_rank so most-relevant hits come first. Fall back to ILIKE for
+    // very short / partial tokens that FTS would mangle.
     const chPlaceholders = accessibleChannelIds.map((_, i) => `$${i + 1}`).join(',');
     const searchIdx = accessibleChannelIds.length + 1;
-    let sql = `SELECT m.id FROM "Message" m WHERE m.deleted = 0 AND m.channelId IN (${chPlaceholders}) AND m.body ILIKE $${searchIdx}`;
-    const params = [...accessibleChannelIds, `%${q}%`];
+
+    let sql;
+    let params;
+    if (q.trim().length >= 3) {
+      sql = `SELECT m.id, ts_rank(m."searchVector", websearch_to_tsquery('simple', $${searchIdx})) AS rank
+             FROM "Message" m
+             WHERE m.deleted = 0
+               AND m.channelId IN (${chPlaceholders})
+               AND m."searchVector" @@ websearch_to_tsquery('simple', $${searchIdx})`;
+      params = [...accessibleChannelIds, q.trim()];
+    } else {
+      sql = `SELECT m.id, 0 AS rank FROM "Message" m WHERE m.deleted = 0 AND m.channelId IN (${chPlaceholders}) AND m.body ILIKE $${searchIdx}`;
+      params = [...accessibleChannelIds, `%${q}%`];
+    }
 
     // Scope to one author.
     const userParam = req.query.userId ? String(req.query.userId).trim() : '';
@@ -122,7 +137,7 @@ searchRouter.get('/search', requireAuth, searchLimiter, async (req, res, next) =
       sql += ` AND m.body LIKE '%http%'`;
     }
 
-    sql += ` ORDER BY m.createdAt DESC LIMIT ${limit}`;
+    sql += ` ORDER BY rank DESC, m."createdAt" DESC LIMIT ${limit}`;
 
     const matchedRows = await prisma.$queryRawUnsafe(sql, ...params);
     const matchedIds = matchedRows.map((r) => r.id);

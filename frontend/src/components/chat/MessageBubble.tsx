@@ -17,6 +17,7 @@ import ReportModal from '../ui/ReportModal';
 import RichText from './RichText';
 import LinkPreviewCard from './LinkPreviewCard';
 import ThreadIndicator from './ThreadIndicator';
+import EditHistoryModal from './EditHistoryModal';
 import AttachmentList from './AttachmentList';
 import SeenByStack from './SeenByStack';
 import { normalizeRole, ROLES, roleGlowShadow } from '../../config/roles';
@@ -85,12 +86,14 @@ function formatRelativeTime(dateString: string) {
 }
 
 const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: isOwnProp, myUsername, myId: myIdProp, myRole: myRoleProp }) => {
+  const [historyOpen, setHistoryOpen] = useState<string | null>(null);
   const { setReplyingTo, messages } = useMessageStore();
-  const { setThreadMessageId, setShowPinnedPanel, addToast } = useUiStore();
+  const { setThreadMessageId, setShowPinnedPanel, addToast, threadUnread } = useUiStore();
   const { selectedServer } = useServerStore();
   const { show, hide, contextMenu } = useContextMenu();
   const messageRowRef = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [editValue, setEditValue] = useState(message.body);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -454,6 +457,20 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
                 color: roleDef.color,
                 fontWeight: 'bold',
                 textShadow: roleGlowShadow(role),
+                cursor: 'pointer',
+                transition: 'opacity 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                hoverTimerRef.current = setTimeout(() => {
+                  useUiStore.getState().openProfilePopup(
+                    { id: message.author?.id || '', username: message.author?.username || '', displayName: message.author?.displayName || authorName, avatarUrl: message.author?.avatarUrl || null, bannerUrl: null, status: message.author?.status, role: message.author?.role, bio: (message.author as any)?.bio, hasTurbo: message.author?.hasTurbo, memberSince: (message.author as any)?.createdAt },
+                    { x: rect.right + 12, y: rect.top }
+                  );
+                }, 500);
+              }}
+              onMouseLeave={() => {
+                if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
               }}
             >
               {authorName}
@@ -579,6 +596,64 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
           </motion.div>
         ) : (
           <>
+            {(message as any).parentMessage && (
+              <div
+                onClick={() => {
+                  const parent = (message as any).parentMessage;
+                  const el = parent.id ? document.querySelector('[data-message-id="' + parent.id + '"]') : null;
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('vox-message-highlight');
+                    setTimeout(() => el.classList.remove('vox-message-highlight'), 1600);
+                  }
+                }}
+                className='vox-reply-quote'
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  marginBottom: 4,
+                  paddingLeft: 8,
+                  borderLeft: '2px solid rgba(216,74,90,0.45)',
+                  fontSize: 12,
+                  color: 'var(--shadow)',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  transition: 'color 0.15s ease, border-color 0.15s ease',
+                  minHeight: 18,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                }}
+                title={'Jump to original message'}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderLeftColor = 'rgba(216,74,90,0.85)'; (e.currentTarget as HTMLElement).style.color = 'var(--ash)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderLeftColor = 'rgba(216,74,90,0.45)'; (e.currentTarget as HTMLElement).style.color = 'var(--shadow)'; }}
+              >
+                <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={1.6} strokeLinecap='round' strokeLinejoin='round' style={{ flexShrink: 0, opacity: 0.7 }} aria-hidden>
+  <path d='M9 14l-5-4 5-4' />
+  <path d='M4 10h9a6 6 0 0 1 6 6v0a6 6 0 0 1-6 6h-3' />
+</svg>
+                <span style={{
+                  fontWeight: 600,
+                  color: 'var(--ash)',
+                  flexShrink: 0,
+                  maxWidth: 180,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  @{(message as any).parentMessage.author?.displayName || (message as any).parentMessage.author?.username || 'user'}
+                </span>
+                <span style={{
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  opacity: 0.85,
+                }}>
+                  {((message as any).parentMessage.body || '').slice(0, 90) || '[attachment]'}
+                </span>
+              </div>
+            )}
             {textBody && (
               <div
                 style={{
@@ -592,8 +667,31 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
               >
                 <RichText text={textBody} serverId={selectedServer?.id} />
                 {message.edited && (
-                  <span style={{ fontSize: '10px', color: 'var(--ash)', marginLeft: '4px', verticalAlign: 'middle' }}>
-                    (edited)
+                  <span
+                    role='button'
+                    onClick={() => setHistoryOpen(message.id)}
+                    style={{
+                      fontSize: '10px',
+                      color: 'var(--ash)',
+                      marginLeft: '6px',
+                      verticalAlign: 'middle',
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      background: 'rgba(140,149,163,0.08)',
+                      border: '1px solid rgba(140,149,163,0.14)',
+                      cursor: 'help',
+                      transition: 'background 0.15s ease, border-color 0.15s ease',
+                    }}
+                    title={(() => {
+                      const stamp = (message as { editedAt?: string | Date }).editedAt;
+                      if (stamp) {
+                        try { return 'Last edited ' + new Date(stamp).toLocaleString(); }
+                        catch { return 'Last edited'; }
+                      }
+                      return 'Edited';
+                    })()}
+                  >
+                    edited
                   </span>
                 )}
                 {isOwn && <Ticks status={(message as any).status} />}
@@ -679,6 +777,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
             {threadCount > 0 && (
               <ThreadIndicator
                 replyCount={threadCount}
+                unreadCount={threadUnread[message.id] || 0}
                 lastReplyAvatar={lastReply?.author?.avatarUrl}
                 lastReplyTime={lastReply ? format(new Date(lastReply.createdAt), 'h:mm a') : ''}
                 onClick={() => setThreadMessageId(message.id)}
@@ -728,6 +827,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
           onClose={() => setShowReport(false)}
         />
       )}
+      <EditHistoryModal messageId={historyOpen} onClose={() => setHistoryOpen(null)} />
     </>
   );
 });

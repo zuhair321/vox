@@ -34,11 +34,13 @@ soundboardRouter.post('/servers/:id/sounds', requireAuth, requireServerAdmin(), 
     const { name, url, volume } = req.body || {};
     if (!name || !String(name).trim()) throw new HttpError(400, 'Sound name is required.');
     if (!url || !String(url).trim()) throw new HttpError(400, 'Sound URL is required.');
+    const trimmedUrl = String(url).trim();
+    if (!/^https?:\/\//i.test(trimmedUrl)) throw new HttpError(400, 'Sound URL must start with http:// or https://.');
 
     const sound = await prisma.sound.create({
       data: {
         name: sanitize(String(name)).slice(0, 50),
-        url: String(url),
+        url: trimmedUrl,
         volume: typeof volume === 'number' ? Math.max(0, Math.min(1, volume)) : 1.0,
         serverId: req.params.id,
       },
