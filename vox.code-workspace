@@ -1,0 +1,307 @@
+{
+  "folders": [
+    { "name": "VOX (root)", "path": "." },
+    { "name": "backend",    "path": "backend" },
+    { "name": "frontend",   "path": "frontend" }
+  ],
+
+  "settings": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.tabSize": 2,
+    "editor.insertSpaces": true,
+    "editor.rulers": [100, 120],
+    "editor.minimap.enabled": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.inlineSuggest.suppressSuggestions": false,
+    "editor.stickyScroll.enabled": true,
+
+    "[typescript]":      { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[javascript]":      { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[json]":            { "editor.defaultFormatter": "vscode.json-language-features" },
+    "[css]":             { "editor.defaultFormatter": "vscode.css-language-features" },
+    "[prisma]":          { "editor.defaultFormatter": "Prisma.prisma" },
+    "[html]":            { "editor.defaultFormatter": "vscode.html-language-features" },
+
+    "files.exclude": {
+      "**/.git":                 true,
+      "**/.DS_Store":            true,
+      "**/.vscode":              false,
+      "**/node_modules":         true,
+      "**/dist":                 true,
+      "**/dist-secondary":       true,
+      "**/dist2":                true,
+      "**/dist-final":           true,
+      "**/dist-temp":            true,
+      "**/dist-v2":              true,
+      "**/dist-hosted":          true,
+      "**/build":                true,
+      "**/out":                  true,
+      "**/win-unpacked":         true,
+      "**/vx":                   true,
+      "**/app.asar":             true,
+      "**/app.asar.unpacked":    true,
+      "**/resources/app.asar*":  true,
+      "**/resources/elevate.exe":true,
+      "**/postgres/":            true,
+      "**/tools/":               true,
+      "**/resources/postgres/":  true,
+      "**/.freebuff":            true,
+      "**/probe-app":            true,
+      "**/probe-*.cjs":          true,
+      "**/probe-*.js":           true,
+      "**/smoke-*.cjs":          true,
+      "**/carrom-preview":       true,
+      "**/queries":              true,
+      "**/test-loader.js":       true,
+      "**/test-*.mjs":           true,
+      "**/_backend.err":         true,
+      "**/_backend.log":         true,
+      "**/buildfailed.txt":      true,
+      "**/pg-start.out":         true,
+      "**/pg-start.err":         true,
+      "**/app_check":            true,
+      "**/config":               true,
+      "**/logs":                 true,
+      "**/*.bak":                true,
+      "**/*.tmp":                true
+    },
+    "search.exclude": {
+      "**/node_modules":          true,
+      "**/dist":                  true,
+      "**/dist2":                 true,
+      "**/build":                 true,
+      "**/win-unpacked":          true,
+      "**/vx":                    true,
+      "**/.freebuff":             true,
+      "**/postgres/":             true,
+      "**/tools/":                true,
+      "**/logs":                  true,
+      "**/resources/postgres/":   true
+    },
+
+    "typescript.tsdk": "frontend/node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+
+    "eslint.workingDirectories": ["frontend", "backend"],
+    "eslint.validate": [
+      "javascript",
+      "javascriptreact",
+      "typescript",
+      "typescriptreact"
+    ],
+
+    "tailwindCSS.experimental.classRegex": [
+      ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+      ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+    ],
+    "tailwindCSS.includeLanguages": {
+      "typescript": "typescript",
+      "typescriptreact": "typescriptreact"
+    },
+
+    "prisma.showPrismaDataPlatformNotification": false,
+
+    "files.eol": "\n",
+    "git.ignoreLimitWarning": true,
+    "git.autofetch": "interval",
+    "terminal.integrated.cwd": "${workspaceFolder}",
+    "accessibility.signalOptions.volume": 0
+  },
+
+  "extensions": {
+    "recommendations": [
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "bradlc.vscode-tailwindcss",
+      "dsznajder.es7-react-js-snippets",
+      "formulahendry.auto-rename-tag",
+      "christian-kohler.path-intellisense",
+      "Prisma.prisma",
+      "ms-vscode.vscode-json",
+      "usernamehw.errorlens",
+      "oderwat.indent-rainbow",
+      "eamodio.gitlens",
+      "pkief.material-icon-theme",
+      "EditorConfig.EditorConfig",
+      "streetsidesoftware.code-spell-checker",
+      "ms-playwright.playwright",
+      "alexcvzz.vscode-sqlite"
+    ]
+  },
+
+  "tasks": {
+    "version": "2.0.0",
+
+    "tasks": [
+      {
+        "label": "Dev: backend only",
+        "type": "shell",
+        "command": "npm run dev --prefix backend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "isBackground": true,
+        "presentation": { "reveal": "always", "panel": "dedicated", "group": "vox-dev" }
+      },
+      {
+        "label": "Dev: frontend (Vite)",
+        "type": "shell",
+        "command": "npm run dev --prefix frontend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "isBackground": true,
+        "presentation": { "reveal": "always", "panel": "dedicated", "group": "vox-dev" }
+      },
+      {
+        "label": "Dev: full stack (concurrently)",
+        "type": "shell",
+        "command": "npx concurrently -n backend,frontend -c blue,green \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+        "options": { "cwd": "${workspaceFolder}" },
+        "isBackground": true,
+        "presentation": { "reveal": "always", "panel": "dedicated", "group": "vox-dev" }
+      },
+      {
+        "label": "Dev: Electron desktop",
+        "type": "shell",
+        "command": "npx electron .",
+        "options": { "cwd": "${workspaceFolder}" },
+        "isBackground": true,
+        "presentation": { "reveal": "always", "panel": "dedicated", "group": "vox-dev" }
+      },
+
+      {
+        "label": "Build: frontend bundle",
+        "type": "shell",
+        "command": "npm run build --prefix frontend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-build" }
+      },
+      {
+        "label": "Build: Windows installer (.exe)",
+        "type": "shell",
+        "command": "npm run build:win",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-build" }
+      },
+
+      {
+        "label": "Lint: frontend (ESLint)",
+        "type": "shell",
+        "command": "npm run lint --prefix frontend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-check" }
+      },
+      {
+        "label": "Typecheck: frontend (tsc --noEmit)",
+        "type": "shell",
+        "command": "npx tsc -p frontend --noEmit",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-check" }
+      },
+      {
+        "label": "Typecheck: backend (node --check)",
+        "type": "shell",
+        "command": "npm run check --prefix backend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-check" }
+      },
+      {
+        "label": "Test: backend (vitest)",
+        "type": "shell",
+        "command": "npm run test --prefix backend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-check" }
+      },
+
+      {
+        "label": "Prisma: generate client",
+        "type": "shell",
+        "command": "npm run prisma:generate --prefix backend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-db" }
+      },
+      {
+        "label": "Prisma: studio (DB GUI)",
+        "type": "shell",
+        "command": "npm run prisma:studio --prefix backend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "isBackground": true,
+        "presentation": { "reveal": "always", "panel": "dedicated", "group": "vox-db" }
+      },
+      {
+        "label": "Prisma: migrate dev",
+        "type": "shell",
+        "command": "npm run prisma:migrate --prefix backend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-db" }
+      },
+      {
+        "label": "Prisma: push schema (no migration)",
+        "type": "shell",
+        "command": "npm run prisma:push --prefix backend",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared", "group": "vox-db" }
+      },
+
+      {
+        "label": "Bump version",
+        "type": "shell",
+        "command": "npm run bump",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": { "reveal": "always", "panel": "shared" }
+      }
+    ]
+  },
+
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Electron: VOX desktop",
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+        "runtimeArgs": ["--remote-debugging-port=9222", "."],
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal",
+        "sourceMaps": true,
+        "outFiles": [
+          "${workspaceFolder}/frontend/dist/**/*.js",
+          "${workspaceFolder}/backend/**/*.js"
+        ]
+      },
+      {
+        "name": "Electron: renderer only (Chrome DevTools)",
+        "type": "chrome",
+        "request": "attach",
+        "port": 9222,
+        "webRoot": "${workspaceFolder}/frontend/src",
+        "sourceMaps": true,
+        "sourceMapPathOverrides": {
+          "webpack:///./src/*": "${webRoot}/*"
+        }
+      },
+      {
+        "name": "Backend: Node attach (port 9229)",
+        "type": "node",
+        "request": "attach",
+        "port": 9229,
+        "address": "127.0.0.1",
+        "localRoot": "${workspaceFolder}/backend",
+        "remoteRoot": "${workspaceFolder}/backend",
+        "sourceMaps": true,
+        "outFiles": ["${workspaceFolder}/backend/**/*.js"]
+      }
+    ],
+    "compounds": [
+      {
+        "name": "Full stack debug (Electron + backend)",
+        "configurations": [
+          "Backend: Node attach (port 9229)",
+          "Electron: VOX desktop"
+        ],
+        "preLaunchTask": "Dev: backend only",
+        "stopAll": true
+      }
+    ]
+  }
+}
