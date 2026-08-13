@@ -1,6 +1,7 @@
 import React, { useEffect, useState, lazy, Suspense, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
+import { registerNavigate } from './utils/nav';
 import { useSocketStore } from './stores/socketStore';
 import { useServerStore } from './stores/serverStore';
 import { useFriendStore } from './stores/friendStore';
@@ -41,6 +42,8 @@ import VoiceChannelPanel from './components/voice/VoiceChannelPanel';
 import ScreenShareOverlay from './components/voice/ScreenShareOverlay';
 import ScreenSourcePicker from './components/voice/ScreenSourcePicker';
 import OnboardingFlow from './components/onboarding/OnboardingFlow';
+import Welcome from './components/onboarding/Welcome';
+import OfflineScreen from './components/system/OfflineScreen';
 import TwoFactorPage from './pages/TwoFactor';
 import { TurboModal } from './components/turbo/TurboModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
@@ -170,6 +173,13 @@ const AppLayout = () => {
   });
 
   const { user, accessToken, isLoading } = useAuthStore();
+  // Track whether THIS MOUNT ever saw an authenticated user. Cold boot
+  // ('no user yet') redirects to /login, but mid-session logouts caused
+  // by a failed fetch (e.g. an expired refresh during Create-Server) used
+  // to yank the user mid-action. We now let auth.ts:logout() drive the
+  // navigation explicitly and only auto-redirect when we never had a user.
+  const hasSeenUser = useRef(false);
+  useEffect(() => { if (user) hasSeenUser.current = true; }, [user]);
 
   useEffect(() => {
     // Don't make any auth-based routing decisions until initialization has
@@ -183,7 +193,13 @@ const AppLayout = () => {
     // concluding we must log in.
     if (!user && isLoading) return;
 
-    if (!user && location.pathname !== '/login') {
+    // Auto-redirect to /login ONLY on cold boot (no user has ever been
+    // mounted in this session). Once the user has been logged in once,
+    // mid-session logouts are handled by auth.ts:logout() → navigateTo,
+    // which preserves any in-flight action's UI state and gives a chance
+    // to finish inline rather than yanking them out of a create-server
+    // modal.
+    if (!user && location.pathname !== '/login' && !hasSeenUser.current) {
       navigate('/login');
       return;
     }
@@ -350,6 +366,15 @@ const AppLayout = () => {
 
 function App() {
   const { initialize } = useAuthStore();
+  const navigate = useNavigate();
+
+  // Make React Router's navigate() available to non-component callers (e.g.
+  // utils/auth.ts logout()) so they don't have to do a full reload — under the
+  // packaged Electron app a reload to "/login" would resolve to
+  // "file:///D:/login" and crash the renderer with ERR_FILE_NOT_FOUND.
+  useEffect(() => {
+    registerNavigate(navigate);
+  }, [navigate]);
 
   useEffect(() => {
     initialize();

@@ -11,10 +11,20 @@ const VOXXmlConfig = (() => {
   }
 })();
 
+// __VOX_CONFIG is a snapshot at preload time. Renderer can ask electronAPI.getVoxConfig()
+// for the latest (and re-resolve lazily). The snapshot still works for cases
+// that read .apiBase synchronously at module load (legacy fallbacks).
+// __VOX_CONFIG is a snapshot at preload time. Renderer can ask electronAPI.getVoxConfig()
+// for the latest (and re-resolve lazily). The snapshot still works for cases
+// that read .apiBase synchronously at module load (legacy fallbacks).
 contextBridge.exposeInMainWorld('__VOX_CONFIG', VOXXmlConfig || { apiBase: 'http://127.0.0.1:4000', mode: 'local' });
 
 contextBridge.exposeInMainWorld('electronAPI', {
   notify: (title, body) => ipcRenderer.send('notify', { title, body }),
+  // Open the OS-level privacy settings for a device (microphone/camera).
+  // Returns the URL that was opened (or null if the OS doesn't support it).
+  openDeviceSettings: (kind) => ipcRenderer.invoke('open-device-settings', kind),
+  flashFrame: () => ipcRenderer.send('flash-frame'),
   flashFrame: () => ipcRenderer.send('flash-frame'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
   onFocusChange: (callback) => {
@@ -52,4 +62,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.off('updater:state', wrapped);
     },
   },
+  // Vox app config — the source of truth for "which server am I talking to?".
+  voxConfig: {
+    get: () => ipcRenderer.invoke('vox:get-config').then(normalizeConfig),
+    set: (next) => ipcRenderer.invoke('vox:set-config', next).then((r) => ({ ...r, config: r.config ? normalizeConfig(r.config) : null })),
+    reset: () => ipcRenderer.invoke('vox:reset-config').then((r) => ({ ...r, config: r.config ? normalizeConfig(r.config) : null })),
+    testReachability: (url) => ipcRenderer.invoke('vox:test-reachability', url),
+    onChanged: (callback) => {
+      const wrapped = (_event, next) => callback(normalizeConfig(next));
+      ipcRenderer.on('vox:config-changed', wrapped);
+      return () => ipcRenderer.off('vox:config-changed', wrapped);
+    },
+  },
 });
+
+// Strip trailing slashes and coerce any error shape the main process returns.
+function normalizeConfig(c) {
+  if (!c || typeof c !== 'object') return null;
+  const out = { ...c };
+  if (typeof out.apiBase === 'string') out.apiBase = out.apiBase.replace(/\/$/, '');
+  return out;
+}

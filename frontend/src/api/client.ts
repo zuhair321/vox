@@ -3,19 +3,55 @@
 //      loaded by Electron from app-config.json / VOX_API_BASE env.
 //   2. Build-time VITE_API_BASE (web/Railway deployments).
 //   3. Local dev backend default (port 4000).
-// A single built bundle therefore works for both the local-SQLite desktop app
-// and a hosted backend — the user never configures anything.
-function resolveApiBase(): string {
+// Backend origin resolution — LAZY. The renderer can swap the target
+// server mid-session (via Settings → Server), and a full reload is
+// wasteful. Each call re-reads window.__VOX_CONFIG (kept fresh by preload).
+//
+// Priority each call:
+//   1. window.__VOX_CONFIG.apiBase
+//   2. Build-time VITE_API_BASE
+//   3. Local dev backend default (http://127.0.0.1:4000)
+export function getApiBase(): string {
   try {
-    const injected = window.__VOX_CONFIG?.apiBase;
-    if (injected && typeof injected === 'string' && injected.length) return injected;
+    const injected = window.__VOX_CONFIG && window.__VOX_CONFIG.apiBase;
+    if (typeof injected === 'string' && injected.length) return injected.replace(/\/$/, '');
   } catch { /* ignore */ }
-  return import.meta.env.VITE_API_BASE || 'http://127.0.0.1:4000';
+  return (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:4000').replace(/\/$/, '');
 }
 
-export const API_BASE = resolveApiBase();
-export function getApiBase(): string {
-  return API_BASE;
+// Backwards-compat alias (legacy callers).
+export const API_BASE = getApiBase();
+
+// ── Reachability probe (no auth, no rate-limit) ────────────────────────────────────
+// Used by the Welcome screen "Test server" button and OfflineScreen "Retry".
+// Hits /api/server-info (no-auth, no-rate-limit) for cheap reachability +
+// identity check. Returns the resolved { ok, status, latencyMs, info, reason }.
+export async function testReachability(apiBaseOverride?: string): Promise<{
+  ok: boolean;
+  status?: number;
+  latencyMs: number | null;
+  reason?: string;
+  info?: { name?: string; version?: string; allowRegistration?: boolean } | null;
+}> {
+  const base = (apiBaseOverride || getApiBase()).replace(/\/$/, '');
+  try { new URL(base); }
+  catch { return { ok: false, latencyMs: null, reason: 'bad-url' }; }
+  const url = base + '/api/server-info';
+  const start = Date.now();
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = setTimeout(() => controller?.abort(), 5000);
+  try {
+    const res = await fetch(url, { method: 'GET', credentials: 'omit', signal: controller?.signal });
+    clearTimeout(timer);
+    const latencyMs = Date.now() - start;
+    if (!res.ok) return { ok: false, status: res.status, latencyMs, reason: 'http-' + res.status };
+    let info: any = null;
+    try { info = await res.json(); } catch { /* not JSON */ }
+    return { ok: true, status: res.status, latencyMs, info };
+  } catch (e: any) {
+    clearTimeout(timer);
+    return { ok: false, latencyMs: null, reason: e?.name === 'AbortError' ? 'timeout' : (e?.message || 'fetch-failed') };
+  }
 }
 
 export function getToken() {
@@ -40,7 +76,7 @@ export async function tryRefresh(): Promise<boolean> {
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+      const res = await fetch(`${getApiBase()}/api/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -171,7 +207,7 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
       const requestHeaders = skipAuth
         ? buildHeaders(customHeaders, body)
         : (() => { const h = buildHeaders(customHeaders, body); if (h.Authorization && getToken() === null) delete h.Authorization; return h; })();
-      res = await fetch(API_BASE + path, {
+      res = await fetch(getApiBase() + path, {
         ...rest,
         body,
         headers: requestHeaders,
@@ -203,7 +239,7 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
     const refreshed = await tryRefresh();
     if (refreshed) {
       const retryHeaders = buildHeaders(customHeaders, body);
-      const retryRes = await fetch(API_BASE + path, {
+      const retryRes = await fetch(getApiBase() + path, {
         ...rest,
         body,
         headers: retryHeaders,
