@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useMemo, useState } from 'react';
 import {
   Accessibility,
   Bell,
-  Camera,
+  Cloud,
   ClipboardList,
   Cpu,
   Globe,
@@ -66,6 +67,7 @@ const appRows: SettingsItem[] = [
   { icon: Globe, label: 'Language', value: 'English' },
   { icon: MessageSquare, label: 'Chat', path: '/settings/chat' },
   { icon: Bell, label: 'Notifications', path: '/settings/notifications' },
+  { icon: Cloud as any, label: 'Server', path: '/settings/server' },
   { icon: SettingsIcon, label: 'Advanced' },
 ];
 

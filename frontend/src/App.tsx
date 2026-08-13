@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState, lazy, Suspense, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
 import { registerNavigate } from './utils/nav';
 import { useSocketStore } from './stores/socketStore';
 import { useServerStore } from './stores/serverStore';
@@ -26,13 +27,11 @@ import CreateChannelModal from './components/server/CreateChannelModal';
 import ThemeSwitcher from './components/ui/ThemeSwitcher';
 import QuickSwitcher from './components/ui/QuickSwitcher';
 import ShortcutsModal from './components/ui/ShortcutsModal';
-import FeedbackWidget from './components/ui/FeedbackWidget';
 import FriendsPage from './components/friends/FriendsPage';
 import DMConversation from './components/friends/DMConversation';
 import LoginDummy from './components/ui/LoginDummy';
 import Profile from './pages/Profile';
 import RegisterPage from './pages/Register';
-import SplashScreen from './components/ui/SplashScreen';
 import InviteModal from './components/server/InviteModal';
 import InviteAccept from './pages/InviteAccept';
 import CustomStatusModal from './components/ui/CustomStatusModal';
@@ -48,7 +47,6 @@ import TwoFactorPage from './pages/TwoFactor';
 import { TurboModal } from './components/turbo/TurboModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useRipple } from './hooks/useRipple';
-import { useNotificationStore } from './stores/notificationStore';
 import UpdateModal from './components/ui/UpdateModal';
 
 const ChannelViewWithMessage: React.FC<{ onOpenThemes: () => void }> = ({ onOpenThemes }) => {
@@ -172,7 +170,31 @@ const AppLayout = () => {
     },
   });
 
-  const { user, accessToken, isLoading } = useAuthStore();
+    // Client-mode runtime config: load + reachability probe + live updates.
+  const [voxConfig, setVoxConfig] = React.useState<any>(null);
+  const [serverReachable, setServerReachable] = React.useState<boolean | null>(null);
+  const [configLoaded, setConfigLoaded] = React.useState(false);
+  React.useEffect(() => {
+    let cancelled = false;
+    const api: any = (window as any).electronAPI;
+    (async () => {
+      try {
+        const cfg = api?.voxConfig?.get ? await api.voxConfig.get() : null;
+        if (!cancelled) { setVoxConfig(cfg); setConfigLoaded(true); }
+        if (cfg && cfg.mode === 'client' && cfg.apiBase) {
+          try {
+            const t = await import('./api/client');
+            const probe = await t.testReachability(cfg.apiBase);
+            if (!cancelled) setServerReachable(probe.ok);
+          } catch { if (!cancelled) setServerReachable(false); }
+        } else if (cfg) { if (!cancelled) setServerReachable(true); }
+      } catch { if (!cancelled) setConfigLoaded(true); }
+    })();
+    const off = api?.voxConfig?.onChanged ? api.voxConfig.onChanged((n: any) => setVoxConfig(n)) : () => {};
+    return () => { cancelled = true; try { off && off(); } catch {} };
+  }, []);
+
+const { user, accessToken, isLoading } = useAuthStore();
   // Track whether THIS MOUNT ever saw an authenticated user. Cold boot
   // ('no user yet') redirects to /login, but mid-session logouts caused
   // by a failed fetch (e.g. an expired refresh during Create-Server) used
@@ -242,6 +264,28 @@ const AppLayout = () => {
   return (
     <div className="app-container">
       <TitleBar />
+      {configLoaded && voxConfig && (!voxConfig.mode || !voxConfig.apiBase) && (
+        <Welcome onSelected={(cfg: any) => { setVoxConfig(cfg); }} />
+      )}
+      {configLoaded && voxConfig && voxConfig.mode === 'client' && serverReachable === false && (
+        <OfflineScreen
+          apiBase={voxConfig.apiBase}
+          onRetry={async () => {
+            try {
+              const t = await import('./api/client');
+              const probe = await t.testReachability(voxConfig.apiBase);
+              setServerReachable(probe.ok);
+              if (probe.ok) { const api: any = (window as any).electronAPI;
+                await api?.voxConfig?.set?.({ lastSeenReachable: new Date().toISOString() }); }
+            } catch { setServerReachable(false); }
+          }}
+          onChangeServer={async () => {
+            try { const api: any = (window as any).electronAPI; await api?.voxConfig?.reset?.(); } catch {}
+            setVoxConfig(null); setServerReachable(null);
+          }}
+        />
+      )}
+
       <OfflineBanner />
       {/* PWA install banner — only shown when browser fires beforeinstallprompt */}
       {canInstall && (

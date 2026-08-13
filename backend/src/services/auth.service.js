@@ -72,24 +72,34 @@ function useSecureCookies() {
   return isProd && !localHttp;
 }
 
+
+function cookieSameSite() {
+  return process.env.COOKIE_SAMESITE_NONE === '1' ? 'none' : 'lax';
+}
 function setAuthCookies(res, access, refresh) {
-  const isProd = useSecureCookies();
+  const ss = cookieSameSite();
+  const isProd = useSecureCookies() || ss === 'none';
+  const ssCap = ss.charAt(0).toUpperCase() + ss.slice(1);
+  const secureSuffix = isProd ? '; Secure' : '';
   const now = Math.floor(Date.now() / 1000);
   const accessDecoded = jwt.decode(access);
   const refreshDecoded = jwt.decode(refresh);
   const maxAgeAccess = (accessDecoded && typeof accessDecoded.exp === 'number' ? accessDecoded.exp : now + 900) - now;
   const maxAgeRefresh = (refreshDecoded && typeof refreshDecoded.exp === 'number' ? refreshDecoded.exp : now + 604800) - now;
   res.setHeader('Set-Cookie', [
-    `vox_access=${access}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeAccess}${isProd ? '; Secure' : ''}`,
-    `vox_refresh=${refresh}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAgeRefresh}${isProd ? '; Secure' : ''}`,
+    `vox_access=${access}; HttpOnly; SameSite=${ssCap}; Path=/; Max-Age=${maxAgeAccess}${secureSuffix}`,
+    `vox_refresh=${refresh}; HttpOnly; SameSite=${ssCap}; Path=/; Max-Age=${maxAgeRefresh}${secureSuffix}`,
   ]);
 }
 
 function clearAuthCookies(res) {
-  const isProd = useSecureCookies();
+  const ss = cookieSameSite();
+  const isProd = useSecureCookies() || ss === 'none';
+  const ssCap = ss.charAt(0).toUpperCase() + ss.slice(1);
+  const secureSuffix = isProd ? '; Secure' : '';
   res.setHeader('Set-Cookie', [
-    `vox_access=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProd ? '; Secure' : ''}`,
-    `vox_refresh=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${isProd ? '; Secure' : ''}`,
+    `vox_access=; HttpOnly; SameSite=${ssCap}; Path=/; Max-Age=0${secureSuffix}`,
+    `vox_refresh=; HttpOnly; SameSite=${ssCap}; Path=/; Max-Age=0${secureSuffix}`,
   ]);
 }
 

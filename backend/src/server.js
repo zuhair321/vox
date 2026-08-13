@@ -165,6 +165,24 @@ app.use(
 // ── Legal / public pages (privacy policy for Play Console + in-app) ──
 app.use(legalRouter);
 
+// Public, no-auth probes — desktop client-mode uses /api/server-info to
+// prove reachability + identity before letting the user submit
+// credentials. /api/health is the deeper liveness check (also used by
+// the splash probe on cold start in client mode).
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({ ok: true, ts: Date.now(), uptime: process.uptime(), version: process.env.npm_package_version || 'dev' });
+});
+app.get('/api/server-info', (_req, res) => {
+  res.status(200).json({
+    name: 'VOX',
+    product: 'vox',
+    version: process.env.npm_package_version || 'dev',
+    allowRegistration: process.env.VOX_DISABLE_REGISTRATION !== '1',
+    crossOriginCookieCapable: true,
+  });
+});
+
+
 // ── Health / boot diagnostics (readiness check) ───────────
 app.get('/health', async (req, res) => {
   try {

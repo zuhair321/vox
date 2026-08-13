@@ -84,10 +84,41 @@ function loadAppConfig() {
 
   if (process.env.VOX_API_BASE) apiBase = process.env.VOX_API_BASE;
 
-  return { apiBase, mode: 'local', hosted: false };
+  let mode = 'local';
+  let lastSeenReachable = null;
+  try {
+    if (typeof readUserAppConfig === 'function') {
+      const u = readUserAppConfig();
+      if (u && u.mode) mode = u.mode;
+      if (u && u.lastSeenReachable) lastSeenReachable = u.lastSeenReachable;
+      if (mode === 'client' && u && u.apiBase) apiBase = u.apiBase;
+    }
+  } catch { /* ignore */ }
+  try {
+    const sp = IS_PACKAGED
+      ? require('path').join(process.resourcesPath, 'app-config.json')
+      : require('path').join(PROJECT_ROOT, 'frontend', 'public', 'app-config.json');
+    if (fs.existsSync(sp)) {
+      const sc = JSON.parse(fs.readFileSync(sp, 'utf8'));
+      if (mode === 'local' && sc && sc.mode) mode = sc.mode;
+    }
+  } catch { /* ignore */ }
+  if (process.env.VOX_API_BASE) {
+    apiBase = process.env.VOX_API_BASE;
+    mode = 'client';
+  }
+  if (mode !== 'local' && mode !== 'client') mode = 'client';
+  return { apiBase, mode, hosted: mode === 'client', lastSeenReachable };
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Client vs local mode gate; renderer is source of truth for WHICH server we talk to.
+// In 'client' mode we skip Postgres + bundled-backend bootstrap so splash-to-chat
+// takes ~few hundred ms instead of 2-3s.
+function shouldRunLocalBackend(appCfg) {
+  return appCfg && appCfg.mode === 'local';
+}
+
 //  AppData directories — all writable data lives in %APPDATA%/VOX-Desktop
 // ═══════════════════════════════════════════════════════════════════
 
@@ -99,6 +130,37 @@ const VOX_CRASH_DUMPS = path.join(VOX_USER_DATA, 'Crashpad');
 app.setPath('userData',  VOX_USER_DATA);
 app.setPath('cache',     VOX_CACHE);
 app.setPath('crashDumps', VOX_CRASH_DUMPS);
+
+// ─── Vox App Config (per-user w/ IPC bridge to renderer) ────────────────────────────────
+// Writable per-user config lives at %APPDATA%/VOX-Desktop/app-config.json. The
+// Renderer is the source of truth for WHICH server we talk to — it mutates
+// this file via vox:get-config / vox:set-config / vox:reset-config IPC.
+const DEFAULT_USER_CONFIG = Object.freeze({
+  mode: 'local',
+  apiBase: 'http://127.0.0.1:4000',
+  lastSeenReachable: null,
+  schemaVersion: 1,
+});
+
+function readUserAppConfig() {
+  try {
+    const p = path.join(VOX_USER_DATA, 'app-config.json');
+    if (!fs.existsSync(p)) return { ...DEFAULT_USER_CONFIG };
+    const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+    return { ...DEFAULT_USER_CONFIG, ...parsed };
+  } catch { return { ...DEFAULT_USER_CONFIG }; }
+}
+
+function writeUserAppConfig(next) {
+  try {
+    const p = path.join(VOX_USER_DATA, 'app-config.json');
+    const merged = { ...readUserAppConfig(), ...next, schemaVersion: 1 };
+    fs.writeFileSync(p, JSON.stringify(merged, null, 2), 'utf8');
+    return merged;
+  } catch { return readUserAppConfig(); }
+}
+
+function safeJsonParse(s) { try { return JSON.parse(s); } catch { return null; } }
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -1011,36 +1073,33 @@ function createWindow() {
   writeMain('VOX starting. isPackaged=' + IS_PACKAGED);
 
   if (IS_PACKAGED) {
-    // Prefer an unpacked dist (resources/frontend/dist/index.html) over the
-    // one inside app.asar so local SPA rebuilds don't have to repack asar.
-    // If both files exist, the unpacked one wins — it is treated as a hot
-    // override; we only fall back to the asar copy when nothing has been
-    // unpacked next to the binary.
-    const packedAsarDist = path.join(__dirname, 'frontend', 'dist', 'index.html');
-    const unpackedDist = path.join(process.resourcesPath, 'frontend', 'dist', 'index.html');
-    const fromAsar = fs.existsSync(packedAsarDist);
-    const fromUnpacked = fs.existsSync(unpackedDist);
-    let indexPath;
-    if (fromUnpacked) {
-      // Sanity-check the unpacked one covers a recent rebuild (has assets/).
-      const unpackedAssets = path.join(process.resourcesPath, 'frontend', 'dist', 'assets');
-      if (fs.existsSync(unpackedAssets)) {
-        indexPath = unpackedDist;
-        writeMain('Loading (unpacked resources): ' + indexPath);
-      } else {
-        indexPath = fromAsar ? packedAsarDist : unpackedDist;
-        writeMain('Loading: ' + indexPath);
-      }
-    } else if (fromAsar) {
-      indexPath = packedAsarDist;
-      writeMain('Loading (asar): ' + indexPath);
-    } else {
-      indexPath = packedAsarDist; // last resort — let electron surface the error
-      writeMain('Loading (fallback): ' + indexPath);
-    }
-    mainWindow.loadFile(indexPath)
-      .then(() => writeMain('loadFile succeeded'))
-      .catch((e) => writeMain('loadFile FAILED: ' + e.message));
+    // Load via http://127.0.0.1:4000/ (same origin as the backend). Cookies
+    // the backend sets (HttpOnly, SameSite=Lax) MUST go back to a same-origin
+    // page; a file:// page is treated as a different origin and the cookies
+    // are silently dropped, which made every authenticated fetch 401 and
+    // bounced the user back to /login mid-action. Loading the SPA from the
+    // backend over HTTP keeps cookies in scope. The backend serves the SPA
+    // from /api/spa when SERVE_FRONTEND=1 (set by the packaged boot path).
+    //
+    // As a fallback for installations where the bundled backend failed to
+    // bind 4000, fall back to resources/frontend/dist/index.html (file://) so
+    // the window still shows something while we surface the error.
+    const appUrl = appConfig.apiBase + '/';
+    writeMain('Loading (HTTP origin): ' + appUrl);
+    mainWindow.loadURL(appUrl)
+      .then(() => writeMain('loadURL succeeded'))
+      .catch((e) => {
+        writeMain('loadURL FAILED, falling back to file://: ' + e.message);
+        const unpackedDist = path.join(process.resourcesPath, 'frontend', 'dist', 'index.html');
+        const packedAsarDist = path.join(__dirname, 'frontend', 'dist', 'index.html');
+        const fallback = fs.existsSync(unpackedDist) ? unpackedDist
+          : fs.existsSync(packedAsarDist) ? packedAsarDist : null;
+        if (fallback) {
+          mainWindow.loadFile(fallback)
+            .then(() => writeMain('loadFile fallback succeeded'))
+            .catch((err) => writeMain('loadFile fallback FAILED: ' + err.message));
+        }
+      });
   } else {
     const appUrl = appConfig.apiBase + '/';
     writeMain('Loading: ' + appUrl);
@@ -1251,16 +1310,18 @@ async function start() {
   // covers this boot; the window is created AFTER the backend answers so its
   // first load succeeds immediately instead of staring at ERR_CONNECTION_REFUSED
   // retries for seconds (which read as "stuck on a black screen").
-  setSplashStatus('Connecting vault…');
-  try {
-    await runDbBootstrap();
-  } catch (err) {
-    console.error('[Startup] DB bootstrap error:', err.message);
-  }
+  setSplashStatus(shouldRunLocalBackend(appConfig) ? 'Connecting vault…' : 'Probing server…');
 
-  try {
-    setSplashStatus('Waking backend…');
-    const result = await startBackend();
+  if (shouldRunLocalBackend(appConfig)) {
+    try {
+      await runDbBootstrap();
+    } catch (err) {
+      console.error('[Startup] DB bootstrap error:', err.message);
+    }
+
+    try {
+      setSplashStatus('Waking backend…');
+      const result = await startBackend();
     if (result.ready) {
       console.log('[Startup] Backend ready.');
     } else {
@@ -1284,8 +1345,23 @@ async function start() {
         );
       }
     }
-  } catch (err) {
-    console.error('[Startup] Backend error:', err.message);
+    } catch (err) {
+      console.error('[Startup] Backend error:', err.message);
+    }
+  } else {
+    console.log('[Startup] Client mode — skipping local backend bootstrap.');
+    // Best-effort reachability probe so the splash shows honest status before
+    // the window loads.
+    try {
+      const probeUrl = String(appConfig.apiBase || '').replace(/\/$/, '') + '/api/health';
+      const u = new URL(probeUrl);
+      const lib = u.protocol === 'https:' ? require('https') : require('http');
+      await new Promise((resolve) => {
+        const req = lib.get(probeUrl, { timeout: 2000 }, (res) => { res.resume(); resolve(); });
+        req.on('error', () => resolve());
+        req.on('timeout', () => { req.destroy(); resolve(); });
+      });
+    } catch { /* ignore — we still create the window so the renderer can show its own error UI */ }
   }
 
   // Window + tray come after the backend is listening so the first paint is
@@ -1323,6 +1399,58 @@ process.on('uncaughtException', (err) => {
 app.whenReady().then(start);
 app.on('before-quit', () => { isQuitting = true; });
 
+
+// ─── Vox App Config IPC (renderer ↔ main) ─────────────────────────────────────
+// Surface for the renderer to read / mutate %APPDATA%/VOX-Desktop/app-config.json
+// and to reachability-probe an arbitrary URL (no auth, no rate-limit).
+ipcMain.handle('vox:get-config', () => readUserAppConfig());
+ipcMain.handle('vox:set-config', (_e, next) => {
+  const s = (next && typeof next === 'object') ? next : {};
+  if (typeof s.apiBase === 'string' && s.apiBase.length) {
+    try {
+      const u = new URL(s.apiBase);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return { ok: false, reason: 'apiBase must be http(s)' };
+      s.apiBase = u.toString().replace(/\/$/, '');
+    } catch { return { ok: false, reason: 'apiBase is not a valid URL' }; }
+  }
+  if (s.mode && !['client', 'local'].includes(s.mode)) return { ok: false, reason: 'mode must be client or local' };
+  const merged = writeUserAppConfig(s);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    process.env.VOX_APP_CONFIG = JSON.stringify({ apiBase: merged.apiBase, mode: merged.mode });
+    mainWindow.webContents.send('vox:config-changed', merged);
+  }
+  return { ok: true, config: merged };
+});
+ipcMain.handle('vox:reset-config', () => {
+  try { const p = path.join(VOX_USER_DATA, 'app-config.json'); if (fs.existsSync(p)) fs.unlinkSync(p); } catch {}
+  const def = { ...DEFAULT_USER_CONFIG };
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    process.env.VOX_APP_CONFIG = JSON.stringify({ apiBase: def.apiBase, mode: def.mode });
+    mainWindow.webContents.send('vox:config-changed', def);
+  }
+  return { ok: true, config: def };
+});
+ipcMain.handle('vox:test-reachability', async (_e, url) => {
+  if (typeof url !== 'string' || !url) return { ok: false, reason: 'no-url', latencyMs: null };
+  let target;
+  try { target = new URL(url.replace(/\/$/, '') + '/api/server-info').toString(); } catch { return { ok: false, reason: 'bad-url', latencyMs: null }; }
+  const lib = target.startsWith('https:') ? require('https') : require('http');
+  const start = Date.now();
+  return new Promise((resolve) => {
+    const req = lib.get(target, { timeout: 5000 }, (res) => {
+      const latencyMs = Date.now() - start;
+      let body = '';
+      res.on('data', (c) => { body += c.toString(); });
+      res.on('end', () => {
+        const ok = res.statusCode >= 200 && res.statusCode < 400;
+        if (ok) writeUserAppConfig({ lastSeenReachable: new Date().toISOString() });
+        resolve({ ok, status: res.statusCode, latencyMs, info: ok ? safeJsonParse(body) : null, reason: ok ? null : 'http-' + res.statusCode });
+      });
+    });
+    req.on('error', (e) => resolve({ ok: false, reason: e.code || e.message, latencyMs: null }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, reason: 'timeout', latencyMs: null }); });
+  });
+});
 
 // ─── Auto-updater (electron-updater) ───────────────────────────────────
 // Lazy-loaded: only paid for when an actual update is requested. The
@@ -1384,7 +1512,36 @@ async function wireUpdaterEvents() {
   updater.on('error', (err) => broadcastUpdaterState({ phase: 'ERROR', error: err && err.message }));
 }
 
-app.whenReady().then(() => { wireUpdaterEvents(); });
+app.whenReady().then(() => {
+  wireUpdaterEvents();
+  // Kick an initial check shortly after boot (10s gives the window time to
+  // mount and the user a chance to see the result).
+  setTimeout(() => {
+    ipcMain.emit('updater:autoCheck');
+  }, 10_000);
+  // …then poll every 6h so a long-lived desktop session eventually
+  // catches up to a release without a manual restart.
+  setInterval(() => {
+    ipcMain.emit('updater:autoCheck');
+  }, 6 * 60 * 60 * 1000);
+});
+
+// shared autoCheck — used by both initial 10s kick and the 6h poll.
+ipcMain.on('updater:autoCheck', async () => {
+  const updater = await getAutoUpdater();
+  if (!updater) return;
+  try {
+    const result = await updater.checkForUpdates();
+    // electron-updater doesn't log when update-not-available fires if the
+    // current and remote are the same; swallow nothing here.
+    if (result && result.updateInfo) {
+      console.log('[updater] check complete:', result.updateInfo.version);
+    }
+  } catch (e) {
+    // Don't crash the app on a transient network blip — the next poll retries.
+    console.warn('[updater] auto check failed:', e && e.message);
+  }
+});
 
 app.on('window-all-closed', () => {
   if (backendProc) backendProc.kill();

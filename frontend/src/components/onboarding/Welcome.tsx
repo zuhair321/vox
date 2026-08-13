@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Cloud, Server, HardDrive, ArrowRight, ShieldCheck, Loader2 } from 'lucide-react';

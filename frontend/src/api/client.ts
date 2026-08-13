@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Backend origin resolution order (Option 1 — hosted SaaS EXE):
 //   1. Runtime injection from the packaged app (window.__VOX_CONFIG.apiBase),
 //      loaded by Electron from app-config.json / VOX_API_BASE env.

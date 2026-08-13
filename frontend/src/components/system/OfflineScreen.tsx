@@ -28,11 +28,11 @@ const OfflineScreen: React.FC<Props> = ({ apiBase, onRetry, onChangeServer, retr
         color: '#e6e8ef',
       }}>
         <WifiOff size={36} color="#c0523e" style={{ marginBottom: 12 }} />
-        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#f0e6d2' }}>Can't reach your server</h2>
+        <h2 style={{ margin: 0, fontSize: 20, fontWeight: 600, color: '#f0e6d2' }}>Can’t reach your server</h2>
         <p style={{ marginTop: 8, color: '#a39cb5', fontSize: 13.5, lineHeight: 1.5 }}>
           VOX tried to connect to{' '}
           <code style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderRadius: 4, color: '#d7a94a' }}>{apiBase}</code>{' '}
-          but didn't get an answer. {lastError ? <span style={{ color: '#c0523e' }}>({lastError})</span> : null}
+          but did not get an answer. {lastError ? <span style={{ color: '#c0523e' }}>({lastError})</span> : null}
         </p>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 22 }}>
           <button

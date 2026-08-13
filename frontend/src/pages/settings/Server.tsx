@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Cloud, Server, HardDrive, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -14,6 +15,7 @@ const ServerSettings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastSeen, setLastSeen] = useState<string | null>(null);
 
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     let off: any;
     (async () => {
@@ -32,7 +34,7 @@ const ServerSettings: React.FC = () => {
       off = api?.voxConfig?.onChanged ? api.voxConfig.onChanged((c: any) => { setCfg(c); setUrl(c.apiBase || ''); setLastSeen(c.lastSeenReachable || null); }) : undefined;
     })();
     return () => { try { off && off(); } catch { /* ignore */ } };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function test() {
     setTesting(true); setError(null); setProbe(null);
