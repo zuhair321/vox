@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     set: (next) => ipcRenderer.invoke('vox:set-config', next).then((r) => ({ ...r, config: r.config ? normalizeConfig(r.config) : null })),
     reset: () => ipcRenderer.invoke('vox:reset-config').then((r) => ({ ...r, config: r.config ? normalizeConfig(r.config) : null })),
     testReachability: (url) => ipcRenderer.invoke('vox:test-reachability', url),
+    isFirstRun: () => ipcRenderer.invoke('vox:is-first-run'),
     onChanged: (callback) => {
       const wrapped = (_event, next) => callback(normalizeConfig(next));
       ipcRenderer.on('vox:config-changed', wrapped);

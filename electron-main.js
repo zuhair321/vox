@@ -1404,6 +1404,12 @@ app.on('before-quit', () => { isQuitting = true; });
 // Surface for the renderer to read / mutate %APPDATA%/VOX-Desktop/app-config.json
 // and to reachability-probe an arbitrary URL (no auth, no rate-limit).
 ipcMain.handle('vox:get-config', () => readUserAppConfig());
+ipcMain.handle('vox:is-first-run', () => {
+  try {
+    const p = path.join(VOX_USER_DATA, 'app-config.json');
+    return !fs.existsSync(p);
+  } catch { return false; }
+});
 ipcMain.handle('vox:set-config', (_e, next) => {
   const s = (next && typeof next === 'object') ? next : {};
   if (typeof s.apiBase === 'string' && s.apiBase.length) {

@@ -173,14 +173,18 @@ const AppLayout = () => {
     // Client-mode runtime config: load + reachability probe + live updates.
   const [voxConfig, setVoxConfig] = React.useState<any>(null);
   const [serverReachable, setServerReachable] = React.useState<boolean | null>(null);
-  const [configLoaded, setConfigLoaded] = React.useState(false);
   React.useEffect(() => {
     let cancelled = false;
     const api: any = (window as any).electronAPI;
     (async () => {
       try {
         const cfg = api?.voxConfig?.get ? await api.voxConfig.get() : null;
-        if (!cancelled) { setVoxConfig(cfg); setConfigLoaded(true); }
+        try {
+          // App() is the source of truth for first-run gating; AppLayout
+          // only mirrors voxConfig + serverReachable. We deliberately do
+          // not call isFirstRun here so we do not duplicate state.
+          await api?.voxConfig?.isFirstRun?.();
+        } catch {}
         if (cfg && cfg.mode === 'client' && cfg.apiBase) {
           try {
             const t = await import('./api/client');
@@ -188,7 +192,7 @@ const AppLayout = () => {
             if (!cancelled) setServerReachable(probe.ok);
           } catch { if (!cancelled) setServerReachable(false); }
         } else if (cfg) { if (!cancelled) setServerReachable(true); }
-      } catch { if (!cancelled) setConfigLoaded(true); }
+      } catch { /* App() is the source of truth for first-run; AppLayout only updates voxConfig state */ }
     })();
     const off = api?.voxConfig?.onChanged ? api.voxConfig.onChanged((n: any) => setVoxConfig(n)) : () => {};
     return () => { cancelled = true; try { off && off(); } catch {} };
@@ -264,10 +268,7 @@ const { user, accessToken, isLoading } = useAuthStore();
   return (
     <div className="app-container">
       <TitleBar />
-      {configLoaded && voxConfig && (!voxConfig.mode || !voxConfig.apiBase) && (
-        <Welcome onSelected={(cfg: any) => { setVoxConfig(cfg); }} />
-      )}
-      {configLoaded && voxConfig && voxConfig.mode === 'client' && serverReachable === false && (
+      {voxConfig && voxConfig.mode === 'client' && serverReachable === false && (
         <OfflineScreen
           apiBase={voxConfig.apiBase}
           onRetry={async () => {
@@ -424,8 +425,33 @@ function App() {
     initialize();
   }, [initialize]);
 
+  // Client-mode runtime config: load + first-run flag (used to gate Welcome
+  // above the Login route so first-install users see the picker first).
+  const [configLoaded, setConfigLoaded] = React.useState(false);
+  const [isFirstRun, setIsFirstRun] = React.useState(true);
+  React.useEffect(() => {
+    let cancelled = false;
+    const api: any = (window as any).electronAPI;
+    (async () => {
+      try {
+        if (api?.voxConfig?.get) await api.voxConfig.get();
+        if (!cancelled) setConfigLoaded(true);
+        try {
+          const isFirst = api?.voxConfig?.isFirstRun ? await api.voxConfig.isFirstRun() : false;
+          if (!cancelled) setIsFirstRun(!!isFirst);
+        } catch { /* if IPC fails, keep the existing default of true */ }
+      } catch {
+        if (!cancelled) setConfigLoaded(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   return (
     <ErrorBoundary>
+      {configLoaded && isFirstRun && (
+        <Welcome onSelected={(_cfg: any) => { setIsFirstRun(false); }} />
+      )}
       <Routes>
         <Route path="/login" element={<LoginDummy />} />
         <Route path="/register" element={<RegisterPage />} />
