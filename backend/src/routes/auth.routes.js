@@ -103,8 +103,11 @@ authRouter.post('/2fa/login', authLimiter, async (req, res, next) => {
 
 authRouter.post('/refresh', sensitiveLimiter, async (req, res, next) => {
   try {
-    const refreshToken = req.body?.refreshToken || req.cookies?.vox_refresh;
-    if (!refreshToken) throw new HttpError(400, 'refreshToken is required.');
+    // F1 (privacy): refresh comes from the HttpOnly cookie ONLY.
+    // The previous body-fallback exposed the refresh token to renderer JS,
+    // which compromised the entire XSS-resistance of HttpOnly cookies.
+    const refreshToken = req.cookies?.vox_refresh;
+    if (!refreshToken) throw new HttpError(401, 'Session expired. Please sign in again.');
     const result = await auth.refreshTokens(refreshToken);
     setAuthCookies(res, result.tokens.access, result.tokens.refresh);
     res.json(sessionPayload(result));
@@ -113,7 +116,8 @@ authRouter.post('/refresh', sensitiveLimiter, async (req, res, next) => {
 
 authRouter.post('/logout', async (req, res, next) => {
   try {
-    await auth.logout(req.body?.refreshToken || req.cookies?.vox_refresh);
+    // F1 (privacy): the refresh token is in the cookie, never the body.
+    await auth.logout(req.cookies?.vox_refresh);
     clearAuthCookies(res);
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -135,6 +139,37 @@ const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(32).optional(),
   bio: z.string().max(255).nullable().optional(),
   status: z.enum(['ONLINE', 'IDLE', 'DND', 'OFFLINE']).optional(),
+});
+
+// F3 (privacy): per-user X25519 public key exchange for DMs.
+// PUT /api/auth/me/keys writes the CALLER's publicKey + fingerprint + rotates keyVersion.
+// GET /api/auth/users/:id/pubkey returns a peer's public key + fingerprint.
+authRouter.put('/me/keys', requireAuth, async (req, res, next) => {
+  try {
+    const publicKey = String(req.body?.publicKey || '').trim();
+    const fingerprint = String(req.body?.publicKeyFingerprint || '').trim();
+    if (!publicKey || publicKey.length < 16 || publicKey.length > 4096)
+      throw new HttpError(400, 'publicKey is required (16-4096 chars).');
+    if (!fingerprint || fingerprint.length !== 64)
+      throw new HttpError(400, 'publicKeyFingerprint must be 64-hex SHA-256.');
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { publicKey, publicKeyFingerprint: fingerprint, keyRotatedAt: new Date() },
+      select: { id: true, publicKey: true, publicKeyFingerprint: true, keyRotatedAt: true },
+    });
+    res.json({ ok: true, keys: updated });
+  } catch (e) { next(e); }
+});
+
+authRouter.get('/users/:id/pubkey', requireAuth, async (req, res, next) => {
+  try {
+    const peer = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, publicKey: true, publicKeyFingerprint: true, keyRotatedAt: true },
+    });
+    if (!peer) throw new HttpError(404, 'User not found.');
+    res.json({ peer });
+  } catch (e) { next(e); }
 });
 
 authRouter.patch('/me', requireAuth, async (req, res, next) => {

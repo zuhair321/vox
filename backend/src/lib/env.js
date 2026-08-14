@@ -107,7 +107,7 @@ export const env = {
     accessSecret: process.env.JWT_ACCESS_SECRET,
     refreshSecret: process.env.JWT_REFRESH_SECRET,
     accessTtl: process.env.JWT_ACCESS_TTL || '30m',
-    refreshTtl: process.env.JWT_REFRESH_TTL || '30d',
+    refreshTtl: process.env.JWT_REFRESH_TTL || '14d',
   },
   twoFactor: {
     appName: process.env.TWO_FACTOR_APP_NAME || 'VOX',

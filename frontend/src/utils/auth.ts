@@ -13,11 +13,12 @@ const SESSION_KEYS = [
   'vox_notifications',
   'vox_onboarding_done',
   'vox_access',
-  'vox_refresh',
+  // F1 (privacy): refresh is HttpOnly cookie only, never in JS storage.
 ];
 
 export function logout() {
-  const refreshToken = sessionStorage.getItem('vox_refresh') || localStorage.getItem('vox_refresh') || '';
+  // F1 (privacy): refreshed server-side via HttpOnly cookie; no body needed.
+  const refreshToken = '';
   
   try {
     const ctrl = new AbortController();
@@ -34,8 +35,8 @@ export function logout() {
     // Network/abort failure — proceed with local teardown regardless.
   }
 
-  document.cookie = 'vox_access=; Path=/; Max-Age=0; SameSite=Lax';
-  document.cookie = 'vox_refresh=; Path=/; Max-Age=0; SameSite=Lax';
+  // F1 (privacy): HttpOnly cookies can't be cleared from JS — the backend's
+  // clearAuthCookies() on /api/auth/logout is what actually expires the session.
 
   try {
     useSocketStore.getState().disconnect();
