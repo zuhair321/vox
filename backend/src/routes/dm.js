@@ -152,18 +152,26 @@ dmRouter.get('/dm/:dmId/messages', requireAuth, async (req, res, next) => {
 dmRouter.post('/dm/:dmId/messages', requireAuth, dmLimiter, async (req, res, next) => {
   try {
     const dmId = req.params.dmId;
-    const content = sanitize(String(req.body?.content || ''));
     const attachments = normalizeAttachments(req.body?.attachments);
 
-    if (!dmId.includes(req.user.id)) throw new HttpError(403, 'Not authorized');
-    if (!content && attachments.length === 0) throw new HttpError(400, 'Content or attachment is required');
+    // F3 (privacy): accept an end-to-end encrypted envelope OR a legacy
+    // plaintext body. The server stores ciphertext+nonce, NEVER sees the
+    // symmetric key. content is set to NULL on E2E rows.
+    const ciphertext = typeof req.body?.ciphertext === 'string' ? req.body.ciphertext.trim() : '';
+    const nonce = typeof req.body?.nonce === 'string' ? req.body.nonce.trim() : '';
+    const envelopeKeyVersion = Number.isInteger(req.body?.keyVersion) ? req.body.keyVersion : 1;
+    const envelopeFingerprint = typeof req.body?.senderKeyFingerprint === 'string' ? req.body.senderKeyFingerprint.trim() : '';
+    const legacyContent = ciphertext || nonce ? '' : sanitize(String(req.body?.content || ''));
 
-    // dmId is the two participant ids joined by '_' (sorted). Recover the
-    // recipient by dropping our own id from the string.
+    if (!dmId.includes(req.user.id)) throw new HttpError(403, 'Not authorized');
+    if (!ciphertext && !nonce && !legacyContent && attachments.length === 0)
+      throw new HttpError(400, 'Content, envelope, or attachment is required');
+    if (ciphertext && (!nonce || envelopeFingerprint.length < 4))
+      throw new HttpError(400, 'Envelope requires nonce + senderKeyFingerprint');
+
     const recipientId = dmId.replace(req.user.id, '').replace(/^_+|_+$/g, '');
     if (!recipientId) throw new HttpError(400, 'Invalid DM channel.');
 
-    // Block check
     const block = await prisma.block.findFirst({
       where: {
         OR: [
@@ -176,7 +184,11 @@ dmRouter.post('/dm/:dmId/messages', requireAuth, dmLimiter, async (req, res, nex
 
     const message = await prisma.dmMessage.create({
       data: {
-        content: String(content || ''),
+        content: legacyContent || null,
+        ciphertext: ciphertext || null,
+        nonce: nonce || null,
+        keyVersion: ciphertext ? envelopeKeyVersion : 1,
+        senderKeyFingerprint: ciphertext ? envelopeFingerprint : null,
         attachments: attachments.length ? attachments : undefined,
         dmId,
         senderId: req.user.id,
@@ -187,6 +199,9 @@ dmRouter.post('/dm/:dmId/messages', requireAuth, dmLimiter, async (req, res, nex
         recipient: true
       }
     });
+    // F3 (privacy): strip any plaintext from the response on E2E rows so it
+    // never leaks back to a renderer that should be decrypting client-side.
+    if (message.ciphertext) message.content = null;
 
     // Mirror the socket path: deliver to both participants' personal rooms so
     // an HTTP-sent DM still shows up live for the recipient and the sender.

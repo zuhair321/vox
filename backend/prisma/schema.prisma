@@ -267,7 +267,18 @@ model Message {
 
 model DmMessage {
   id          String   @id @default(uuid())
-  content     String
+  /// Plaintext kept ONLY for the legacy / migration window. E2E rows have this NULL.
+  content     String?
+  /// Base64 X25519 + ChaCha20-Poly1305 envelope. The server NEVER holds the key.
+  ciphertext  String?
+  /// Base64 12-byte nonce paired with `ciphertext`.
+  nonce       String?
+  /// Bumped when the sender rotates their keypair. The receiver uses this to
+  /// select which stored peer public key to use for decryption.
+  keyVersion  Int      @default(1)
+  /// SHA-256 fingerprint of the sender's public key at encryption time —
+  /// the UI shows this as a verifiable lock badge and warns on mismatch.
+  senderKeyFingerprint String?
   attachments Json?
   dmId        String
   senderId    String
@@ -283,6 +294,7 @@ model DmMessage {
   @@index([dmId, createdAt])
   @@index([recipientId, read])
   @@index([senderId, createdAt])
+  @@index([dmId, keyVersion])
 }
 
 // ─── Friend ──────────────────────────────────────────────────────

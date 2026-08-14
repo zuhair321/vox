@@ -87,6 +87,7 @@ const ROUTE_REGISTRY = [
   ['/api', './routes/feedback.routes.js', 'feedbackRouter'],
   ['/api', './routes/moderation.routes.js', 'moderationRouter'],
   ['/api', './routes/custom-powers.routes.js', 'customPowersRouter'],
+  ['/api', './routes/keys.routes.js', 'keysRouter'],
 ];
 
 // Check database mode at startup. If DATABASE_URL is missing, we default to a

@@ -13,10 +13,34 @@ export function buildDmId(userAId: string, userBId: string): string {
 
 export const fetchDMMessages = (dmId: string) => api(`/api/dm/${dmId}/messages`);
 
-export const sendDMHTTP = (dmId: string, content: string, attachments?: Attachment[]) =>
+export interface DMEnvelope {
+  ciphertext: string;
+  nonce: string;
+  keyVersion: number;
+  senderKeyFingerprint: string;
+}
+
+export const sendDMHTTP = (
+  dmId: string,
+  content: string,
+  attachments?: Attachment[],
+  envelope?: DMEnvelope | null,
+) =>
   api(`/api/dm/${dmId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ content, attachments })
+    // F3: if the envelope is present, the SERVER ONLY sees ciphertext + nonce;
+    // content is left blank so the wire never carries plaintext.
+    body: JSON.stringify(
+      envelope
+        ? {
+            ciphertext: envelope.ciphertext,
+            nonce: envelope.nonce,
+            keyVersion: envelope.keyVersion,
+            senderKeyFingerprint: envelope.senderKeyFingerprint,
+            attachments,
+          }
+        : { content, attachments },
+    ),
   });
 
 export const editDM = (dmId: string, messageId: string, content: string) =>
