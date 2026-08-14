@@ -1481,16 +1481,18 @@ function broadcastUpdaterState(state) {
 }
 
 ipcMain.handle('updater:check', async () => {
+  if (!app.isPackaged) return { ok: true, status: 'dev' };
   const updater = await getAutoUpdater();
-  if (!updater) return { ok: false, reason: 'electron-updater not available' };
-  try { await updater.checkForUpdates(); return { ok: true }; }
-  catch (e) { return { ok: false, reason: e && e.message }; }
+  if (!updater) return { ok: false, status: 'unavailable', error: 'electron-updater not bundled' };
+  try { await updater.checkForUpdates(); return { ok: true, status: 'ready' }; }
+  catch (e) { return { ok: false, status: 'error', error: e && e.message ? String(e.message) : 'unknown' }; }
 });
 ipcMain.handle('updater:download', async () => {
+  if (!app.isPackaged) return { ok: true, status: 'dev' };
   const updater = await getAutoUpdater();
-  if (!updater) return { ok: false, reason: 'electron-updater not available' };
-  try { await updater.downloadUpdate(); return { ok: true }; }
-  catch (e) { return { ok: false, reason: e && e.message }; }
+  if (!updater) return { ok: false, status: 'unavailable', error: 'electron-updater not bundled' };
+  try { await updater.downloadUpdate(); return { ok: true, status: 'downloading' }; }
+  catch (e) { return { ok: false, status: 'error', error: e && e.message ? String(e.message) : 'unknown' }; }
 });
 ipcMain.handle('updater:quit-and-install', async () => {
   const updater = await getAutoUpdater();
@@ -1499,23 +1501,61 @@ ipcMain.handle('updater:quit-and-install', async () => {
   catch (e) { return { ok: false, reason: e && e.message }; }
 });
 ipcMain.handle('updater:state', async () => {
+  // F2: tell the renderer explicitly whether we're packaged. UpdateModal
+  // uses this to decide between showing the real notice and the 'Updates
+  // are available in the desktop build' toast in dev / unpackaged runs.
+  if (!app.isPackaged) return { status: 'dev', available: false, downloaded: false, version: null, progress: 0, error: null };
   const updater = await getAutoUpdater();
-  if (!updater) return { available: false };
+  if (!updater) return { status: 'unavailable', available: false, downloaded: false, version: null, progress: 0, error: 'electron-updater not bundled' };
   try {
-    return { available: true, version: updater.currentVersion, channel: updater.channel || null };
-  } catch (_) { return { available: false }; }
+    return { status: 'ready', available: false, downloaded: false, version: updater.currentVersion ? String(updater.currentVersion) : null, progress: 0, error: null };
+  } catch (_) { return { status: 'unavailable', available: false, downloaded: false, version: null, progress: 0, error: null }; }
 });
 
 // Wire the autoUpdater lifecycle events to the renderer so the UI can show progress.
 async function wireUpdaterEvents() {
   const updater = await getAutoUpdater();
   if (!updater) return;
-  updater.on('checking-for-update', () => broadcastUpdaterState({ phase: 'CHECKING' }));
-  updater.on('update-available', (info) => broadcastUpdaterState({ phase: 'AVAILABLE', info: { version: info && info.version, releaseDate: info && info.releaseDate } }));
-  updater.on('download-progress', (p) => broadcastUpdaterState({ phase: 'DOWNLOADING', progress: { percent: Math.round((p && p.percent) || 0), transferred: p && p.transferred, total: p && p.total } }));
-  updater.on('update-downloaded', (info) => broadcastUpdaterState({ phase: 'READY', info: { version: info && info.version } }));
-  updater.on('update-not-available', () => broadcastUpdaterState({ phase: 'IDLE' }));
-  updater.on('error', (err) => broadcastUpdaterState({ phase: 'ERROR', error: err && err.message }));
+  // F2: align the broadcast shape with frontend/src/types/electron.ts'
+  // UpdaterState. The renderer's useUpdateStore and UpdateModal.tsx both
+  // read { available, downloaded, version, progress, error } directly —
+  // so we forward each event translated to that shape.
+  updater.on('checking-for-update', () =>
+    broadcastUpdaterState({ available: false, downloaded: false, version: null, progress: 0, error: null, phase: 'CHECKING' })
+  );
+  updater.on('update-available', (info) =>
+    broadcastUpdaterState({
+      available: true, downloaded: false, progress: 0, error: null,
+      version: info && info.version ? String(info.version) : null,
+      releaseNotes: info && (info.releaseNotes || info.releaseNotesHTML) ? String(info.releaseNotes || info.releaseNotesHTML) : null,
+      phase: 'AVAILABLE',
+    })
+  );
+  updater.on('download-progress', (p) =>
+    broadcastUpdaterState({
+      available: true, downloaded: false,
+      progress: Math.round((p && p.percent) || 0),
+      error: null,
+      phase: 'DOWNLOADING',
+    })
+  );
+  updater.on('update-downloaded', (info) =>
+    broadcastUpdaterState({
+      available: true, downloaded: true, progress: 100, error: null,
+      version: info && info.version ? String(info.version) : null,
+      phase: 'READY',
+    })
+  );
+  updater.on('update-not-available', () =>
+    broadcastUpdaterState({ available: false, downloaded: false, version: null, progress: 0, error: null, phase: 'IDLE' })
+  );
+  updater.on('error', (err) =>
+    broadcastUpdaterState({
+      available: false, downloaded: false, version: null, progress: 0,
+      error: err && err.message ? String(err.message) : 'Update error',
+      phase: 'ERROR',
+    })
+  );
 }
 
 app.whenReady().then(() => {

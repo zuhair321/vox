@@ -2,6 +2,7 @@ import React, { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, RotateCcw } from 'lucide-react';
 import { useUpdateStore } from '../../stores/updateStore';
+import type { UpdaterState } from '../../types/electron';
 import { useUiStore } from '../../stores/uiStore';
 
 const UpdateModal: React.FC = () => {
@@ -9,10 +10,10 @@ const UpdateModal: React.FC = () => {
   const { addToast } = useUiStore();
 
   useEffect(() => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.updater) return;
 
-    const unsub = api.updater.onState((newState: any) => {
+    const unsub = api.updater.onState((newState: UpdaterState) => {
       setState(newState);
       if (newState.available && !newState.downloaded) {
         addToast(`Update v${newState.version} is available`, 'info', { duration: 0 });
@@ -29,7 +30,7 @@ const UpdateModal: React.FC = () => {
   }, [setState, addToast]);
 
   const handleCheck = useCallback(async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.updater) return;
     const result = await api.updater.check();
     if (result.status === 'dev') {
@@ -40,7 +41,7 @@ const UpdateModal: React.FC = () => {
   }, [addToast]);
 
   const handleDownload = useCallback(async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.updater) return;
     const result = await api.updater.download();
     if (result.status === 'dev') {
@@ -51,7 +52,7 @@ const UpdateModal: React.FC = () => {
   }, [addToast]);
 
   const handleRestart = useCallback(async () => {
-    const api = (window as any).electronAPI;
+    const api = window.electronAPI;
     if (!api?.updater) return;
     await api.updater.quitAndInstall();
   }, []);

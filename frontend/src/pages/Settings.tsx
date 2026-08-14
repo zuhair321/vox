@@ -19,6 +19,7 @@ import {
   Palette,
   Paperclip,
   QrCode,
+  RefreshCw,
   Search,
   Settings as SettingsIcon,
   Shield,
@@ -42,7 +43,7 @@ type SettingsItem = {
   value?: string;
   path?: string;
   danger?: boolean;
-  action?: 'logout';
+  action?: 'logout' | 'check-updates';
 };
 
 const accountRows: SettingsItem[] = [
@@ -73,6 +74,7 @@ const appRows: SettingsItem[] = [
 
 const supportRows: SettingsItem[] = [
   { icon: HelpCircle, label: 'Support' },
+  { icon: RefreshCw, label: 'Check for Updates', action: 'check-updates' as const },
   { icon: Info, label: 'Upload Debug Logs' },
   { icon: ClipboardList, label: 'Acknowledgements' },
 ];
@@ -110,6 +112,16 @@ const Settings: React.FC = () => {
     if (row.action === 'logout') {
       setConfirmLogout(true);
       return;
+    }
+
+    if (row.action === 'check-updates') {
+      const api = (window as any).electronAPI;
+      if (!api?.updater) { addToast('Updates are available in the desktop build', 'info'); return; }
+      addToast('Checking for updates…', 'info', { duration: 2000 });
+      api.updater.check().then((res: any) => {
+        if (res?.status === 'dev') addToast('Updates will run in the installed build', 'info');
+        else if (res?.error) addToast('Update check failed: ' + res.error, 'error');
+      });
     }
     if (row.path) {
       navigate(row.path);
