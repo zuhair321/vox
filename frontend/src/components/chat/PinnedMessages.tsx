@@ -63,11 +63,18 @@ const PinnedMessages: React.FC = () => {
     <AnimatePresence>
       {showPinnedPanel && (
         <motion.div
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: 260, opacity: 1 }}
-          exit={{ width: 0, opacity: 0 }}
+          initial={{ x: 48, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 48, opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
           style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: 260,
+            zIndex: 43,
+            boxShadow: '-12px 0 40px rgba(0,0,0,0.55)',
             borderLeft: '1px solid var(--rim)',
             background:
               'linear-gradient(180deg, rgba(216, 74, 90, 0.03), transparent 26%), var(--abyss)',

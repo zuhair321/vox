@@ -116,7 +116,7 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
         </motion.div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <MessageArea channelId={selectedChannel.id} messageId={messageId} />
           <div style={{ flexShrink: 0, padding: '0 16px 24px 16px' }}>

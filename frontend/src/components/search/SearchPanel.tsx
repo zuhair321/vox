@@ -81,11 +81,18 @@ const SearchPanel: React.FC = () => {
     <AnimatePresence>
       {showSearchPanel && (
         <motion.div
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: 320, opacity: 1 }}
-          exit={{ width: 0, opacity: 0 }}
+          initial={{ x: 48, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 48, opacity: 0 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
           style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: 320,
+            zIndex: 44,
+            boxShadow: '-12px 0 40px rgba(0,0,0,0.55)',
             borderLeft: '1px solid var(--rim)',
             background: 'var(--obsidian)',
             display: 'flex',

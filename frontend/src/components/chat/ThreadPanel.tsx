@@ -117,13 +117,20 @@ const ThreadPanel: React.FC = () => {
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ width: 0, opacity: 0 }}
-        animate={{ width: 360, opacity: 1 }}
-        exit={{ width: 0, opacity: 0 }}
-        transition={{ duration: 0.2, ease: 'easeOut' }}
+        initial={{ x: 48, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 48, opacity: 0 }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
         style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: 360,
+          zIndex: 45,
           borderLeft: '1px solid var(--rim)',
           background: 'var(--abyss)',
+          boxShadow: '-12px 0 40px rgba(0,0,0,0.55)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
