@@ -54,6 +54,25 @@ serverRouter.get('/servers', requireAuth, async (req, res, next) => {
         },
       },
     });
+    // Self-heal: servers created before voice-channel seeding (or where every
+    // voice channel was deleted) get a fresh General voice channel so the
+    // sidebar never shows a dead "NO VOICE CHANNELS" section.
+    const healed = await Promise.all(
+      servers
+        .filter((s) => !s.channels.some((c) => c.type === 'VOICE'))
+        .map(async (s) => ({
+          serverId: s.id,
+          channel: await prisma.channel.create({
+            data: { id: newChannelId(), name: 'General', type: 'VOICE', serverId: s.id },
+          }),
+        })),
+    );
+    // Attach the real created channels so the response reflects the healing
+    // without a second query.
+    for (const { serverId, channel } of healed) {
+      const s = servers.find((x) => x.id === serverId);
+      if (s) s.channels.push(channel);
+    }
     res.json(servers);
   } catch (e) { next(e); }
 });
@@ -74,7 +93,12 @@ serverRouter.post('/servers', requireAuth, async (req, res, next) => {
           create: [{ userId: req.user.id, role: 'FOUNDER' }]
         },
         channels: {
-          create: [{ id: newChannelId(), name: 'general', type: 'TEXT' }]
+          // Discord-style seed: a text #general plus a General voice channel,
+          // so a fresh server is never stuck in "NO VOICE CHANNELS".
+          create: [
+            { id: newChannelId(), name: 'general', type: 'TEXT' },
+            { id: newChannelId(), name: 'General', type: 'VOICE' }
+          ]
         }
       },
       include: { channels: true, members: { include: { user: true } } }
