@@ -41,7 +41,7 @@ async function reportError(err, req) {
   if (!url) return;
   try {
     const payload = {
-      text: `🚨 VOX 5xx on ${req.method} ${req.originalUrl}\n\`\`\`${String(err.stack || err.message).slice(0, 1800)}\`\`\``,
+      text: `🚨 VOX 5xx on ${req.method} ${req.originalUrl}\n\`\`\`${String(err.stack || err.message).replace(/\/[^\s:]+/g, '[path]').slice(0, 1800)}\`\`\``,
     };
     await fetch(url, {
       method: 'POST',

@@ -20,7 +20,7 @@ import { requireAuth } from './middleware/auth.js';
 import { startDiscovery, stopDiscovery } from './lib/discovery.js';
 import { logMetrics } from './lib/monitoring.js';
 import { legalRouter } from './routes/legal.routes.js';
-import { monitorPerformance, monitorDatabaseQueries } from './middleware/performance.js';
+import { monitorPerformance } from './middleware/performance.js';
 
 // ── Crash resilience ──────────────────────────────────────────
 // After an uncaughtException the process state is undefined, so the correct
@@ -140,7 +140,6 @@ app.use(cookieParser());
 // Performance monitoring (development only)
 if (env.NODE_ENV !== 'production') {
   app.use(monitorPerformance());
-  app.use(monitorDatabaseQueries());
 }
 
 // ── Uploaded files (avatars / banners) ───────────────────────
