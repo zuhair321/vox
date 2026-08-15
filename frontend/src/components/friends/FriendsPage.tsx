@@ -8,6 +8,7 @@ import { validateUsername } from '../../utils/validation';
 import { buildDmId } from '../../api/dm';
 import StatusDot from '../void/StatusDot';
 import UserOperativeBar from '../ui/UserOperativeBar';
+import MemberPanel from '../ui/MemberPanel';
 
 function resolveMediaUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
@@ -381,6 +382,9 @@ const FriendsPage: React.FC = () => {
         
         {renderContent()}
       </div>
+
+      {/* Operatives panel — empty when no realm is selected (matches layout) */}
+      <MemberPanel />
     </div>
   );
 };
