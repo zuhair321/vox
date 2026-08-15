@@ -255,7 +255,11 @@ const { user, accessToken, isLoading } = useAuthStore();
       return;
     }
 
-    if (user && accessToken) {
+    // Cookie-based auth: the backend never returns tokens in the body
+    // (they live in HttpOnly cookies), so accessToken is always null.
+    // Gating on it would silently skip the initial servers/friends fetch,
+    // making the rail look empty until the user creates a server.
+    if (user) {
       const cachedUser = localStorage.getItem('vox_user');
       if (cachedUser) {
         try {

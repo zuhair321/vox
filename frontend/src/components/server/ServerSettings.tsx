@@ -56,6 +56,8 @@ const ServerSettings: React.FC = () => {
   const [iconBusy, setIconBusy] = useState(false);
   const [bannerBusy, setBannerBusy] = useState(false);
   const [hoveredTab, setHoveredTab] = useState<TabKey | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTyped, setDeleteTyped] = useState('');
   const { addToast } = useUiStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -99,20 +101,20 @@ const ServerSettings: React.FC = () => {
 
   const visibleTabs = TABS.filter(tab => !tab.adminOnly || canManage);
 
-  const handleDeleteServer = async () => {
-    // Use a typed-confirmation rather than window.confirm: the previous
-    // // flow let anyone one-click away a server they built. Now the user
-    // must type the server name verbatim to confirm.
-    const typed = window.prompt(
-      `💀 Permanently delete "${server.name}"?\n\n` +
-      `This deletes every channel, message, role, ban and audit log.\n\n` +
-      `Type the server name exactly to confirm:`
-    );
-    if (typed === null) return;
-    if (typed.trim() !== server.name) {
+  // Electron does NOT implement window.prompt (it returns null immediately),
+  // so delete confirmation must be an in-app modal. Open it, verify the typed
+  // name matches exactly, then delete.
+  const handleDeleteServer = () => {
+    setDeleteTyped('');
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteServer = async () => {
+    if (deleteTyped.trim() !== server.name) {
       addToast('Server name did not match — deletion cancelled.', 'warning');
       return;
     }
+    setDeleteConfirmOpen(false);
     try {
       await deleteServer(server.id);
       // Server:deleted socket broadcast also calls removeServer(); we belt-
@@ -595,6 +597,69 @@ const ServerSettings: React.FC = () => {
           e.target.value = '';
         }}
       />
+
+      {/* In-app delete confirmation — window.prompt is not implemented in
+          Electron, so this modal replaces it. */}
+      {deleteConfirmOpen && (
+        <div
+          className="confirm-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setDeleteConfirmOpen(false)}
+        >
+          <motion.div
+            className="confirm-panel"
+            initial={{ opacity: 0, scale: 0.92, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 10 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '50%',
+                background: 'linear-gradient(135deg, rgba(216,74,90,0.2), rgba(216,74,90,0.1))',
+                border: '1px solid var(--blood)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px',
+              }}>💀</div>
+              <h2 style={{ margin: 0, fontFamily: "'Cinzel', serif", fontSize: '16px', color: 'var(--ghost-white)' }}>
+                Delete "{server.name}"?
+              </h2>
+            </div>
+            <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: 'var(--ash)', fontFamily: "'Share Tech Mono', monospace", lineHeight: 1.5 }}>
+              This permanently deletes every channel, message, role, ban and audit log. Type the server name exactly to confirm:
+            </p>
+            <input
+              autoFocus
+              value={deleteTyped}
+              onChange={(e) => setDeleteTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmDeleteServer(); if (e.key === 'Escape') setDeleteConfirmOpen(false); }}
+              placeholder={server.name}
+              style={{
+                width: '100%', boxSizing: 'border-box', padding: '10px 12px',
+                background: 'var(--void)', border: '1px solid var(--rim)', borderRadius: '4px',
+                color: 'var(--ghost-white)', fontFamily: "'Share Tech Mono', monospace", fontSize: '13px',
+                marginBottom: '16px', outline: 'none',
+              }}
+            />
+            <div className="confirm-actions">
+              <motion.button type="button" className="angular-button" onClick={() => setDeleteConfirmOpen(false)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                CANCEL
+              </motion.button>
+              <motion.button
+                type="button"
+                className="angular-button danger"
+                onClick={confirmDeleteServer}
+                disabled={deleteTyped.trim() !== server.name}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                style={{ opacity: deleteTyped.trim() === server.name ? 1 : 0.5, cursor: deleteTyped.trim() === server.name ? 'pointer' : 'not-allowed' }}
+              >
+                DELETE SERVER
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

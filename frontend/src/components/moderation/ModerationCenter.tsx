@@ -107,11 +107,12 @@ const ModerationCenter: React.FC<Props> = ({ serverId, members = [], channelId }
           } catch (e: any) { addToast(e?.message || 'Failed.', 'error'); }
         }}
         onEdit={async (role) => {
-          // Open a simple inline permission editor via prompt for the bitfield.
-          const input = window.prompt('Role name', role.name);
-          if (input === null) return;
+          // window.prompt is NOT implemented in Electron (returns null), so
+          // rename through an in-app input instead.
+          const renamed = await (await import('../../utils/promptName')).promptName('Role name', role.name);
+          if (renamed === null || renamed.trim() === '') return;
           try {
-            await updateRole(serverId, role.id, { name: input });
+            await updateRole(serverId, role.id, { name: renamed.trim() });
             addToast('Role updated.', 'success');
             loadRoles();
           } catch (e: any) { addToast(e?.message || 'Failed.', 'error'); }
