@@ -108,6 +108,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           startProactiveRefresh();
           return;
         }
+        // 200 but no user payload — session validated to nothing; stop retrying.
+        break;
       } catch (e: any) {
         const status = (e as { status?: number })?.status;
         // Genuine auth failure — the refresh cookie is gone. Sign in again.

@@ -261,7 +261,9 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
             messageId: 'Your session ended. Please sign in to continue.',
           });
         } catch { /* ignore */ }
-        throw new Error('Session ended. Please sign in to continue.');
+        const sErr = new Error('Session ended. Please sign in to continue.') as Error & { status?: number };
+        sErr.status = 401;
+        throw sErr;
       }
       let data: unknown;
       try {
@@ -286,7 +288,9 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
         messageId: 'Your session ended. Please sign in to continue.',
       });
     } catch { /* ignore */ }
-    throw new Error('Session ended. Please sign in to continue.');
+    const sErr = new Error('Session ended. Please sign in to continue.') as Error & { status?: number };
+    sErr.status = 401;
+    throw sErr;
   }
 
   if (res.status === 429) {
