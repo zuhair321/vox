@@ -4,17 +4,17 @@ import { useUiStore } from '../../stores/uiStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useSocketStore } from '../../stores/socketStore';
 import { useNavigate } from 'react-router-dom';
-import { Settings, UserRound, Palette, MicOff, VolumeX, Monitor } from 'lucide-react';
+import { MicOff, VolumeX, Monitor } from 'lucide-react';
 import { API_BASE } from '../../api/client';
 import { useProfileStore } from '../../stores/profileStore';
 import { useContextMenu, MenuItem } from '../../hooks/useContextMenu';
 import ContextMenu from '../ui/ContextMenu';
-import StatusPicker from '../ui/StatusPicker';
 import VoiceTimer from '../voice/VoiceTimer';
 import { getMicrophoneStream } from '../../utils/webrtc';
 import { classifyMediaError } from '../../utils/mediaErrors';
 import ChannelSettings from '../server/ChannelSettings';
 import ServerLogo from './ServerLogo';
+import UserOperativeBar from './UserOperativeBar';
 
 function resolveMediaUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -180,9 +180,7 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
   const navigate = useNavigate();
   const profile = useProfileStore();
   const { unread } = useMessageStore();
-  const avatarUrl = resolveMediaUrl(profile.avatarUrl);
 
-  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
   const [channelSettingsId, setChannelSettingsId] = useState<string | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
   const channelMenu = useContextMenu();
@@ -553,31 +551,7 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
         <ChannelSettings channelId={channelSettingsId} onClose={() => setChannelSettingsId(null)} />
       )}
 
-      <div className="vox-user-panel" style={{ position: 'relative', gridTemplateColumns: 'minmax(0, 1fr) 30px 30px 30px 30px' }}>
-        {statusPickerOpen && <StatusPicker onClose={() => setStatusPickerOpen(false)} />}
-        <button
-          type="button"
-          className="vox-user-profile ripple-container"
-          onClick={() => setStatusPickerOpen((v) => !v)}
-          aria-label="Set status"
-        >
-          <div className="octagon">{avatarUrl ? <img src={avatarUrl} alt="" /> : profile.displayName.slice(0, 1).toUpperCase()}</div>
-          <span>
-            <strong>{profile.displayName}</strong>
-            <em style={{ textTransform: 'capitalize' }}>{profile.userStatus}</em>
-            {profile.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}
-          </span>
-        </button>
-        <button type="button" className="vox-panel-icon ripple-container" onClick={() => navigate('/profile')} aria-label="Profile">
-          <UserRound size={17} />
-        </button>
-        <button type="button" className="vox-panel-icon ripple-container" onClick={onOpenThemes} aria-label="Switch theme" title="Switch theme">
-          <Palette size={16} />
-        </button>
-        <button type="button" className="vox-panel-icon ripple-container" onClick={() => navigate('/settings')} aria-label="Settings">
-          <Settings size={17} />
-        </button>
-      </div>
+      <UserOperativeBar onOpenThemes={onOpenThemes} />
     </div>
   );
 };

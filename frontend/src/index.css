@@ -371,7 +371,12 @@ h1, h2, h3, h4, h5, h6, .title {
 .app-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 32px);
+  /* The 32px TitleBar is an IN-FLOW flex child of this container, so the
+     container itself must be full viewport height. Using calc(100vh - 32px)
+     double-subtracted the title bar and left a dead 32px strip at the bottom
+     that stopped the sidebar's operative (user) bar from reaching the window
+     edge — the DM bar never "hit" the bottom bar. */
+  height: 100vh;
   width: 100vw;
   background: #000000;
   overflow: hidden;

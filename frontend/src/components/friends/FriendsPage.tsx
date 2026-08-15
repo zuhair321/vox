@@ -3,12 +3,11 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useNavigate } from 'react-router-dom';
 import { useUiStore } from '../../stores/uiStore';
-import { Settings, UserRound } from 'lucide-react';
 import { API_BASE } from '../../api/client';
-import { useProfileStore } from '../../stores/profileStore';
 import { validateUsername } from '../../utils/validation';
 import { buildDmId } from '../../api/dm';
 import StatusDot from '../void/StatusDot';
+import UserOperativeBar from '../ui/UserOperativeBar';
 
 function resolveMediaUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
@@ -23,8 +22,6 @@ const FriendsPage: React.FC = () => {
   const [addUsername, setAddUsername] = useState('');
   const { addToast } = useUiStore();
   const navigate = useNavigate();
-  const profile = useProfileStore();
-  const avatarUrl = resolveMediaUrl(profile.avatarUrl);
 
   // Current user id is needed to derive each conversation's dmId so we can
   // look up its unread badge from the DM store.
@@ -338,21 +335,7 @@ const FriendsPage: React.FC = () => {
             );
           })}
         </div>
-        <div className="vox-user-panel">
-          <button type="button" className="vox-user-profile" onClick={() => navigate('/profile')} aria-label="Open profile">
-            <div className="octagon">{avatarUrl ? <img src={avatarUrl} alt="" /> : 'Z'}</div>
-            <span>
-              <strong>{profile.displayName}</strong>
-              <em style={{ textTransform: 'capitalize' }}>{profile.userStatus}</em>
-            </span>
-          </button>
-          <button type="button" className="vox-panel-icon" onClick={() => navigate('/profile')} aria-label="Profile">
-            <UserRound size={17} />
-          </button>
-          <button type="button" className="vox-panel-icon" onClick={() => navigate('/settings')} aria-label="Settings">
-            <Settings size={17} />
-          </button>
-        </div>
+        <UserOperativeBar />
       </div>
 
       {/* Main Friends Area */}
