@@ -2,7 +2,8 @@
   position: relative;
   z-index: var(--z-content);
   display: grid;
-  grid-template-columns: 64px 220px minmax(360px, 1fr) 200px;
+  grid-template-columns: 220px minmax(360px, 1fr) 200px;
+  grid-template-rows: 80px 1fr;
   height: 100vh;
   min-width: 0;
   overflow: hidden;
@@ -99,13 +100,16 @@
 }
 
 .void-server-rail {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 11px;
-  padding: 12px 0;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 24px;
   background: var(--void);
-  border-right: 1px solid rgba(216, 74, 90, 0.12);
+  border-bottom: 1px solid rgba(216, 74, 90, 0.12);
+  height: 80px;
 }
 
 .server-node {
@@ -1490,11 +1494,12 @@
 
 @media (max-width: 760px) {
   .void-shell {
-    grid-template-columns: 56px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 64px 1fr;
   }
 
   .void-server-rail {
-    width: 56px;
+    height: 64px;
   }
 
   .void-channel-panel {

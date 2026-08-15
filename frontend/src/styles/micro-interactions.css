@@ -4,19 +4,32 @@
    for interactive elements that were missing them.
    ════════════════════════════════════════════════════════════════ */
 
-/* ── Server icon hover glow ─────────────────────────────────── */
+/* ── PS5 Server icon hover glow ─────────────────────────────── */
 .server-icon:not(.active):hover {
   border-color: var(--chaos) !important;
-  box-shadow: 0 0 14px var(--chaos-glow);
-  transform: scale(1.08);
+  box-shadow: 0 0 14px var(--chaos-glow), 0 4px 20px rgba(0,0,0,0.3);
+  transform: scale(1.1) translateY(-2px);
 }
 
 .server-icon:active {
-  transform: scale(0.95) !important;
+  transform: scale(0.92) !important;
+  transition: transform 0.1s ease !important;
 }
 
 .server-icon.active {
-  box-shadow: 0 0 12px var(--chaos-glow);
+  box-shadow: 0 0 16px var(--chaos-glow), 0 0 32px rgba(216, 74, 90, 0.1);
+  animation: ps5GlowPulse 2.5s ease-in-out infinite;
+}
+
+/* ── PS5 3D tilt container ─────────────────────────────────── */
+.server-icon-3d-wrap {
+  perspective: 600px;
+  transform-style: preserve-3d;
+}
+
+.server-icon-3d-wrap .server-icon {
+  transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transform-style: preserve-3d;
 }
 
 /* ── Voice channel item hover ──────────────────────────────── */

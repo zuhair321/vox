@@ -370,6 +370,7 @@ h1, h2, h3, h4, h5, h6, .title {
 /* App Layout — Gothic Black */
 .app-container {
   display: flex;
+  flex-direction: column;
   height: calc(100vh - 32px);
   width: 100vw;
   background: #000000;
@@ -402,17 +403,22 @@ h1, h2, h3, h4, h5, h6, .title {
 }
 
 .server-rail {
-  width: 72px;
+  width: 100%;
+  height: 80px;
   background:
-    radial-gradient(circle at 50% 16%, rgba(216, 74, 90, 0.04), transparent 36%),
+    radial-gradient(ellipse 60% 100% at 50% 0%, rgba(216, 74, 90, 0.06), transparent 60%),
     linear-gradient(180deg, #050506, #020203);
-  border-right: 1px solid rgba(216, 74, 90, 0.12);
+  border-bottom: 1px solid rgba(216, 74, 90, 0.12);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  padding: 12px 0;
-  gap: 12px;
-  overflow-y: auto;
+  justify-content: center;
+  padding: 0 24px;
+  gap: 8px;
+  overflow: visible;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
 }
 
 .sidebar {
@@ -2637,6 +2643,149 @@ button[aria-label="Back"]:hover {
 @keyframes railGlow {
   0%, 100% { opacity: 0.1; }
   50% { opacity: 0.35; }
+}
+
+/* ── PS5-style server rail animations ── */
+@keyframes ps5PulseWave {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0.6;
+    border-width: 3px;
+  }
+  60% {
+    opacity: 0.3;
+    border-width: 1.5px;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+    border-width: 0.5px;
+  }
+}
+
+@keyframes ps5IconPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  60% { transform: scale(0.95); }
+  80% { transform: scale(1.08); }
+  100% { transform: scale(1.0); }
+}
+
+@keyframes ps5GlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 12px var(--chaos-glow), 0 0 24px rgba(216, 74, 90, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--chaos-glow), 0 0 40px rgba(216, 74, 90, 0.15);
+  }
+}
+
+@keyframes ps5BackgroundShift {
+  0% { background-position: 50% 50%; }
+  50% { background-position: 52% 48%; }
+  100% { background-position: 50% 50%; }
+}
+
+/* ── PS5 server rail horizontal helpers ── */
+.server-rail-scroll-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 4px 12px;
+  max-width: calc(100vw - 200px);
+}
+
+.server-rail-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.server-rail-scroll-arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(216, 74, 90, 0.08);
+  border: 1px solid rgba(216, 74, 90, 0.15);
+  color: var(--ghost-white);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  opacity: 0.6;
+  backdrop-filter: blur(8px);
+}
+
+.server-rail-scroll-arrow:hover {
+  opacity: 1;
+  background: rgba(216, 74, 90, 0.15);
+  border-color: var(--chaos);
+  transform: scale(1.1);
+}
+
+.server-rail-item {
+  scroll-snap-align: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.ps5-focus-ring {
+  position: absolute;
+  border-radius: 16px;
+  border: 2px solid var(--chaos);
+  pointer-events: none;
+  z-index: 5;
+  animation: ps5GlowPulse 2s ease-in-out infinite;
+}
+
+.ps5-pulse-wave {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--chaos);
+  pointer-events: none;
+  z-index: 4;
+  animation: ps5PulseWave 600ms ease-out forwards;
+}
+
+.server-icon-ps5 {
+  transition: filter 0.3s ease, transform 0.3s ease;
+  will-change: transform, filter;
+}
+
+.server-icon-ps5.far {
+  filter: brightness(0.7) saturate(0.5);
+  transform: scale(0.88);
+}
+
+.server-icon-ps5.adjacent {
+  filter: brightness(0.85) saturate(0.75);
+  transform: scale(0.95);
+}
+
+.server-icon-ps5.selected {
+  filter: brightness(1.1) saturate(1.2);
+  transform: scale(1.0);
+}
+
+.server-rail-divider-h {
+  width: 2px;
+  height: 32px;
+  background: var(--rim);
+  opacity: 0.5;
+  flex-shrink: 0;
+  border-radius: 1px;
 }
 
 /* ── Sidebar banner shimmer ── */

@@ -318,11 +318,11 @@ const { user, accessToken, isLoading } = useAuthStore();
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <PanelErrorBoundary panelName="ServerRail">
-          <ServerRail />
-        </PanelErrorBoundary>
+      <PanelErrorBoundary panelName="ServerRail">
+        <ServerRail />
+      </PanelErrorBoundary>
 
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         <Suspense fallback={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}><div className="spinner" /></div>}>
           <Routes location={location} key={location.pathname}>
             <Route path="/invite/:code" element={<PanelErrorBoundary panelName="Invite"><InviteAccept /></PanelErrorBoundary>} />

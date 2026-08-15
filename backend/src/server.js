@@ -184,6 +184,45 @@ app.get('/api/server-info', (_req, res) => {
 });
 
 
+// In the packaged Electron desktop app the backend and the React SPA share the
+// SAME origin (http://127.0.0.1:4000). Serving the SPA from the backend (instead
+// of Electron's loadFile from app.asar) keeps auth cookies same-site, so the
+// HttpOnly vox_access/vox_refresh cookies attach on every request and login no
+// longer 401s due to the file:// → http:// cross-site cookie boundary.
+//
+// Enabled only when SERVE_FRONTEND=1 (set by electron-main in packaged mode).
+// The SPA root is resolved from FRONTEND_DIST, falling back to ../frontend/dist.
+if (process.env.SERVE_FRONTEND === '1') {
+  const fs = await import('node:fs');
+  const frontendDist = process.env.FRONTEND_DIST
+    || path.resolve(__dirname, '..', '..', 'frontend', 'dist')
+    || path.resolve(__dirname, '..', 'frontend', 'dist');
+  if (fs.existsSync(frontendDist)) {
+    console.log('[SPA] Serving frontend from', frontendDist);
+    app.use(express.static(frontendDist, {
+      index: false,
+      // Never let the SPA override API / health / uploads / legal routes.
+      setHeaders: (res, fp) => {
+        if (fp.endsWith('.html')) res.set('Cache-Control', 'no-cache');
+      },
+    }));
+    // SPA fallback: any non-API GET that isn't a known asset returns index.html.
+    // The reserved prefixes are excluded whether they appear as an exact path
+    // (e.g. /health) or with a sub-path (e.g. /api/...), so backend routes are
+    // never shadowed by the SPA catch-all.
+    app.get(/^(?!\/(api|health|uploads|legal|ws)(\/|$)).*/, (req, res, next) => {
+      const urlPath = req.path;
+      const assetPath = path.join(frontendDist, urlPath);
+      if (fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
+        return res.sendFile(assetPath);
+      }
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+  } else {
+    console.warn('[SPA] SERVE_FRONTEND=1 but no frontend dist found at', frontendDist);
+  }
+}
+
 // ── Health / boot diagnostics (readiness check) ───────────
 app.get('/health', async (req, res) => {
   try {
