@@ -288,7 +288,7 @@ serverRouter.post('/servers/:id/raid', requireAuth, async (req, res, next) => {
     const enabled = Boolean(req.body?.enabled);
     await setRaidMode(serverId, enabled);
     const io = getIO();
-    emitRealtimeEvent('server:raid-mode', serverId, { serverId, enabled });
+    emitRealtimeEvent('server:raid-mode', `server:${serverId}`, { serverId, enabled });
     res.json({ ok: true, raidMode: enabled });
   } catch (e) { next(e); }
 });
@@ -778,8 +778,14 @@ serverRouter.delete('/servers/:id/members/:userId/roles/:roleId', requireAuth, a
       throw new HttpError(403, 'Not authorized');
     }
 
+    // H6: Look up the target ServerMember record first (userId is User ID, not ServerMember PK)
+    const targetMember = await prisma.serverMember.findUnique({
+      where: { serverId_userId: { serverId, userId } },
+      select: { id: true },
+    });
+    if (!targetMember) throw new HttpError(404, 'Target member not found');
     await prisma.serverMemberRole.deleteMany({
-      where: { serverMemberId: userId, roleId },
+      where: { serverMemberId: targetMember.id, roleId },
     });
     res.json({ message: 'Role removed' });
   } catch (e) { next(e); }

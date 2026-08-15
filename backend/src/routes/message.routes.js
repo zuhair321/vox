@@ -156,7 +156,7 @@ messageRouter.post('/channels/:channelId/messages', requireAuth, requirePermissi
       });
     }
 
-    emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
+    emitRealtimeEvent('message:new', `channel:${channelId}`, { message }).catch(() => {});
     const io = getIO();
     io.to(`channel:${channelId}`).emit('message:new', { message });
 
@@ -198,7 +198,7 @@ messageRouter.post('/messages', requireAuth, messageLimiter, async (req, res, ne
     const attachments = normalizeAttachments(req.body?.attachments);
     const message = await createMessage({ channelId, author: req.user.username, body: sanitizedBody, user: req.user, attachments });
     const mapped = mapMessage(message);
-    emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
+    emitRealtimeEvent('message:new', `channel:${channelId}`, { message }).catch(() => {});
     const io = getIO();
     io.to(`channel:${channelId}`).emit('message:new', { message });
 
@@ -270,7 +270,7 @@ messageRouter.post('/messages/:id/reactions', requireAuth, reactionLimiter, asyn
     };
 
     const io = getIO();
-    emitRealtimeEvent('message:reactions', message.channelId, mapped);
+    emitRealtimeEvent('message:reactions', `channel:${message.channelId}`, mapped);
     io.to(`channel:${message.channelId}`).emit('message:reactions', mapped);
     res.json(mapped);
   } catch (e) { next(e); }
@@ -318,7 +318,7 @@ messageRouter.patch('/messages/:id', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    emitRealtimeEvent('message:updated', updated.channelId, { message: updated });
+    emitRealtimeEvent('message:updated', `channel:${updated.channelId}`, { message: updated });
     io.to(`channel:${updated.channelId}`).emit('message:updated', { message: updated });
 
     // Audit log: moderator editing someone else's message.
@@ -374,7 +374,7 @@ messageRouter.delete('/messages/:id', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    emitRealtimeEvent('message:deleted', existing.channelId, { messageId, channelId: existing.channelId });
+    emitRealtimeEvent('message:deleted', `channel:${existing.channelId}`, { messageId, channelId: existing.channelId });
     io.to(`channel:${existing.channelId}`).emit('message:deleted', { messageId, channelId: existing.channelId });
 
     // Audit log: moderator deletion.
@@ -425,7 +425,7 @@ messageRouter.post('/messages/:id/pin', requireAuth, async (req, res, next) => {
     });
 
     const io = getIO();
-    emitRealtimeEvent('message:pinned', updated.channelId, {
+    emitRealtimeEvent('message:pinned', `channel:${updated.channelId}`, {
       message: {
         id: updated.id,
         channelId: updated.channelId,
@@ -769,7 +769,7 @@ messageRouter.post('/messages/:id/thread/mark-read', requireAuth, async (req, re
 
 import { recordEditForHistory } from '../services/chat.service.js';
 
-messageRouter.get('/messages/:id/history', async (req, res, next) => {
+messageRouter.get('/messages/:id/history', requireAuth, async (req, res, next) => {
   try {
     const msg = await prisma.message.findUnique({
       where: { id: req.params.id },

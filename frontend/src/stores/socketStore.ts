@@ -60,6 +60,8 @@ export const useSocketStore = create<SocketStore>((set, get) => {
       const freshToken = useAuthStore.getState().accessToken || sessionStorage.getItem('vox_access') || localStorage.getItem('vox_access');
       if (freshToken) {
         (socket as any).auth = { token: freshToken };
+        // H2: Also update the manager auth so future reconnects use the fresh token
+        (socket.io.opts as any).auth = { token: freshToken };
       }
     });
 

@@ -10,6 +10,7 @@ const voiceChannelBySocket = new Map();
 const voiceServerBySocket = new Map();
 const voiceUserBySocket = new Map();
 const screenSharingBySocket = new Map();
+const userSocketCount = new Map();  // H4: per-user socket refcount
 
 // ── Socket event rate limits (Redis-backed sliding window) ────
 const RATE_LIMITS = {
@@ -57,7 +58,9 @@ function handleVoiceLeave(io, socket) {
   }
 
   if (serverId && user) {
-    emitRealtimeEvent('voice:member-update', channelId, {
+    // Voice sockets live in the `voice:<channelId>` room — the bridge emits to
+    // the exact room name passed here, so it must be the prefixed room.
+    emitRealtimeEvent('voice:member-update', `voice:${channelId}`, {
       channelId,
       action: 'leave',
       user,
@@ -76,6 +79,8 @@ export function registerHandlers(io, socket) {
   // On connect, join personal user room for DMs
   if (userId) {
     socket.join(`user:${userId}`);
+    // H4: track socket count per user
+    userSocketCount.set(userId, (userSocketCount.get(userId) || 0) + 1);
     // Join all server rooms so we can scope presence broadcasts.
     // getState() is cached so this is fast even on every connect.
     (async () => {
@@ -98,15 +103,32 @@ export function registerHandlers(io, socket) {
     })();
   }
 
-  socket.on('server:join', (serverId) => {
-    socket.join(`server:${serverId}`);
+  socket.on('server:join', async (serverId) => {
+    if (!userId || !serverId) return;
+    try {
+      const member = await prisma.serverMember.findUnique({
+        where: { serverId_userId: { serverId, userId } },
+      });
+      if (!member) return;
+      socket.join(`server:${serverId}`);
+    } catch { /* ignore */ }
   });
 
-  socket.on('channel:join', (channelId) => {
-    socket.join(`channel:${channelId}`);
+  socket.on('channel:join', async (channelId) => {
+    if (!userId || !channelId) return;
+    try {
+      const ch = await prisma.channel.findUnique({ where: { id: channelId }, select: { serverId: true } });
+      if (!ch?.serverId) return;
+      const member = await prisma.serverMember.findUnique({
+        where: { serverId_userId: { serverId: ch.serverId, userId } },
+      });
+      if (!member) return;
+      socket.join(`channel:${channelId}`);
+    } catch { /* ignore */ }
   });
 
   socket.on('channel:leave', (channelId) => {
+    if (!channelId) return;
     socket.leave(`channel:${channelId}`);
   });
 
@@ -166,7 +188,7 @@ export function registerHandlers(io, socket) {
       username: user.username,
       avatarUrl,
     });
-    emitRealtimeEvent('voice:member-update', channelId, {
+    emitRealtimeEvent('voice:member-update', `voice:${channelId}`, {
       channelId,
       action: 'join',
       user,
@@ -214,7 +236,7 @@ export function registerHandlers(io, socket) {
     const channelId = voiceChannelBySocket.get(socket.id);
     const user = getSocketUser(socket);
     if (!channelId || !user) return;
-    emitRealtimeEvent('voice:user-muted', channelId, {
+    emitRealtimeEvent('voice:user-muted', `voice:${channelId}`, {
       socketId: socket.id,
       userId: user.id,
       muted: Boolean(muted),
@@ -225,7 +247,7 @@ export function registerHandlers(io, socket) {
     const channelId = voiceChannelBySocket.get(socket.id);
     const user = getSocketUser(socket);
     if (!channelId || !user) return;
-    emitRealtimeEvent('voice:user-deafened', channelId, {
+    emitRealtimeEvent('voice:user-deafened', `voice:${channelId}`, {
       socketId: socket.id,
       userId: user.id,
       deafened: Boolean(deafened),
@@ -249,7 +271,7 @@ export function registerHandlers(io, socket) {
     if (!channelId || !user) return;
     const enabled = Boolean(screen);
     screenSharingBySocket.set(socket.id, enabled);
-    emitRealtimeEvent('voice:screen', channelId, {
+    emitRealtimeEvent('voice:screen', `voice:${channelId}`, {
       socketId: socket.id,
       userId: user.id,
       username: user.username,
@@ -290,7 +312,7 @@ export function registerHandlers(io, socket) {
     const channelId = voiceChannelBySocket.get(socket.id);
     const user = getSocketUser(socket);
     if (!channelId || !user) return;
-    emitRealtimeEvent('voice:user-video', channelId, {
+    emitRealtimeEvent('voice:user-video', `voice:${channelId}`, {
       socketId: socket.id,
       userId: user.id,
       video: Boolean(video),
@@ -342,7 +364,7 @@ export function registerHandlers(io, socket) {
           include: { author: true },
         });
       }
-      emitRealtimeEvent('message:new', channelId, { message }).catch(() => {});
+      emitRealtimeEvent('message:new', `channel:${channelId}`, { message }).catch(() => {});
       io.to(`channel:${channelId}`).emit('message:new', { message });
 
             // If this was a thread reply, broadcast a lightweight thread:reply
@@ -572,10 +594,13 @@ export function registerHandlers(io, socket) {
   });
 
   socket.on('dm:join', ({ dmId }) => {
+    if (!userId || !dmId) return;
+    if (!dmId.includes(userId)) return;
     socket.join(`dm:${dmId}`);
   });
 
   socket.on('dm:leave', ({ dmId }) => {
+    if (!dmId) return;
     socket.leave(`dm:${dmId}`);
   });
 
@@ -636,15 +661,20 @@ export function registerHandlers(io, socket) {
     handleVoiceLeave(io, socket);
     if (userId) {
       try {
-        setStatusCache(userId, 'OFFLINE').catch(() => {});
-        await prisma.user.update({
-          where: { id: userId },
-          data: { status: 'OFFLINE' }
-        });
-        // Scope to all server rooms this user was in
-        const serverIds = socket.data.serverIds || [];
-        for (const serverId of serverIds) {
-          emitRealtimeEvent('presence:update', null, { userId, status: 'offline' });
+        // H4: only set OFFLINE when ALL sockets for this user are gone
+        const remaining = (userSocketCount.get(userId) || 1) - 1;
+        userSocketCount.set(userId, remaining);
+        if (remaining <= 0) {
+          userSocketCount.delete(userId);
+          setStatusCache(userId, 'OFFLINE').catch(() => {});
+          await prisma.user.update({
+            where: { id: userId },
+            data: { status: 'OFFLINE' }
+          });
+          const serverIds = socket.data.serverIds || [];
+          for (const serverId of serverIds) {
+            emitRealtimeEvent('presence:update', null, { userId, status: 'offline' });
+          }
         }
       } catch (e) { console.error('Error on disconnect:', e); }
     }

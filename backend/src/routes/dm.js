@@ -210,7 +210,7 @@ dmRouter.post('/dm/:dmId/messages', requireAuth, dmLimiter, async (req, res, nex
       io.to(`user:${recipientId}`).emit('dm:new', { message });
       io.to(`user:${req.user.id}`).emit('dm:new', { message });
     }
-    emitRealtimeEvent('dm:new', dmId, { message });
+    emitRealtimeEvent('dm:new', `dm:${dmId}`, { message });
 
     res.status(201).json({ message });
   } catch (e) { next(e); }
@@ -225,6 +225,7 @@ dmRouter.patch('/dm/:dmId/messages/:messageId', requireAuth, dmLimiter, async (r
 
     const existing = await prisma.dmMessage.findUnique({ where: { id: messageId } });
     if (!existing) throw new HttpError(404, 'Message not found');
+    if (existing.dmId !== req.params.dmId || !existing.dmId.includes(req.user.id)) throw new HttpError(403, 'Not authorized');
     if (existing.senderId !== req.user.id) throw new HttpError(403, 'You can only edit your own DMs');
     if (existing.deleted) throw new HttpError(410, 'Message already deleted');
 
@@ -239,7 +240,7 @@ dmRouter.patch('/dm/:dmId/messages/:messageId', requireAuth, dmLimiter, async (r
       io.to(`user:${updated.senderId}`).emit('dm:updated', { message: updated });
       io.to(`user:${updated.recipientId}`).emit('dm:updated', { message: updated });
     }
-    emitRealtimeEvent('dm:updated', dmId, { message: updated });
+    emitRealtimeEvent('dm:updated', `dm:${dmId}`, { message: updated });
 
     res.json({ ok: true, message: updated });
   } catch (e) { next(e); }
@@ -252,6 +253,7 @@ dmRouter.delete('/dm/:dmId/messages/:messageId', requireAuth, async (req, res, n
 
     const existing = await prisma.dmMessage.findUnique({ where: { id: messageId } });
     if (!existing) throw new HttpError(404, 'Message not found');
+    if (existing.dmId !== req.params.dmId || !existing.dmId.includes(req.user.id)) throw new HttpError(403, 'Not authorized');
     if (existing.senderId !== req.user.id) throw new HttpError(403, 'You can only delete your own DMs');
     if (existing.deleted) throw new HttpError(410, 'Message already deleted');
 
@@ -266,7 +268,7 @@ dmRouter.delete('/dm/:dmId/messages/:messageId', requireAuth, async (req, res, n
       io.to(`user:${deleted.senderId}`).emit('dm:deleted', { messageId: deleted.id, dmId: deleted.dmId });
       io.to(`user:${deleted.recipientId}`).emit('dm:deleted', { messageId: deleted.id, dmId: deleted.dmId });
     }
-    emitRealtimeEvent('dm:deleted', deleted.dmId, { messageId: deleted.id, dmId: deleted.dmId });
+    emitRealtimeEvent('dm:deleted', `dm:${deleted.dmId}`, { messageId: deleted.id, dmId: deleted.dmId });
 
     res.json({ ok: true, message: deleted });
   } catch (e) { next(e); }

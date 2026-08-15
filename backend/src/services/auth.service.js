@@ -17,6 +17,7 @@ import {
   verifyRefresh,
 } from './tokens.js';
 import jwt from 'jsonwebtoken';
+import { cacheSet, cacheGet, cacheInvalidate } from '../lib/redis.js';
 
 // otplib v13 exposes a functional API (generateSecret / generateURI / verify)
 // rather than the legacy `authenticator` instance.
@@ -151,7 +152,9 @@ export async function register({ email, username, password }, deviceContext = {}
 }
 
 // ── Login History & Alerts ───────────────────────────────────
-const pendingTwoFactorContext = new Map();
+// H3: 2FA context backed by Redis (survives restarts and multi-instance)
+const TFA_CONTEXT_KEY = (userId) => `vox:tfa-context:${userId}`;
+const TFA_CONTEXT_TTL = 300; // 5 minutes
 
 async function recordLoginHistory(userId, deviceContext) {
   const deviceInfo = deviceContext.deviceInfo || null;
@@ -285,11 +288,11 @@ export async function login({ emailOrUsername, password }, deviceContext = {}) {
   if (user.twoFactorEnabled) {
     const tempToken = jwtTemp(user, '5m');
     // Store device context for use after 2FA completion
-    pendingTwoFactorContext.set(user.id, {
+    await cacheSet(TFA_CONTEXT_KEY(user.id), JSON.stringify({
       deviceInfo: deviceContext.deviceInfo,
       ipAddress: deviceContext.ipAddress,
       userAgent: deviceContext.userAgent,
-    });
+    }), TFA_CONTEXT_TTL).catch(() => {});
     return { twoFactorRequired: true, tempToken };
   }
 
@@ -354,8 +357,12 @@ export async function completeTwoFactorLogin(tempToken, code) {
   const ok = await verifyTotp({ token: String(code || '').trim(), secret });
   if (!ok?.valid) throw new HttpError(400, 'Invalid 2FA code.');
 
-  const deviceContext = pendingTwoFactorContext.get(user.id) || {};
-  pendingTwoFactorContext.delete(user.id);
+  let deviceContext = {};
+    try {
+      const raw = await cacheGet(TFA_CONTEXT_KEY(user.id));
+      if (raw) deviceContext = JSON.parse(raw);
+    } catch { /* fallback to empty */ }
+  await cacheInvalidate(TFA_CONTEXT_KEY(user.id)).catch(() => {});
 
   const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
   

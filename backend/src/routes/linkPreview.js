@@ -6,8 +6,35 @@
 // in-memory for 1 hour per URL to avoid hammering the same origin.
 import { Router } from 'express';
 import fetch from 'node-fetch';
+import dns from 'node:dns';
 import * as cheerio from 'cheerio';
 import { HttpError } from '../middleware/error.js';
+
+
+// C4: Resolve hostname and reject private/link-local/cloud-metadata IPs.
+const BLOCKED_RANGES = [
+  /^127\./,           // loopback
+  /^10\./,            // private Class A
+  /^172\.(1[6-9]|2\d|3[01])\./,  // private Class B
+  /^192\.168\./,      // private Class C
+  /^169\.254\./,      // link-local
+  /^0\./,             // current network
+  /^::1$/,            // IPv6 loopback
+  /^fc/, /^fd/,       // IPv6 ULA
+  /^fe80/,            // IPv6 link-local
+];
+
+async function isResolvedIpSafe(hostname) {
+  try {
+    const addrs = await dns.promises.resolve4(hostname, { ttl: true });
+    for (const addr of addrs) {
+      if (BLOCKED_RANGES.some(re => re.test(addr))) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const linkPreviewRouter = Router();
 
@@ -45,6 +72,12 @@ linkPreviewRouter.get('/link-preview', async (req, res, next) => {
     const cached = cache.get(url);
     if (cached && Date.now() - cached.at < CACHE_TTL_MS) {
       return res.json(cached.data);
+    }
+
+    // C4: Verify resolved IP is not internal
+    const parsedUrl = new URL(url);
+    if (!(await isResolvedIpSafe(parsedUrl.hostname))) {
+      throw new HttpError(400, 'URL resolves to a restricted address.');
     }
 
     const controller = new AbortController();

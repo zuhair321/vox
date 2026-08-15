@@ -22,7 +22,7 @@ export function mintAccessToken(user) {
   return jwt.sign(
     { username: user.username, role: user.role || 'MEMBER', userId: user.id },
     env.jwt.accessSecret,
-    { subject: user.id, expiresIn: env.jwt.accessTtl },
+    { subject: user.id, expiresIn: env.jwt.accessTtl, issuer: 'vox', audience: 'vox' },
   );
 }
 
@@ -33,6 +33,8 @@ export async function mintTokenPair(user, deviceInfo, ipAddress, userAgent) {
     subject: user.id,
     jwtid: crypto.randomUUID(),
     expiresIn: env.jwt.refreshTtl,
+    issuer: 'vox',
+    audience: 'vox',
   });
 
   // Persist the refresh token (hashed) with device info — fail silently if DB is down
@@ -56,11 +58,11 @@ export async function mintTokenPair(user, deviceInfo, ipAddress, userAgent) {
 }
 
 export function verifyAccess(token) {
-  return jwt.verify(token, env.jwt.accessSecret);
+  return jwt.verify(token, env.jwt.accessSecret, { algorithms: ['HS256'], issuer: 'vox', audience: 'vox' });
 }
 
 export function verifyRefresh(token) {
-  return jwt.verify(token, env.jwt.refreshSecret);
+  return jwt.verify(token, env.jwt.refreshSecret, { algorithms: ['HS256'], issuer: 'vox', audience: 'vox' });
 }
 
 // Look up a refresh token in the DB; returns the row if it's valid + not revoked.
