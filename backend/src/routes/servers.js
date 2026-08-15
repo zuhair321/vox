@@ -57,16 +57,26 @@ serverRouter.get('/servers', requireAuth, async (req, res, next) => {
     // Self-heal: servers created before voice-channel seeding (or where every
     // voice channel was deleted) get a fresh General voice channel so the
     // sidebar never shows a dead "NO VOICE CHANNELS" section.
-    const healed = await Promise.all(
-      servers
-        .filter((s) => !s.channels.some((c) => c.type === 'VOICE'))
-        .map(async (s) => ({
-          serverId: s.id,
-          channel: await prisma.channel.create({
-            data: { id: newChannelId(), name: 'General', type: 'VOICE', serverId: s.id },
-          }),
-        })),
-    );
+    //
+    // Runs inside a transaction with FOR UPDATE row locks so two concurrent
+    // GET /servers calls can never both create a duplicate voice channel.
+    const healed = await prisma.$transaction(async (tx) => {
+      const missing = servers.filter((s) => !s.channels.some((c) => c.type === 'VOICE'));
+      const created = [];
+      for (const s of missing) {
+        await tx.$queryRaw`SELECT id FROM "Server" WHERE id = ${s.id} FOR UPDATE`;
+        const count = await tx.channel.count({ where: { serverId: s.id, type: 'VOICE' } });
+        if (count === 0) {
+          created.push({
+            serverId: s.id,
+            channel: await tx.channel.create({
+              data: { id: newChannelId(), name: 'General', type: 'VOICE', serverId: s.id },
+            }),
+          });
+        }
+      }
+      return created;
+    });
     // Attach the real created channels so the response reflects the healing
     // without a second query.
     for (const { serverId, channel } of healed) {
