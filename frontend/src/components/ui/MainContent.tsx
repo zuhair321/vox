@@ -18,6 +18,7 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
     setShowSearchPanel,
     showSearchPanel,
     threadMessageId,
+    setThreadMessageId,
   } = useUiStore();
 
   if (!selectedChannel) {
@@ -96,7 +97,10 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
           <button
             type="button"
             className={`vox-panel-icon panel-toggle-btn ${showSearchPanel ? 'active' : ''}`}
-            onClick={() => setShowSearchPanel(!showSearchPanel)}
+            onClick={() => {
+              setShowSearchPanel(!showSearchPanel);
+              if (!showSearchPanel) { setThreadMessageId(null); setShowPinnedPanel(false); }
+            }}
             title="Search (Ctrl+F)"
             aria-label="Search messages"
           >
@@ -107,7 +111,10 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
           <button
             type="button"
             className={`vox-panel-icon panel-toggle-btn ${showPinnedPanel ? 'active' : ''}`}
-            onClick={() => setShowPinnedPanel(!showPinnedPanel)}
+            onClick={() => {
+              setShowPinnedPanel(!showPinnedPanel);
+              if (!showPinnedPanel) { setThreadMessageId(null); setShowSearchPanel(false); }
+            }}
             title="Pinned messages"
             aria-label="Pinned messages"
           >
