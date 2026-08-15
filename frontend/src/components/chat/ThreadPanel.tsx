@@ -120,13 +120,13 @@ const ThreadPanel: React.FC = () => {
         initial={{ x: 48, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         exit={{ x: 48, opacity: 0 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
+        transition={{ type: 'spring', stiffness: 240, damping: 30, mass: 1 }}
         style={{
           position: 'absolute',
           top: 0,
           right: 0,
           bottom: 0,
-          width: 360,
+          width: 'min(360px, 100%)',
           zIndex: 45,
           borderLeft: '1px solid var(--rim)',
           background: 'var(--abyss)',
@@ -134,7 +134,6 @@ const ThreadPanel: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          minWidth: 0,
         }}
       >
         <div className="top-bar"

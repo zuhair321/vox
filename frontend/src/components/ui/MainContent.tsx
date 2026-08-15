@@ -124,6 +124,21 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
       </div>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+        {(threadMessageId || showSearchPanel || showPinnedPanel) && (
+          <div
+            onClick={() => { setThreadMessageId(null); setShowSearchPanel(false); setShowPinnedPanel(false); }}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'rgba(0,0,0,0.45)',
+              backdropFilter: 'blur(2px)',
+              WebkitBackdropFilter: 'blur(2px)',
+              zIndex: 42,
+              pointerEvents: 'auto',
+            }}
+            aria-hidden="true"
+          />
+        )}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <MessageArea channelId={selectedChannel.id} messageId={messageId} />
           <div style={{ flexShrink: 0, padding: '0 16px 24px 16px' }}>
