@@ -116,6 +116,7 @@ const ThreadPanel: React.FC = () => {
 
   return (
     <AnimatePresence>
+      {threadMessageId && (
       <motion.div
         initial={{ x: 48, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
@@ -254,6 +255,7 @@ const ThreadPanel: React.FC = () => {
           <input type='text' className='angular-input' placeholder='Reply in thread…' value={replyText} onChange={(e) => onTextChange(e.target.value)} onBlur={() => emitTyping(false)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
         </div>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 };

@@ -409,7 +409,7 @@ h1, h2, h3, h4, h5, h6, .title {
 
 .server-rail {
   width: 100%;
-  height: 80px;
+  height: 52px;
   background:
     radial-gradient(ellipse 60% 100% at 50% 0%, rgba(216, 74, 90, 0.06), transparent 60%),
     linear-gradient(180deg, #050506, #020203);
@@ -2812,8 +2812,8 @@ button[aria-label="Back"]:hover {
 
 /* ── Main content entrance ── */
 @keyframes contentFadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .main-content-enter {
@@ -3114,8 +3114,8 @@ button, a, input, select, textarea, [role="button"] {
 }
 
 @keyframes page-fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* Modal backdrop blur */
@@ -3170,4 +3170,13 @@ button, a, input, select, textarea, [role="button"] {
 @keyframes typing-bounce {
   0%, 60%, 100% { transform: translateY(0); }
   30% { transform: translateY(-4px); }
+}
+
+/* Narrow windows: hide the operatives panel so the chat keeps full width.
+   The desktop window has a 940px min-width, so at any real window size all
+   three bars (channels | main window | operatives) stay visible. */
+@media (max-width: 860px) {
+  .member-panel {
+    display: none;
+  }
 }
