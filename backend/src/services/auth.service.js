@@ -155,6 +155,7 @@ export async function register({ email, username, password }, deviceContext = {}
 // H3: 2FA context backed by Redis (survives restarts and multi-instance)
 const TFA_CONTEXT_KEY = (userId) => `vox:tfa-context:${userId}`;
 const TFA_CONTEXT_TTL = 300; // 5 minutes
+const tfaFallback = new Map();  // In-memory fallback when Redis is down
 
 async function recordLoginHistory(userId, deviceContext) {
   const deviceInfo = deviceContext.deviceInfo || null;
@@ -292,7 +293,11 @@ export async function login({ emailOrUsername, password }, deviceContext = {}) {
       deviceInfo: deviceContext.deviceInfo,
       ipAddress: deviceContext.ipAddress,
       userAgent: deviceContext.userAgent,
-    }), TFA_CONTEXT_TTL).catch(() => {});
+    }), TFA_CONTEXT_TTL).catch(() => { tfaFallback.set(user.id, JSON.stringify({
+      deviceInfo: deviceContext.deviceInfo,
+      ipAddress: deviceContext.ipAddress,
+      userAgent: deviceContext.userAgent,
+    })); });
     return { twoFactorRequired: true, tempToken };
   }
 
@@ -361,8 +366,9 @@ export async function completeTwoFactorLogin(tempToken, code) {
     try {
       const raw = await cacheGet(TFA_CONTEXT_KEY(user.id));
       if (raw) deviceContext = JSON.parse(raw);
+      else if (tfaFallback.has(user.id)) deviceContext = JSON.parse(tfaFallback.get(user.id));
     } catch { /* fallback to empty */ }
-  await cacheInvalidate(TFA_CONTEXT_KEY(user.id)).catch(() => {});
+  await cacheInvalidate(TFA_CONTEXT_KEY(user.id)).catch(() => {}); tfaFallback.delete(user.id);
 
   const tokens = await mintTokenPair(user, deviceContext.deviceInfo, deviceContext.ipAddress, deviceContext.userAgent);
   

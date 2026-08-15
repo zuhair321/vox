@@ -83,6 +83,7 @@ export function registerHandlers(io, socket) {
     userSocketCount.set(userId, (userSocketCount.get(userId) || 0) + 1);
     // Join all server rooms so we can scope presence broadcasts.
     // getState() is cached so this is fast even on every connect.
+    socket.data.serverIds = [];  // Default so disconnect handler can broadcast
     (async () => {
       try {
         const state = await getState(userId);

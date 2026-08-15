@@ -58,11 +58,24 @@ export async function mintTokenPair(user, deviceInfo, ipAddress, userAgent) {
 }
 
 export function verifyAccess(token) {
-  return jwt.verify(token, env.jwt.accessSecret, { algorithms: ['HS256'], issuer: 'vox', audience: 'vox' });
+  // Backward-compat: enforce iss/aud only on tokens that already have them
+    const decoded = jwt.decode(token);
+    const opts = { algorithms: ['HS256'] };
+    if (decoded?.iss || decoded?.aud) {
+      opts.issuer = 'vox';
+      opts.audience = 'vox';
+    }
+    return jwt.verify(token, env.jwt.accessSecret, opts);
 }
 
 export function verifyRefresh(token) {
-  return jwt.verify(token, env.jwt.refreshSecret, { algorithms: ['HS256'], issuer: 'vox', audience: 'vox' });
+  const decoded = jwt.decode(token);
+    const opts = { algorithms: ['HS256'] };
+    if (decoded?.iss || decoded?.aud) {
+      opts.issuer = 'vox';
+      opts.audience = 'vox';
+    }
+    return jwt.verify(token, env.jwt.refreshSecret, opts);
 }
 
 // Look up a refresh token in the DB; returns the row if it's valid + not revoked.

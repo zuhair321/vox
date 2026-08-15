@@ -19,6 +19,8 @@ const BLOCKED_RANGES = [
   /^192\.168\./,      // private Class C
   /^169\.254\./,      // link-local
   /^0\./,             // current network
+  /^100\.(6[4-9]|[7-9]\d|1[0-2][0-7])\./,  // CGNAT
+  /^198\.(1[89])\./,  // benchmarking
   /^::1$/,            // IPv6 loopback
   /^fc/, /^fd/,       // IPv6 ULA
   /^fe80/,            // IPv6 link-local
@@ -26,7 +28,7 @@ const BLOCKED_RANGES = [
 
 async function isResolvedIpSafe(hostname) {
   try {
-    const addrs = await dns.promises.resolve4(hostname, { ttl: true });
+    const addrs = await dns.promises.resolve(hostname);
     for (const addr of addrs) {
       if (BLOCKED_RANGES.some(re => re.test(addr))) return false;
     }

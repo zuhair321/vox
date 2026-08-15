@@ -781,9 +781,14 @@ serverRouter.delete('/servers/:id/members/:userId/roles/:roleId', requireAuth, a
     // H6: Look up the target ServerMember record first (userId is User ID, not ServerMember PK)
     const targetMember = await prisma.serverMember.findUnique({
       where: { serverId_userId: { serverId, userId } },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     if (!targetMember) throw new HttpError(404, 'Target member not found');
+    // H6: Verify role hierarchy — can't modify equal or higher rank
+    const rolePower = { FOUNDER: 4, ADMIN: 3, MODERATOR: 2, MEMBER: 1 };
+    if ((rolePower[targetMember.role] || 0) >= (rolePower[member.role] || 0)) {
+      throw new HttpError(403, 'Cannot modify a member with equal or higher rank');
+    }
     await prisma.serverMemberRole.deleteMany({
       where: { serverMemberId: targetMember.id, roleId },
     });
