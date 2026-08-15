@@ -309,7 +309,9 @@ export async function api<T = any>(path: string, options: RequestInit & { skipAu
   if (!res.ok) {
     const errorMsg = extractError(data, res.statusText || `HTTP ${res.status}`);
     console.error(`[API] Error on ${path}:`, errorMsg);
-    throw new Error(errorMsg);
+    const err = new Error(errorMsg) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
 
   return data as T;

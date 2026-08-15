@@ -111,6 +111,10 @@ router.get('/presence', requireAuth, async (req, res) => {
     const snapshot = await presenceSnapshot(ids);
     return res.json({ online: snapshot });
   } catch (e) {
-    return res.status(500).json({ online: {} });
+    // Presence is best-effort (Redis-backed). If the cache is down, report
+    // everyone offline with 200 rather than failing the whole request — the
+    // client treats a 500 here as a broken endpoint.
+    console.warn('[presence] failed, reporting all offline:', e && e.message ? e.message : e);
+    return res.json({ online: {} });
   }
 });

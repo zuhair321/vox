@@ -88,18 +88,42 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // The HttpOnly cookie carries auth. getMe() hits /api/auth/me which the
     // backend authenticates from the cookie. If the access cookie is expired,
     // api() transparently refreshes it via the refresh cookie.
-    try {
-      const { user } = await authApi.getMe();
-      if (user) {
-        persistUser(user);
-        set({ user, isLoading: false });
-        // Keep the access token warm so we never hit a 401 retry path on a
-        // busy app. Safe under React StrictMode double-mount.
-        startProactiveRefresh();
+    //
+    // IMPORTANT: a transient failure (5xx while the bundled Postgres is still
+    // booting, or a network blip) must NOT wipe a valid session — that was the
+    // root cause of the recurring "session expired" forced logouts. Only a
+    // genuine 401 (refresh cookie gone/revoked) means "sign in again". For
+    // anything else we keep the restored user and retry with backoff, and if
+    // the backend is still down we stay on the cached profile (offline) rather
+    // than dumping the user to the login screen.
+    const MAX_TRIES = 3;
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      try {
+        const { user } = await authApi.getMe();
+        if (user) {
+          persistUser(user);
+          set({ user, isLoading: false });
+          // Keep the access token warm so we never hit a 401 retry path on a
+          // busy app. Safe under React StrictMode double-mount.
+          startProactiveRefresh();
+          return;
+        }
+      } catch (e: any) {
+        const status = (e as { status?: number })?.status;
+        // Genuine auth failure — the refresh cookie is gone. Sign in again.
+        if (status === 401) break;
+        // Transient (503/500/network) — wait and retry a few times. The
+        // backend can still be connecting to Postgres at cold boot.
+        if (attempt < MAX_TRIES) {
+          await new Promise((r) => setTimeout(r, 800 * attempt));
+          continue;
+        }
+        // Exhausted retries: keep the cached session instead of logging out.
+        console.warn('[auth] backend unreachable, keeping cached session', status || e?.message);
+        stopProactiveRefresh();
+        set({ isLoading: false });
         return;
       }
-    } catch {
-      // Auth failed — fall through to a clean logout.
     }
 
     clearPersistedUser();

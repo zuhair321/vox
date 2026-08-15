@@ -372,6 +372,21 @@ function waitForServer(url, timeout = 15000) {
 // listening") instead of blindly sleeping or hammering /health (which runs a
 // DB query every 300ms). Resolves as soon as the process is actually serving,
 // or after `timeout` so startup never deadlocks.
+async function waitForDbHealth(timeout = 25000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    try {
+      const res = await fetch('http://127.0.0.1:4000/health');
+      if (res.ok) {
+        const body = await res.json();
+        if (body && body.database === 'connected') return true;
+      }
+    } catch { /* backend not answering yet */ }
+    if (Date.now() > deadline) return false;
+    await new Promise((r) => setTimeout(r, 700));
+  }
+}
+
 function waitForBackendReady(proc, timeout = 35000) {
   return new Promise((resolve) => {
     let done = false;
@@ -1325,6 +1340,12 @@ async function start() {
       const result = await startBackend();
     if (result.ready) {
       console.log('[Startup] Backend ready.');
+      // The backend prints "listening" as soon as Express binds, but the
+      // bundled Postgres may still be initializing (health returns 503). If
+      // the window loads now, the renderer's getMe() 500s and the old auth
+      // store treated that as "session expired" → forced logout on every cold
+      // boot. Keep the splash up until the database actually answers.
+      await waitForDbHealth(25000);
     } else {
       console.error('[Startup] Backend exited before becoming ready — check the error output below.');
       if (!isQuitting) {
