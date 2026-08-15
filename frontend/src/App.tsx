@@ -10,6 +10,7 @@ import { useProfileStore } from './stores/profileStore';
 import { useUiStore } from './stores/uiStore';
 import { useThemeStore } from './stores/themeStore';
 import { useAuthStore } from './stores/authStore';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 
 // We will implement these components next
 import ServerRail from './components/server/ServerRail';
@@ -81,7 +82,7 @@ const Chat = lazy(() => import('./pages/settings/Chat'));
 
 const AppLayout = () => {
   const { connect, disconnect } = useSocketStore();
-  const { fetchServers, selectedServer } = useServerStore();
+  const { fetchServers, servers, selectedServer } = useServerStore();
   const { fetchFriends } = useFriendStore();
   const { applyServerTheme } = useThemeStore();
   const location = useLocation();
@@ -119,6 +120,30 @@ const AppLayout = () => {
     const serverId = selectedServer?.id ?? null;
     applyServerTheme(serverId);
   }, [location.pathname, selectedServer?.id, applyServerTheme]);
+
+  // PS5-style page slide between servers. Direction comes from the index
+  // delta in the servers array: moving right in the rail slides in from the
+  // right, moving left slides in from the left. Reduced-motion users get no
+  // slide at all (rendered below without the motion wrapper).
+  const reduceMotion = useReducedMotion();
+  const [slideDir, setSlideDir] = useState(1);
+  const [prevSlideKey, setPrevSlideKey] = useState<string | null>(null);
+  const slideKey = selectedServer?.id ?? 'home';
+  // Compute the slide direction DURING render (React's "adjust state during
+  // render" pattern) so AnimatePresence mounts the new child with the correct
+  // direction. A useEffect would run AFTER the commit — the first frame of the
+  // enter/exit would use the previous transition's direction and the slide
+  // would visibly lag one switch behind.
+  if (prevSlideKey !== slideKey) {
+    setPrevSlideKey(slideKey);
+    if (prevSlideKey !== null) {
+      const prevIdx = servers.findIndex((s) => s.id === prevSlideKey);
+      const nextIdx = servers.findIndex((s) => s.id === slideKey);
+      if (prevIdx >= 0 && nextIdx >= 0 && nextIdx !== prevIdx) {
+        setSlideDir(nextIdx > prevIdx ? 1 : -1);
+      }
+    }
+  }
 
   // Global overlay state: theme switcher, quick switcher (Ctrl+K), and the
   // keyboard-shortcuts help (Ctrl+/). Lives at the layout root so they render
@@ -265,6 +290,58 @@ const { user, accessToken, isLoading } = useAuthStore();
     };
   }, [connect, disconnect, fetchServers, fetchFriends, hydrateFromUser, navigate, user, accessToken, isInitialized, location.pathname]);
 
+  const routesTree = (
+    <Routes location={location} key={location.pathname}>
+
+            <Route path="/invite/:code" element={<PanelErrorBoundary panelName="Invite"><InviteAccept /></PanelErrorBoundary>} />
+            <Route path="/friends" element={<PanelErrorBoundary panelName="Friends"><FriendsPage /></PanelErrorBoundary>} />
+            <Route path="/dm/:dmId" element={<PanelErrorBoundary panelName="DM"><DMConversation /></PanelErrorBoundary>} />
+            <Route path="/profile" element={<PanelErrorBoundary panelName="Profile"><Profile /></PanelErrorBoundary>} />
+            <Route path="/settings" element={<PanelErrorBoundary panelName="Settings"><Settings /></PanelErrorBoundary>} />
+            <Route path="/settings/account" element={<PanelErrorBoundary panelName="Account"><Account /></PanelErrorBoundary>} />
+            <Route path="/settings/privacy" element={<PanelErrorBoundary panelName="Privacy"><Privacy /></PanelErrorBoundary>} />
+            <Route path="/settings/social" element={<PanelErrorBoundary panelName="Social"><Social /></PanelErrorBoundary>} />
+            <Route path="/settings/devices" element={<PanelErrorBoundary panelName="Devices"><Devices /></PanelErrorBoundary>} />
+            <Route path="/settings/sessions" element={<PanelErrorBoundary panelName="Sessions"><Sessions /></PanelErrorBoundary>} />
+            <Route path="/settings/apps" element={<PanelErrorBoundary panelName="AuthorizedApps"><AuthorizedApps /></PanelErrorBoundary>} />
+            <Route path="/settings/family" element={<PanelErrorBoundary panelName="FamilyCenter"><FamilyCenter /></PanelErrorBoundary>} />
+            <Route path="/settings/appearance" element={<PanelErrorBoundary panelName="Appearance"><Appearance /></PanelErrorBoundary>} />
+            <Route path="/settings/voice" element={<PanelErrorBoundary panelName="Voice"><Voice /></PanelErrorBoundary>} />
+            <Route path="/settings/notifications" element={<PanelErrorBoundary panelName="Notifications"><Notifications /></PanelErrorBoundary>} />
+            <Route path="/settings/chat" element={<PanelErrorBoundary panelName="Chat"><Chat /></PanelErrorBoundary>} />
+            <Route path="/server-settings/:serverId" element={<PanelErrorBoundary panelName="ServerSettings"><ServerSettings /></PanelErrorBoundary>} />
+            <Route path="/server-insights/:serverId" element={
+              <PanelErrorBoundary panelName="ServerInsights">
+                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <ServerInsights />
+              </PanelErrorBoundary>
+            } />
+            <Route path="/server-profile/:serverId" element={
+              <PanelErrorBoundary panelName="ServerProfile">
+                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <ServerProfile />
+                <MemberPanel />
+              </PanelErrorBoundary>
+            } />
+            <Route path="/channels/:serverId/:channelId" element={
+              <PanelErrorBoundary panelName="ChannelView">
+                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                  <MainContent />
+                  <VoiceChannelPanel />
+                </div>
+                <MemberPanel />
+              </PanelErrorBoundary>
+            } />
+            <Route path="/channels/:serverId/:channelId/:messageId" element={
+              <ChannelViewWithMessage onOpenThemes={() => setThemeOpen(true)} />
+            } />
+            <Route path="/" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Select a server or friends.</div>} />
+            <Route path="*" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Page not found.</div>} />
+          
+    </Routes>
+  );
+
   return (
     <div className="app-container">
       <TitleBar />
@@ -322,57 +399,28 @@ const { user, accessToken, isLoading } = useAuthStore();
         <ServerRail />
       </PanelErrorBoundary>
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <Suspense fallback={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}><div className="spinner" /></div>}>
-          <Routes location={location} key={location.pathname}>
-            <Route path="/invite/:code" element={<PanelErrorBoundary panelName="Invite"><InviteAccept /></PanelErrorBoundary>} />
-            <Route path="/friends" element={<PanelErrorBoundary panelName="Friends"><FriendsPage /></PanelErrorBoundary>} />
-            <Route path="/dm/:dmId" element={<PanelErrorBoundary panelName="DM"><DMConversation /></PanelErrorBoundary>} />
-            <Route path="/profile" element={<PanelErrorBoundary panelName="Profile"><Profile /></PanelErrorBoundary>} />
-            <Route path="/settings" element={<PanelErrorBoundary panelName="Settings"><Settings /></PanelErrorBoundary>} />
-            <Route path="/settings/account" element={<PanelErrorBoundary panelName="Account"><Account /></PanelErrorBoundary>} />
-            <Route path="/settings/privacy" element={<PanelErrorBoundary panelName="Privacy"><Privacy /></PanelErrorBoundary>} />
-            <Route path="/settings/social" element={<PanelErrorBoundary panelName="Social"><Social /></PanelErrorBoundary>} />
-            <Route path="/settings/devices" element={<PanelErrorBoundary panelName="Devices"><Devices /></PanelErrorBoundary>} />
-            <Route path="/settings/sessions" element={<PanelErrorBoundary panelName="Sessions"><Sessions /></PanelErrorBoundary>} />
-            <Route path="/settings/apps" element={<PanelErrorBoundary panelName="AuthorizedApps"><AuthorizedApps /></PanelErrorBoundary>} />
-            <Route path="/settings/family" element={<PanelErrorBoundary panelName="FamilyCenter"><FamilyCenter /></PanelErrorBoundary>} />
-            <Route path="/settings/appearance" element={<PanelErrorBoundary panelName="Appearance"><Appearance /></PanelErrorBoundary>} />
-            <Route path="/settings/voice" element={<PanelErrorBoundary panelName="Voice"><Voice /></PanelErrorBoundary>} />
-            <Route path="/settings/notifications" element={<PanelErrorBoundary panelName="Notifications"><Notifications /></PanelErrorBoundary>} />
-            <Route path="/settings/chat" element={<PanelErrorBoundary panelName="Chat"><Chat /></PanelErrorBoundary>} />
-            <Route path="/server-settings/:serverId" element={<PanelErrorBoundary panelName="ServerSettings"><ServerSettings /></PanelErrorBoundary>} />
-            <Route path="/server-insights/:serverId" element={
-              <PanelErrorBoundary panelName="ServerInsights">
-                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
-                <ServerInsights />
-              </PanelErrorBoundary>
-            } />
-            <Route path="/server-profile/:serverId" element={
-              <PanelErrorBoundary panelName="ServerProfile">
-                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
-                <ServerProfile />
-                <MemberPanel />
-              </PanelErrorBoundary>
-            } />
-            <Route path="/channels/:serverId/:channelId" element={
-              <PanelErrorBoundary panelName="ChannelView">
-                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
-                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                  <MainContent />
-                  <VoiceChannelPanel />
-                </div>
-                <MemberPanel />
-              </PanelErrorBoundary>
-            } />
-            <Route path="/channels/:serverId/:channelId/:messageId" element={
-              <ChannelViewWithMessage onOpenThemes={() => setThemeOpen(true)} />
-            } />
-            <Route path="/" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Select a server or friends.</div>} />
-            <Route path="*" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Page not found.</div>} />
-          </Routes>
-        </Suspense>
-      </div>
+      {reduceMotion ? (
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+          <Suspense fallback={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}><div className="spinner" /></div>}>
+            {routesTree}
+          </Suspense>
+        </div>
+      ) : (
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={slideKey}
+            initial={{ x: slideDir * 150, opacity: 0.25 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: slideDir * -150, opacity: 0.1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 28, mass: 1.1 }}
+            style={{ display: 'flex', flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative' }}
+          >
+            <Suspense fallback=<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}><div className="spinner" /></div>>
+              {routesTree}
+            </Suspense>
+          </motion.div>
+        </AnimatePresence>
+      )}
 
       <ToastContainer />
       <ProfilePopup />

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useServerStore } from '../../stores/serverStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useNavigate } from 'react-router-dom';
@@ -26,6 +26,8 @@ const ServerRail: React.FC = () => {
   const serverMenu = useContextMenu();
   const [hoveredServerId, setHoveredServerId] = useState<string | null>(null);
   const [pulseServerId, setPulseServerId] = useState<string | null>(null);
+  const [haptic, setHaptic] = useState<{ id: string; n: number } | null>(null);
+  const reduceMotion = useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -63,6 +65,12 @@ const ServerRail: React.FC = () => {
     setPulseServerId(server.id);
     setTimeout(() => setPulseServerId(null), 650);
 
+    // Haptic kick: short sharp scale pop on the freshly selected icon.
+    if (!reduceMotion) {
+      setHaptic({ id: server.id, n: Date.now() });
+      setTimeout(() => setHaptic((h) => (h && h.id === server.id ? null : h)), 420);
+    }
+
     setSelectedServer(server);
     if (server.channels.length > 0) {
       navigate(`/channels/${server.id}/${server.channels[0].id}`);
@@ -81,6 +89,16 @@ const ServerRail: React.FC = () => {
     if (tiltState?.id === serverId) setTiltState(null);
     setHoveredServerId(null);
   };
+
+  // Haptic kick keyframes — memoized on `haptic` so the array reference is
+  // stable while the kick is in flight. Without this, any re-render during the
+  // 420ms window (e.g. a hover flip on the same icon) would recreate the array
+  // and restart the pop from the top. The `(haptic.n % 50) * 0.0001` tail makes
+  // each new select produce a different last keyframe so framer re-triggers.
+  const kickScale = React.useMemo(() => {
+    if (!haptic) return null;
+    return [1, 1.18, 0.97, 1.12 + ((haptic.n % 50) * 0.0001)];
+  }, [haptic]);
 
   // Get distance from selected server for scale cascade
   const getDistanceClass = (serverId: string) => {
@@ -182,7 +200,7 @@ const ServerRail: React.FC = () => {
     return null;
   };
 
-  // PS5 spring transition
+  // PS5 spring transition (hover / idle glides)
   const ps5Spring = {
     type: 'spring' as const,
     stiffness: 500,
@@ -190,11 +208,21 @@ const ServerRail: React.FC = () => {
     mass: 0.8,
   };
 
+  // Focus ring — deliberately SLOW ease-out so it glides between icons
+  // instead of snapping: low stiffness, heavy mass, moderate damping.
+  const focusSpring = {
+    type: 'spring' as const,
+    stiffness: 170,
+    damping: 26,
+    mass: 1.6,
+  };
+
+  // Haptic pop — stiff + underdamped for a short overshoot "thump".
   const ps5PopSpring = {
     type: 'spring' as const,
-    stiffness: 600,
-    damping: 20,
-    mass: 0.6,
+    stiffness: 720,
+    damping: 16,
+    mass: 0.55,
   };
 
   return (
@@ -274,7 +302,7 @@ const ServerRail: React.FC = () => {
             layoutId="ps5-focus-ring"
             className="ps5-focus-ring"
             style={{ inset: '-5px' }}
-            transition={ps5Spring}
+            transition={focusSpring}
           />
         )}
       </motion.button>
@@ -317,7 +345,13 @@ const ServerRail: React.FC = () => {
                 onMouseMove={(e) => handleMouseMove(e, server.id)}
                 onMouseLeave={() => handleMouseLeave(server.id)}
                 animate={{
-                  scale: isSelected ? 1.12 : isHovered ? 1.08 : 1,
+                  scale: isSelected
+                    ? haptic && haptic.id === server.id && kickScale
+                      ? kickScale
+                      : 1.12
+                    : isHovered
+                      ? 1.08
+                      : 1,
                   y: isSelected ? -4 : isHovered ? -3 : 0,
                   rotateX: tilt ? tilt.rx : 0,
                   rotateY: tilt ? tilt.ry : 0,
@@ -356,7 +390,7 @@ const ServerRail: React.FC = () => {
                     layoutId="ps5-focus-ring"
                     className="ps5-focus-ring"
                     style={{ inset: '-5px' }}
-                    transition={ps5Spring}
+                    transition={focusSpring}
                   />
                 )}
 
