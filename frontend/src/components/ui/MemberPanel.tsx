@@ -43,7 +43,7 @@ type MemberLike = {
   };
 };
 
-const MemberPanel: React.FC = () => {
+const MemberPanel: React.FC<{ empty?: boolean }> = ({ empty }) => {
   const { selectedServer } = useServerStore();
   const { addToast } = useUiStore();
   const navigate = useNavigate();
@@ -250,7 +250,7 @@ const MemberPanel: React.FC = () => {
 
   const { buckets, counts } = useMemo(buildMemberBuckets, [selectedServer, profile.userStatus, myUserId]);
 
-  if (!selectedServer) return <div className="member-panel"></div>;
+  if (empty || !selectedServer) return <div className="member-panel"></div>;
 
   return (
     <div className="member-panel">

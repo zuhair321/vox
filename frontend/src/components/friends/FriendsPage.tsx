@@ -383,8 +383,8 @@ const FriendsPage: React.FC = () => {
         {renderContent()}
       </div>
 
-      {/* Operatives panel — empty when no realm is selected (matches layout) */}
-      <MemberPanel />
+      {/* Operatives panel — always a bare dark void in DM space (matches layout) */}
+      <MemberPanel empty />
     </div>
   );
 };

@@ -172,7 +172,7 @@ const VoiceChannelRow: React.FC<{
 
 import { useMessageStore } from '../../stores/messageStore';
 
-const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
+const Sidebar: React.FC = () => {
   const { selectedServer, selectedChannel, setSelectedChannel, servers, removeServer, setSelectedServer } = useServerStore();
   const { setCreateChannelOpen, addToast, setInviteModalOpen, setShowDiscover } = useUiStore();
   const voice = useVoiceStore();
@@ -551,7 +551,7 @@ const Sidebar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
         <ChannelSettings channelId={channelSettingsId} onClose={() => setChannelSettingsId(null)} />
       )}
 
-      <UserOperativeBar onOpenThemes={onOpenThemes} />
+      <UserOperativeBar />
     </div>
   );
 };

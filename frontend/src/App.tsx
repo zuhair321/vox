@@ -50,11 +50,11 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useRipple } from './hooks/useRipple';
 import UpdateModal from './components/ui/UpdateModal';
 
-const ChannelViewWithMessage: React.FC<{ onOpenThemes: () => void }> = ({ onOpenThemes }) => {
+const ChannelViewWithMessage: React.FC = () => {
   const { messageId } = useParams<{ serverId: string; channelId: string; messageId: string }>();
   return (
     <PanelErrorBoundary panelName="ChannelView">
-      <Sidebar onOpenThemes={onOpenThemes} />
+      <Sidebar />
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         <MainContent messageId={messageId} />
         <VoiceChannelPanel />
@@ -312,20 +312,20 @@ const { user, accessToken, isLoading } = useAuthStore();
             <Route path="/server-settings/:serverId" element={<PanelErrorBoundary panelName="ServerSettings"><ServerSettings /></PanelErrorBoundary>} />
             <Route path="/server-insights/:serverId" element={
               <PanelErrorBoundary panelName="ServerInsights">
-                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <Sidebar />
                 <ServerInsights />
               </PanelErrorBoundary>
             } />
             <Route path="/server-profile/:serverId" element={
               <PanelErrorBoundary panelName="ServerProfile">
-                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <Sidebar />
                 <ServerProfile />
                 <MemberPanel />
               </PanelErrorBoundary>
             } />
             <Route path="/channels/:serverId/:channelId" element={
               <PanelErrorBoundary panelName="ChannelView">
-                <Sidebar onOpenThemes={() => setThemeOpen(true)} />
+                <Sidebar />
                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
                   <MainContent />
                   <VoiceChannelPanel />
@@ -334,7 +334,7 @@ const { user, accessToken, isLoading } = useAuthStore();
               </PanelErrorBoundary>
             } />
             <Route path="/channels/:serverId/:channelId/:messageId" element={
-              <ChannelViewWithMessage onOpenThemes={() => setThemeOpen(true)} />
+              <ChannelViewWithMessage />
             } />
             <Route path="/" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Select a server or friends.</div>} />
             <Route path="*" element={<div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center'}}>Page not found.</div>} />

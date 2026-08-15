@@ -19,7 +19,7 @@ function resolveMediaUrl(url: string | null | undefined) {
  * Shared across the server sidebar, the DM bar, and the friends page so the
  * DM bar always "hits" the same bottom bar as the main sidebar.
  */
-const UserOperativeBar: React.FC<{ onOpenThemes?: () => void }> = ({ onOpenThemes }) => {
+const UserOperativeBar: React.FC = () => {
   const navigate = useNavigate();
   const profile = useProfileStore();
   const avatarUrl = resolveMediaUrl(profile.avatarUrl);
