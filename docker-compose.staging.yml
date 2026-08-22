@@ -1,0 +1,79 @@
+# ═══════════════════════════════════════════════════════════════
+# VOX — Docker Compose (Staging Environment)
+# ═══════════════════════════════════════════════════════════════
+# Usage: docker compose -f docker-compose.staging.yml up -d
+# ═══════════════════════════════════════════════════════════════
+
+services:
+  postgres-staging:
+    image: postgres:16-alpine
+    container_name: vox-postgres-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vox_staging
+      POSTGRES_USER: vox
+      POSTGRES_PASSWORD: ${STAGING_DB_PASSWORD:-staging_password}
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vox -d vox_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis-staging:
+    image: redis:7-alpine
+    container_name: vox-redis-staging
+    restart: unless-stopped
+    command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru
+    ports:
+      - "127.0.0.1:6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend-staging:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vox-backend-staging
+    restart: unless-stopped
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      redis-staging:
+        condition: service_healthy
+    environment:
+      NODE_ENV: staging
+      PORT: 4001
+      DATABASE_URL: postgresql://vox:${STAGING_DB_PASSWORD:-staging_password}@postgres-staging:5432/vox_staging?schema=public
+      REDIS_URL: redis://redis-staging:6379
+      JWT_ACCESS_SECRET: ${STAGING_JWT_SECRET:-staging_jwt_secret_change_me}
+      JWT_REFRESH_SECRET: ${STAGING_JWT_REFRESH_SECRET:-staging_jwt_refresh_secret_change_me}
+      JWT_ACCESS_TTL: 30m
+      JWT_REFRESH_TTL: 7d
+      TWO_FACTOR_APP_NAME: VOX-Staging
+      TWO_FACTOR_ENCRYPTION_KEY: ${STAGING_2FA_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      CLIENT_ORIGIN: ${STAGING_CLIENT_ORIGIN:-http://localhost:3001}
+      SERVE_FRONTEND: "1"
+      FRONTEND_DIST: /app/frontend/dist
+    volumes:
+      - uploads_staging_data:/app/uploads
+    ports:
+      - "127.0.0.1:4001:4001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_staging_data:
+    driver: local
+  uploads_staging_data:
+    driver: local

@@ -21,6 +21,7 @@ import { startDiscovery, stopDiscovery } from './lib/discovery.js';
 import { logMetrics } from './lib/monitoring.js';
 import { legalRouter } from './routes/legal.routes.js';
 import { monitorPerformance } from './middleware/performance.js';
+import { securityHeaders, compression, idempotency, featureFlagsMiddleware, apiVersion, requestId, corsCache } from './middleware/enterprise.js';
 
 // ── Crash resilience ──────────────────────────────────────────
 // After an uncaughtException the process state is undefined, so the correct
@@ -108,6 +109,14 @@ app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
+// Enterprise middleware suite
+app.use(securityHeaders);
+app.use(compression);
+app.use(requestId);
+app.use(apiVersion);
+app.use(corsCache);
+app.use(featureFlagsMiddleware);
+app.use(idempotency());
 app.use(securityMiddleware);
 app.use(requestLogger);
 app.use(rateLimitMiddleware({
