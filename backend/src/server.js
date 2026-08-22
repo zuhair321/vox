@@ -53,6 +53,8 @@ const ROUTE_REGISTRY = [
   ['/api', './routes/servers.js', 'serverRouter'],
   ['/api', './routes/friends.js', 'friendRouter'],
   ['/api', './routes/dm.js', 'dmRouter'],
+  ['/api', './routes/groupDm.js', 'groupDmRouter'],
+  ['/api', './routes/stickers.js', 'stickerRouter'],
   ['/api', './routes/search.js', 'searchRouter'],
   ['/api', './routes/insights.js', 'insightsRouter'],
   ['/api', './routes/invites.js', 'inviteRouter'],

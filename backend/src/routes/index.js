@@ -39,3 +39,5 @@ export { activityRouter } from './activity.routes.js';
 export { moderationRouter } from './moderation.routes.js';
 export { customPowersRouter } from './custom-powers.routes.js';
 export { docsRouter } from "./docs.js";
+export { groupDmRouter } from "./groupDm.js";
+export { stickerRouter } from "./stickers.js";

@@ -64,6 +64,9 @@ model User {
   channelMessages Message[]       @relation("MessageAuthor")
   dmsSent         DmMessage[]     @relation("dmMessagesSent")
   dmsReceived     DmMessage[]     @relation("dmMessagesReceived")
+  ownedGroupDms    GroupDm[]
+  groupDmMemberships GroupDmMember[]
+  groupDmsSent     GroupDmMessage[] @relation("GroupDmMessagesSent")
   friends         Friend[]        @relation("friend_requests_sent")
   friendsOf       Friend[]        @relation("friend_requests_received")
   invitesCreated  Invite[]
@@ -1116,4 +1119,100 @@ model DmPreference {
 
   @@unique([userId, dmId])
   @@index([userId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Group DMs — Multi-person direct messages (up to 10 members)
+// ═══════════════════════════════════════════════════════════════
+model GroupDm {
+  id          String   @id @default(uuid())
+  name        String?  // Optional group name
+  icon        String?  // Optional group icon
+  ownerId     String   // Creator of the group
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members     GroupDmMember[]
+  messages    GroupDmMessage[]
+  
+  @@index([ownerId])
+}
+
+model GroupDmMember {
+  id          String   @id @default(uuid())
+  groupDmId   String
+  userId      String
+  nickname    String?  // Optional nickname in this group
+  joinedAt    DateTime @default(now())
+  lastReadAt  DateTime?
+  
+  // Relations
+  groupDm     GroupDm  @relation(fields: [groupDmId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([groupDmId, userId])
+  @@index([groupDmId])
+  @@index([userId])
+}
+
+model GroupDmMessage {
+  id          String   @id @default(uuid())
+  content     String?
+  ciphertext  String?  // E2E encrypted content
+  nonce       String?
+  keyVersion  Int      @default(1)
+  senderKeyFingerprint String?
+  attachments Json?
+  groupDmId   String
+  senderId    String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  edited      Boolean  @default(false)
+  deleted     Boolean  @default(false)
+  
+  // Relations
+  groupDm     GroupDm  @relation(fields: [groupDmId], references: [id], onDelete: Cascade)
+  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  
+  @@index([groupDmId, createdAt])
+  @@index([senderId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Stickers — Custom sticker packs for messages
+// ═══════════════════════════════════════════════════════════════
+model Sticker {
+  id          String   @id @default(uuid())
+  name        String   // Display name
+  tags        String   // Related emoji (for search)
+  assetUrl    String   // Image URL
+  type        String   @default("png") // png, gif, apng
+  available   Boolean  @default(true)
+  serverId    String?  // null = global sticker
+  creatorId   String
+  createdAt   DateTime @default(now())
+  usageCount  Int      @default(0)
+  
+  // Relations
+  server      Server?  @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  
+  @@index([serverId])
+  @@index([creatorId])
+  @@index([tags])
+}
+
+model StickerPack {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  creatorId   String
+  stickers    Sticker[]
+  createdAt   DateTime @default(now())
+  
+  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  
+  @@index([creatorId])
 }
