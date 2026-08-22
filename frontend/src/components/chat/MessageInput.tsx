@@ -538,7 +538,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
             borderRadius: '8px'
           }}
         >
-          <span style={{ fontSize: '10px', color: '#ff6b6b', animation: 'vox-pulse 1.2s infinite' }}>🔴</span>
+          <span style={{ fontSize: '10px', color: 'var(--electric)', animation: 'vox-pulse 1.2s infinite' }}>🔴</span>
           <span style={{ color: 'var(--ghost-white)' }}>Recording…</span>
           <span style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--ash)' }}>
             {Math.floor(voice.elapsed / 60)}:{String(Math.floor(voice.elapsed % 60)).padStart(2, '0')}
@@ -588,7 +588,7 @@ const MessageInput: React.FC<{ channelId?: string; dmId?: string }> = React.memo
       )}
 
       {recordingError && (
-        <div style={{ padding: '4px 12px', color: '#ff6b6b', fontSize: 12 }}>{recordingError}</div>
+        <div style={{ padding: '4px 12px', color: 'var(--electric)', fontSize: 12 }}>{recordingError}</div>
       )}
 
       <EmojiPicker

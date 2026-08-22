@@ -6,38 +6,36 @@
 
 :root {
   /* ── Backgrounds — descending into the void ──────────────── */
-  --void: #0c090b;          /* deep shell */
-  --abyss: #151012;         /* main background */
-  --dark-matter: #21171a;   /* card backgrounds */
-  --obsidian: #26191d;      /* sidebar */
-  --phantom: #372126;       /* elevated surfaces */
-  --rim: #5a2c32;           /* borders */
-  --ghost: #704047;         /* hover states */
+  --void: #0c090b;
+  --abyss: #151012;
+  --dark-matter: #21171a;
+  --obsidian: #26191d;
+  --phantom: #372126;
+  --rim: #5a2c32;
+  --ghost: #704047;
 
   /* ── Accents — cracks of light in the darkness ───────────── */
-  --crimson: #8b0000;       /* danger, delete, evil */
-  --blood: #cc0000;         /* active danger */
-  --void-purple: #5a0808;   /* legacy accent now dried blood */
-  --chaos: #b1121b;         /* primary action */
-  --electric: #e63232;      /* hover glow */
-  --gold: #ffd700;          /* rare, legendary */
-  --toxic: #00ff41;         /* online status, matrix */
+  --crimson: #a5182f;
+  --blood: #cc0000;
+  --chaos: #b1121b;
+  --electric: #e63232;
+  --gold: #c9a24b;
+  --gold-dim: #8a6f34;
+  --toxic: #00ff41;
 
-  /* ── Text — spectral hierarchy ───────────────────────────── */
-  --ghost-white: #fff4f4;   /* primary text */
-  --ash: #ead0d0;           /* secondary text */
-  --shadow: #b88989;        /* muted/disabled */
+  /* ── Text — parchment hierarchy ──────────────────────────── */
+  --ghost-white: #e9e4d8;
+  --ash: #c9c2b4;
+  --shadow: #8b8790;
 
   /* ── Derived — convenience composites ────────────────────── */
-  --chaos-glow: rgba(204, 0, 0, 0.42);
-  --crimson-glow: rgba(139, 0, 0, 0.5);
+  --chaos-glow: rgba(177, 18, 27, 0.42);
+  --crimson-glow: rgba(165, 24, 47, 0.5);
   --toxic-glow: rgba(0, 255, 65, 0.4);
-  --gold-glow: rgba(255, 215, 0, 0.3);
+  --gold-glow: rgba(201, 162, 75, 0.3);
 
-  /* ── Circle clip-paths — avatars and signature shapes ─────── */
+  /* ── Clip-paths ──────────────────────────────────────────── */
   --octagon: circle(50%);
-
-  /* ── Angular cut-corner clip-paths ───────────────────────── */
   --cut-corner-tr: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 0 100%);
   --cut-corner-bl: polygon(0 0, 100% 0, 100% 100%, 20px 100%, 0 calc(100% - 20px));
   --cut-corner-all: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px), calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px);
@@ -46,35 +44,83 @@
   --font-display: 'Cinzel Decorative', serif;
   --font-ui: 'Share Tech Mono', monospace;
   --font-accent: 'Creepster', cursive;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  /* ── Z-index scale ───────────────────────────────────────── */
+  /* ── Typography Scale ────────────────────────────────────── */
+  --text-2xs: 0.625rem;   /* 10px */
+  --text-xs: 0.6875rem;   /* 11px */
+  --text-sm: 0.75rem;     /* 12px */
+  --text-base: 0.8125rem; /* 13px */
+  --text-md: 0.875rem;    /* 14px */
+  --text-lg: 1rem;        /* 16px */
+  --text-xl: 1.25rem;     /* 20px */
+  --text-2xl: 1.5rem;     /* 24px */
+  --text-3xl: 1.875rem;   /* 30px */
+
+  /* ── Spacing Scale ───────────────────────────────────────── */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ── Border Radius ───────────────────────────────────────── */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 50%;
+
+  /* ── Shadow System ───────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --shadow-glow-crimson: 0 0 20px rgba(165, 24, 47, 0.3);
+  --shadow-glow-gold: 0 0 20px rgba(201, 162, 75, 0.25);
+  --shadow-glow-toxic: 0 0 20px rgba(0, 255, 65, 0.25);
+  --shadow-inset: inset 0 1px 4px rgba(0, 0, 0, 0.4);
+
+  /* ── Transitions ─────────────────────────────────────────── */
+  --transition-fast: 120ms ease;
+  --transition-base: 180ms ease;
+  --transition-slow: 300ms ease;
+  --transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Z-index Scale ───────────────────────────────────────── */
   --z-particles: 0;
   --z-content: 1;
+  --z-sticky: 5;
   --z-overlay: 10;
+  --z-dropdown: 15;
   --z-modal: 20;
+  --z-toast: 30;
+  --z-tooltip: 40;
 }
 
 /* ════════════════════════════════════════════════════════════════
-   VOX — ATELIER TOKEN SET (design brief pass)
+   VOX — ATELIER TOKEN SET
    Canonical names used by the new surface work in atelier.css.
-   Existing legacy tokens above remain fully functional.
    ════════════════════════════════════════════════════════════════ */
 
 :root {
   /* ── Backgrounds ─────────────────────────────────────────── */
-  --bg-void: #0a0a0d;        /* window background */
-  --bg-surface: #131217;     /* sidebars, panels */
-  --bg-elevated: #1c1a20;    /* cards, hover surfaces */
+  --bg-void: #0a0a0d;
+  --bg-surface: #131217;
+  --bg-elevated: #1c1a20;
   --border-hairline: #2a2730;
-
-  /* ── Accents — the covenant palette ──────────────────────── */
-  --crimson: #a5182f;
-  --crimson-glow: rgba(165, 24, 47, 0.35);
-  --gold: #c9a24b;
-  --gold-dim: #8a6f34;
 
   /* ── Text — parchment hierarchy ──────────────────────────── */
   --text-primary: #e9e4d8;
+  --text-secondary: #c9c2b4;
   --text-muted: #8b8790;
   --text-faint: #5a5660;
 
@@ -83,12 +129,4 @@
   --seal-wax: #6d1b24;
   --seal-wax-hi: #a5182f;
   --seal-glow: rgba(165, 24, 47, 0.28);
-}
-
-/* Rebind the legacy aliases the rest of the app already reads so the
-   whole surface shares the covenant palette (keeps old names working). */
-:root {
-  --ghost-white: #e9e4d8;
-  --ash: #c9c2b4;
-  --shadow: #8b8790;
 }

@@ -226,7 +226,7 @@ const ImageLightbox: React.FC<LightboxProps> = ({ images, startIndex, onClose })
                 height: 'auto',
                 borderRadius: 4,
                 display: failed ? 'none' : 'block',
-                background: '#000',
+                background: 'var(--void)',
               }}
             />
           ) : (

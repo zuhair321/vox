@@ -673,7 +673,7 @@ const VoiceChannelPanel: React.FC = () => {
                 borderRadius: '4px',
                 fontSize: '9px',
                 fontWeight: 700,
-                color: '#a99bf5',
+                color: 'var(--gold)',
                 letterSpacing: '0.08em',
                 marginLeft: 4,
               }}

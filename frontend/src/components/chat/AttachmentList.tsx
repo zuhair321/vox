@@ -150,7 +150,7 @@ const AttachmentList: React.FC<AttachmentListProps> = ({ attachments }) => {
                   maxHeight: '350px',
                   borderRadius: '8px',
                   display: 'block',
-                  background: '#000',
+                  background: 'var(--void)',
                 }}
               />
             </div>

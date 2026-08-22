@@ -48,7 +48,7 @@ const AppealManager: React.FC<Props> = ({ serverId }) => {
             </div>
           )}
           <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-            <button className="angular-button" onClick={() => review(a.id, 'APPROVED', '')} style={{ padding: '6px 12px', fontSize: '12px', background: '#4caf50' }}>
+            <button className="angular-button" onClick={() => review(a.id, 'APPROVED', '')} style={{ padding: '6px 12px', fontSize: '12px', background: 'var(--toxic)' }}>
               Approve
             </button>
             <button className="angular-button" onClick={() => review(a.id, 'DENIED', '')} style={{ padding: '6px 12px', fontSize: '12px', background: 'var(--chaos)' }}>

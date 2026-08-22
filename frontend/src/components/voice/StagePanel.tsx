@@ -172,7 +172,7 @@ const StagePanel: React.FC<{ channelId: string }> = ({ channelId }) => {
             </div>
           )}
           {mySpeaker?.status === 'MOD' && (
-            <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, color: '#4af3ff', fontSize: 12, border: '1px solid rgba(74,243,255,0.4)', padding: '8px 20px', borderRadius: 6, background: 'rgba(74,243,255,0.08)' }}>
+            <div style={{ marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--gold)', fontSize: 12, border: '1px solid rgba(74,243,255,0.4)', padding: '8px 20px', borderRadius: 6, background: 'rgba(74,243,255,0.08)' }}>
               <Shield size={14} /> STAGE MODERATOR
             </div>
           )}

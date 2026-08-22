@@ -184,7 +184,7 @@ const PinnedMessages: React.FC = () => {
                         width: '24px',
                         height: '24px',
                         overflow: 'hidden',
-                        background: 'linear-gradient(135deg, #2a3038, #4a535f)',
+                        background: 'linear-gradient(135deg, var(--dark-matter), var(--phantom))',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -194,7 +194,7 @@ const PinnedMessages: React.FC = () => {
                       {avatarUrl ? (
                         <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       ) : (
-                        <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '11px' }}>
+                        <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '11px' }}>
                           {authorName[0].toUpperCase()}
                         </span>
                       )}

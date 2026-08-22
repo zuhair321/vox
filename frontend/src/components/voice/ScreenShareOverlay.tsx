@@ -390,8 +390,8 @@ const ScreenShareOverlay: React.FC = () => {
         {/* Letterbox bars for cinematic mode */}
         {cinematic && (
           <>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '60px', background: 'linear-gradient(180deg, #000, transparent)', zIndex: 5, pointerEvents: 'none' }} />
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60px', background: 'linear-gradient(0deg, #000, transparent)', zIndex: 5, pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '60px', background: 'linear-gradient(180deg, var(--void), transparent)', zIndex: 5, pointerEvents: 'none' }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '60px', background: 'linear-gradient(0deg, var(--void), transparent)', zIndex: 5, pointerEvents: 'none' }} />
           </>
         )}
         {hasLocal && (

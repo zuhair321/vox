@@ -254,7 +254,7 @@ export const VoicePreviewModal: React.FC<VoicePreviewModalProps> = ({
                   <AlertTriangle size={20} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: '#d9c98d', fontWeight: 700, letterSpacing: '0.08em' }}>
+                  <div style={{ fontSize: 12, color: 'var(--gold)', fontWeight: 700, letterSpacing: '0.08em' }}>
                     {mediaError.title.toUpperCase()}
                   </div>
                   <div style={{ marginTop: 4, fontSize: 14, color: 'var(--ghost-white)', fontWeight: 600 }}>
@@ -324,7 +324,7 @@ export const VoicePreviewModal: React.FC<VoicePreviewModalProps> = ({
             )}
 
             {/* Preview area */}
-            <div style={{ position: 'relative', background: '#000', aspectRatio: mediaError ? 'auto' : '16/9', overflow: 'hidden', minHeight: mediaError ? 60 : undefined }}>
+            <div style={{ position: 'relative', background: 'var(--void)', aspectRatio: mediaError ? 'auto' : '16/9', overflow: 'hidden', minHeight: mediaError ? 60 : undefined }}>
               <video
                 ref={videoRef}
                 autoPlay
@@ -339,7 +339,7 @@ export const VoicePreviewModal: React.FC<VoicePreviewModalProps> = ({
                 <div style={{
                   position: 'absolute', inset: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'radial-gradient(circle at center, #1a1620 0%, #08060a 100%)',
+                  background: 'radial-gradient(circle at center, var(--dark-matter) 0%, var(--void) 100%)',
                 }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{

@@ -421,7 +421,7 @@ const ServerRail: React.FC = () => {
                     width: '16px',
                     height: '16px',
                     borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #ff73fa, #ffd37a)',
+                    background: 'linear-gradient(135deg, var(--electric), var(--gold))',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -493,7 +493,7 @@ const ServerRail: React.FC = () => {
                     }} />
                     {server.name}
                     {boostLevel > 0 && (
-                      <span style={{ color: '#ff73fa', marginLeft: '6px', fontSize: '10px' }}>
+                      <span style={{ color: 'var(--electric)', marginLeft: '6px', fontSize: '10px' }}>
                         ⚡ Lv.{boostLevel}
                       </span>
                     )}

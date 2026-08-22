@@ -157,7 +157,7 @@ const ThreadPanel: React.FC = () => {
                 style={{
                   marginLeft: '10px',
                   background: 'var(--chaos)',
-                  color: '#0b0d11',
+                  color: 'var(--bg-void)',
                   fontWeight: 800,
                   fontSize: '10px',
                   padding: '2px 7px',
@@ -189,7 +189,7 @@ const ThreadPanel: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                 <div className="octagon" style={{
                   width: '32px', height: '32px', overflow: 'hidden',
-                  background: 'linear-gradient(135deg, #2a3038, #4a535f, #dce4ee)',
+                  background: 'linear-gradient(135deg, var(--dark-matter), var(--phantom), var(--text-primary))',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   flexShrink: 0,
                 }}>
@@ -200,7 +200,7 @@ const ThreadPanel: React.FC = () => {
                       return <img src={full} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
                     }
                     const name = parentMsg.author?.username || parentMsg.authorOverride || '?';
-                    return <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{name[0].toUpperCase()}</span>;
+                    return <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{name[0].toUpperCase()}</span>;
                   })()}
                 </div>
                 <span style={{ color: 'var(--ghost-white)', fontWeight: 'bold', fontSize: '13px' }}>

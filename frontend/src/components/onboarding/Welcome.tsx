@@ -52,7 +52,7 @@ const Welcome: React.FC<Props> = ({ onSelected }) => {
 
   const cardBase: React.CSSProperties = {
     background: 'rgba(20,18,32,0.7)', border: '1px solid rgba(255,255,255,0.06)',
-    borderRadius: 14, padding: '20px 22px', color: '#e6e8ef', cursor: 'pointer',
+    borderRadius: 14, padding: '20px 22px', color: 'var(--text-primary)', cursor: 'pointer',
     transition: 'border-color 180ms ease, transform 180ms ease',
   };
   const cardSelected: React.CSSProperties = {
@@ -68,7 +68,7 @@ const Welcome: React.FC<Props> = ({ onSelected }) => {
         exit={{ opacity: 0 }}
         style={{
           position: 'fixed', inset: 0, zIndex: 9999,
-          background: 'radial-gradient(ellipse 120% 80% at 50% -20%, #1a1626 0%, #0a0810 70%, #04030a 100%)',
+          background: 'radial-gradient(ellipse 120% 80% at 50% -20%, var(--dark-matter) 0%, var(--void) 70%, #04030a 100%)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '24px', backdropFilter: 'blur(8px)',
         }}
@@ -86,9 +86,9 @@ const Welcome: React.FC<Props> = ({ onSelected }) => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <ShieldCheck size={22} color="#d7a94a" />
-            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: '#f0e6d2', letterSpacing: 0.3 }}>Choose how to connect</h1>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, color: 'var(--text-primary)', letterSpacing: 0.3 }}>Choose how to connect</h1>
           </div>
-          <p style={{ margin: 0, color: '#a39cb5', fontSize: 14, lineHeight: 1.55 }}>
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.55 }}>
             VOX can talk to a hosted VOX instance over HTTPS, to a self-hosted server you run
             yourself, or run entirely on your own machine with a bundled backend. Pick the option
             that fits.
@@ -97,24 +97,24 @@ const Welcome: React.FC<Props> = ({ onSelected }) => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 22 }}>
             <motion.div whileHover={{ y: -2 }} onClick={() => setPicked('cloud')} style={picked === 'cloud' ? cardSelected : cardBase}>
               <Cloud size={20} color={picked === 'cloud' ? '#d7a94a' : '#a39cb5'} />
-              <div style={{ fontWeight: 600, marginTop: 8, color: '#ece5d6' }}>VOX Cloud</div>
-              <div style={{ fontSize: 12, color: '#a39cb5', marginTop: 4 }}>Hosted by VOX. Just sign in.</div>
+              <div style={{ fontWeight: 600, marginTop: 8, color: 'var(--text-primary)' }}>VOX Cloud</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Hosted by VOX. Just sign in.</div>
             </motion.div>
             <motion.div whileHover={{ y: -2 }} onClick={() => setPicked('custom')} style={picked === 'custom' ? cardSelected : cardBase}>
               <Server size={20} color={picked === 'custom' ? '#d7a94a' : '#a39cb5'} />
-              <div style={{ fontWeight: 600, marginTop: 8, color: '#ece5d6' }}>Self-hosted</div>
-              <div style={{ fontSize: 12, color: '#a39cb5', marginTop: 4 }}>Your own VOX server URL.</div>
+              <div style={{ fontWeight: 600, marginTop: 8, color: 'var(--text-primary)' }}>Self-hosted</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Your own VOX server URL.</div>
             </motion.div>
             <motion.div whileHover={{ y: -2 }} onClick={() => setPicked('local')} style={picked === 'local' ? cardSelected : cardBase}>
               <HardDrive size={20} color={picked === 'local' ? '#d7a94a' : '#a39cb5'} />
-              <div style={{ fontWeight: 600, marginTop: 8, color: '#ece5d6' }}>Personal server</div>
-              <div style={{ fontSize: 12, color: '#a39cb5', marginTop: 4 }}>Bundled backend + database on this machine.</div>
+              <div style={{ fontWeight: 600, marginTop: 8, color: 'var(--text-primary)' }}>Personal server</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Bundled backend + database on this machine.</div>
             </motion.div>
           </div>
 
           {picked === 'custom' && (
             <div style={{ marginTop: 18 }}>
-              <label style={{ display: 'block', fontSize: 12, color: '#a39cb5', marginBottom: 6, letterSpacing: 0.4 }}>SERVER URL</label>
+              <label style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginBottom: 6, letterSpacing: 0.4 }}>SERVER URL</label>
               <input
                 type="url"
                 value={url}
@@ -122,7 +122,7 @@ const Welcome: React.FC<Props> = ({ onSelected }) => {
                 placeholder="https://vox.yourdomain.com"
                 style={{
                   width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 8, padding: '10px 12px', color: '#ece5d6', fontFamily: 'inherit', fontSize: 14,
+                  borderRadius: 8, padding: '10px 12px', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: 14,
                   outline: 'none',
                 }}
               />
@@ -136,7 +136,7 @@ const Welcome: React.FC<Props> = ({ onSelected }) => {
               disabled={testing}
               style={{
                 background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
-                color: '#a39cb5', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                color: 'var(--text-muted)', padding: '8px 14px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 6,
               }}
             >
@@ -144,23 +144,23 @@ const Welcome: React.FC<Props> = ({ onSelected }) => {
               Test connection
             </button>
             {probe && probe.ok && (
-              <span style={{ fontSize: 12, color: '#58a06b' }}>
+              <span style={{ fontSize: 12, color: 'var(--toxic)' }}>
                 ✓ reachable{typeof probe.latencyMs === 'number' ? ` (${probe.latencyMs} ms)` : ''}{probe.info?.name ? ` — ${probe.info.name}` : ''}
               </span>
             )}
-            {error && <span style={{ fontSize: 12, color: '#c0523e' }}>{error}</span>}
+            {error && <span style={{ fontSize: 12, color: 'var(--crimson)' }}>{error}</span>}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 26 }}>
-            <div style={{ fontSize: 12, color: '#5d6f6b' }}>
-              You can change this any time from <code style={{ color: '#a8c3bb' }}>Settings → Server</code>.
+            <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+              You can change this any time from <code style={{ color: 'var(--gold)' }}>Settings → Server</code>.
             </div>
             <button
               type="button"
               onClick={commit}
               style={{
-                background: 'linear-gradient(135deg,#8a6a2a,#d7a94a)',
-                border: 'none', color: '#1a1408', padding: '10px 18px', borderRadius: 10,
+                background: 'linear-gradient(135deg, var(--gold-dim), var(--gold))',
+                border: 'none', color: 'var(--void)', padding: '10px 18px', borderRadius: 10,
                 fontWeight: 600, fontSize: 13.5, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: 6,
                 boxShadow: '0 6px 20px rgba(215,169,74,0.25)',

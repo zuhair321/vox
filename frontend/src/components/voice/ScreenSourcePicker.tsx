@@ -81,7 +81,7 @@ const ScreenSourcePicker: React.FC = () => {
     >
       <div
         style={{
-          background: '#0a0a0d',
+          background: 'var(--bg-void)',
           border: '1px solid #2a2a38',
           borderRadius: '10px',
           padding: '24px',
@@ -92,11 +92,11 @@ const ScreenSourcePicker: React.FC = () => {
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 style={{ margin: '0 0 16px', color: '#f4f7fb', fontSize: '16px', fontWeight: 700 }}>
+        <h2 style={{ margin: '0 0 16px', color: 'var(--text-primary)', fontSize: '16px', fontWeight: 700 }}>
           Share a screen or window
         </h2>
 
-        {loading && <div style={{ color: '#8c95a3', padding: '40px 0', textAlign: 'center', fontSize: '13px' }}>Loading sources...</div>}
+        {loading && <div style={{ color: 'var(--text-muted)', padding: '40px 0', textAlign: 'center', fontSize: '13px' }}>Loading sources...</div>}
 
         <div style={{
           display: 'grid',
@@ -112,7 +112,7 @@ const ScreenSourcePicker: React.FC = () => {
               type="button"
               onClick={() => choose(s.id)}
               style={{
-                background: '#161620',
+                background: 'var(--bg-surface)',
                 border: '1px solid #2a2a38',
                 borderRadius: '6px',
                 padding: '8px',
@@ -121,7 +121,7 @@ const ScreenSourcePicker: React.FC = () => {
                 flexDirection: 'column',
                 gap: '8px',
                 textAlign: 'left',
-                color: '#f4f7fb',
+                color: 'var(--text-primary)',
                 transition: 'border-color 0.15s',
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = '#8fcf9b'; }}
@@ -130,7 +130,7 @@ const ScreenSourcePicker: React.FC = () => {
               <div style={{
                 width: '100%',
                 height: '140px',
-                background: '#000',
+                background: 'var(--void)',
                 borderRadius: '4px',
                 overflow: 'hidden',
                 display: 'flex',
@@ -150,7 +150,7 @@ const ScreenSourcePicker: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
           <button type="button" onClick={cancel}
             style={{
-              background: '#d84a5a', color: 'white', border: 'none',
+              background: 'var(--chaos)', color: 'white', border: 'none',
               padding: '8px 20px', borderRadius: '4px', cursor: 'pointer',
               fontSize: '12px', fontWeight: 700, fontFamily: "'Share Tech Mono', monospace",
             }}>

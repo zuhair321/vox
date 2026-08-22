@@ -308,7 +308,7 @@ const CreateServerModal: React.FC = () => {
                 overflow: 'hidden',
                 background: iconPreview 
                   ? 'var(--obsidian)' 
-                  : 'linear-gradient(135deg, #2a3038, #4a535f)',
+                  : 'linear-gradient(135deg, var(--dark-matter), var(--phantom))',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -323,7 +323,7 @@ const CreateServerModal: React.FC = () => {
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} 
                 />
               ) : (
-                <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '28px' }}>
+                <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '28px' }}>
                   {name ? name[0]?.toUpperCase() : '?'}
                 </span>
               )}
@@ -405,7 +405,7 @@ const CreateServerModal: React.FC = () => {
                 overflow: 'hidden',
                 background: bannerPreview 
                   ? 'var(--obsidian)' 
-                  : 'linear-gradient(135deg, #2a3038, #4a535f)',
+                  : 'linear-gradient(135deg, var(--dark-matter), var(--phantom))',
                 border: '1px solid var(--rim)',
                 display: 'flex',
                 alignItems: 'center',

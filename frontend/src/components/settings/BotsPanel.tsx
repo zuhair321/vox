@@ -70,7 +70,7 @@ const BotsPanel: React.FC<Props> = ({ serverId }) => {
         </button>
       </div>
 
-      {error && <div style={{ color: '#ff5a5a', fontSize: 13, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: 'var(--electric)', fontSize: 13, marginBottom: 8 }}>{error}</div>}
 
       {token && (
         <motion.div

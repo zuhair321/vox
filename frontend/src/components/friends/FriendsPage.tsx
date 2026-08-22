@@ -167,7 +167,7 @@ const FriendsPage: React.FC = () => {
                   {reqAvatar ? (
                     <img src={reqAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{req.user.username.slice(0, 1).toUpperCase()}</span>
+                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{req.user.username.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div>
@@ -198,7 +198,7 @@ const FriendsPage: React.FC = () => {
                   {reqAvatar ? (
                     <img src={reqAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{(req.friend?.username || '?').slice(0, 1).toUpperCase()}</span>
+                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{(req.friend?.username || '?').slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div>
@@ -234,7 +234,7 @@ const FriendsPage: React.FC = () => {
                   {userAvatar ? (
                     <img src={userAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{user.username.slice(0, 1).toUpperCase()}</span>
+                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{user.username.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div>
@@ -289,7 +289,7 @@ const FriendsPage: React.FC = () => {
                   {friendAvatar ? (
                     <img src={friendAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{f.username.slice(0, 1).toUpperCase()}</span>
+                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{f.username.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--abyss)', padding: 1, display: 'flex' }}>
@@ -398,7 +398,7 @@ const FriendsPage: React.FC = () => {
                     {friendAvatar ? (
                       <img src={friendAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
-                      <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{f.username.slice(0, 1).toUpperCase()}</span>
+                      <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{f.username.slice(0, 1).toUpperCase()}</span>
                     )}
                   </div>
                   <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--abyss)', padding: 1, display: 'flex' }}>

@@ -421,7 +421,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
               overflow: 'hidden',
               background:
                 message.author?.color ||
-                'linear-gradient(135deg, #2a3038, #4a535f, #dce4ee)',
+                'linear-gradient(135deg, var(--dark-matter), var(--phantom), var(--text-primary))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -434,7 +434,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               />
             ) : (
-              <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '18px' }}>
+              <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '18px' }}>
                 {authorName.slice(0, 1).toUpperCase()}
               </span>
             )}

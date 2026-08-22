@@ -197,7 +197,7 @@ const UpdateModal: React.FC = () => {
             )}
 
             {state.error && (
-              <p className="update-desc" style={{ color: '#ff6b6b' }}>
+              <p className="update-desc" style={{ color: 'var(--electric)' }}>
                 Error: {state.error}
               </p>
             )}

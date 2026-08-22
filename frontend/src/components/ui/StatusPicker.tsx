@@ -51,7 +51,7 @@ const StatusPicker: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             style={{
               width: '40px',
               height: '40px',
-              background: 'linear-gradient(135deg, #3b0a12, #0f0f13, #2a1520)',
+              background: 'linear-gradient(135deg, var(--crimson), var(--void), var(--dark-matter))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

@@ -21,7 +21,7 @@ const CustomPowerBadge: React.FC<Props> = ({ powers }) => {
             fontSize: '11px',
             fontWeight: 600,
             background: 'rgba(88,101,242,0.18)',
-            color: '#aeb8ff',
+            color: 'var(--text-muted)',
             border: '1px solid rgba(88,101,242,0.35)',
           }}
         >

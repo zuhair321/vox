@@ -101,7 +101,7 @@ const ModerationCenter: React.FC<Props> = ({ serverId, members = [], channelId }
         roles={roles.map((r) => ({ ...r, permissions: r.permissions }))}
         onCreate={async () => {
           try {
-            await createRole(serverId, { name: 'New Role', color: '#5865f2', permissions: '0' });
+            await createRole(serverId, { name: 'New Role', color: 'var(--chaos)', permissions: '0' });
             addToast('Role created.', 'success');
             loadRoles();
           } catch (e: any) { addToast(e?.message || 'Failed.', 'error'); }

@@ -71,7 +71,7 @@ const ThreadIndicator: React.FC<ThreadIndicatorProps> = ({
           title={unreadCount + ' new ' + (unreadCount === 1 ? 'reply' : 'replies')}
           style={{
             background: 'var(--chaos)',
-            color: '#0b0d11',
+            color: 'var(--bg-void)',
             fontWeight: 800,
             fontSize: '9px',
             padding: '1px 6px',

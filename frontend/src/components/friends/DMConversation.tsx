@@ -173,7 +173,7 @@ const DMConversation: React.FC = () => {
             {resolveMediaUrl((friend as any)?.avatarUrl) ? (
               <img src={resolveMediaUrl((friend as any)?.avatarUrl)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             ) : (
-              <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '12px' }}>{(friend?.username || '?').slice(0, 1).toUpperCase()}</span>
+              <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '12px' }}>{(friend?.username || '?').slice(0, 1).toUpperCase()}</span>
             )}
           </div>
           <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--abyss)', padding: 1, display: 'flex' }}>
@@ -353,7 +353,7 @@ const DMConversation: React.FC = () => {
                   {senderAvatar ? (
                     <img src={senderAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{(msg.sender?.username || '?').slice(0, 1).toUpperCase()}</span>
+                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{(msg.sender?.username || '?').slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
               ) : isOwn ? (
@@ -361,7 +361,7 @@ const DMConversation: React.FC = () => {
                   {senderAvatar ? (
                     <img src={senderAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{(msg.sender?.username || '?').slice(0, 1).toUpperCase()}</span>
+                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{(msg.sender?.username || '?').slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
               ) : (
