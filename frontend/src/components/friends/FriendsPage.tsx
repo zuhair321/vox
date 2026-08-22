@@ -132,10 +132,10 @@ const FriendsPage: React.FC = () => {
   const renderContent = () => {
     if (activeTab === 'ADD') {
       return (
-        <div style={{ padding: '32px' }}>
-          <h2 style={{ fontSize: '18px', color: 'var(--ghost-white)' }}>ADD OPERATIVE TO YOUR NETWORK</h2>
-          <p style={{ color: 'var(--ash)', fontSize: '13px', marginBottom: '24px' }}>You can add friends with their VOX username.</p>
-          <form onSubmit={handleAddFriend} style={{ display: 'flex', gap: '16px' }}>
+        <div className="vox-page">
+          <h2 className="vox-page-header">ADD OPERATIVE TO YOUR NETWORK</h2>
+          <p className="vox-text-muted" style={{ marginBottom: "24px" }}>You can add friends with their VOX username.</p>
+          <form onSubmit={handleAddFriend} className="vox-flex vox-gap-4">
             <input 
               className="angular-input" 
               placeholder="Enter a username..." 
@@ -151,8 +151,8 @@ const FriendsPage: React.FC = () => {
 
     if (activeTab === 'PENDING') {
       return (
-        <div style={{ padding: '32px' }}>
-          <h3 style={{ fontSize: '12px', color: 'var(--ash)', marginBottom: '16px' }}>INCOMING — {incoming.length}</h3>
+        <div className="vox-page">
+          <h3 className="vox-section-title">INCOMING — {incoming.length}</h3>
           {incoming.length === 0 && (
             <div className="vox-empty-state compact" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
               <div className="vox-empty-desc">No incoming transmissions.</div>
@@ -161,21 +161,21 @@ const FriendsPage: React.FC = () => {
           {incoming.map(req => {
             const reqAvatar = resolveMediaUrl((req.user as any).avatarUrl || null);
             return (
-            <div key={req.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--rim)' }}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <div className="octagon" style={{ width: '36px', height: '36px', backgroundColor: 'var(--phantom)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div key={req.id} className="vox-friend-row">
+              <div className="vox-flex vox-gap-3 vox-items-center">
+                <div className="octagon" className="vox-avatar" style={{ backgroundColor: "var(--phantom)" }}>
                   {reqAvatar ? (
-                    <img src={reqAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={reqAvatar} alt="" className="vox-object-cover" style={{ width: "100%", height: "100%" }} />
                   ) : (
-                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{req.user.username.slice(0, 1).toUpperCase()}</span>
+                    <span className="vox-text-primary vox-font-bold" style={{ color: "var(--bg-void)" }}>{req.user.username.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div>
-                  <div style={{ color: 'var(--ghost-white)', fontWeight: 'bold' }}>{req.user.username}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--ash)' }}>Incoming Friend Request</div>
+                  <div className="vox-friend-name">{req.user.username}</div>
+                  <div className="vox-friend-status">Incoming Friend Request</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="vox-flex vox-gap-2">
                 <button onClick={() => acceptRequest(req.id)} className="angular-button friend-action-btn" style={{ borderColor: 'var(--toxic)', color: 'var(--toxic)' }}>✓</button>
                 <button onClick={() => declineRequest(req.id)} className="angular-button friend-action-btn" style={{ borderColor: 'var(--blood)', color: 'var(--blood)' }}>✗</button>
               </div>
@@ -183,7 +183,7 @@ const FriendsPage: React.FC = () => {
             );
           })}
           
-          <h3 style={{ fontSize: '12px', color: 'var(--ash)', marginTop: '32px', marginBottom: '16px' }}>OUTGOING — {outgoing.length}</h3>
+          <h3 className="vox-section-title" style={{ marginTop: "32px" }}>OUTGOING — {outgoing.length}</h3>
           {outgoing.length === 0 && (
             <div className="vox-empty-state compact" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
               <div className="vox-empty-desc">No outgoing transmissions.</div>
@@ -192,21 +192,21 @@ const FriendsPage: React.FC = () => {
           {outgoing.map(req => {
             const reqAvatar = resolveMediaUrl((req.friend as any)?.avatarUrl || null);
             return (
-            <div key={req.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--rim)' }}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <div className="octagon" style={{ width: '36px', height: '36px', backgroundColor: 'var(--phantom)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div key={req.id} className="vox-friend-row">
+              <div className="vox-flex vox-gap-3 vox-items-center">
+                <div className="octagon" className="vox-avatar" style={{ backgroundColor: "var(--phantom)" }}>
                   {reqAvatar ? (
-                    <img src={reqAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={reqAvatar} alt="" className="vox-object-cover" style={{ width: "100%", height: "100%" }} />
                   ) : (
-                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{(req.friend?.username || '?').slice(0, 1).toUpperCase()}</span>
+                    <span className="vox-text-primary vox-font-bold" style={{ color: "var(--bg-void)" }}>{(req.friend?.username || '?').slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div>
-                  <div style={{ color: 'var(--ghost-white)', fontWeight: 'bold' }}>{req.friend?.username || 'Unknown'}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--ash)' }}>Outgoing Friend Request</div>
+                  <div className="vox-friend-name">{req.friend?.username || 'Unknown'}</div>
+                  <div className="vox-friend-status">Outgoing Friend Request</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div className="vox-flex vox-gap-2">
                 <button onClick={() => declineRequest(req.id)} className="angular-button friend-action-btn" style={{ borderColor: 'var(--blood)', color: 'var(--blood)' }}>✗</button>
               </div>
             </div>
@@ -218,8 +218,8 @@ const FriendsPage: React.FC = () => {
 
     if (activeTab === 'BLOCKED') {
       return (
-        <div style={{ padding: '32px' }}>
-          <h3 style={{ fontSize: '12px', color: 'var(--ash)', marginBottom: '16px' }}>BLOCKED — {blocked.length}</h3>
+        <div className="vox-page">
+          <h3 className="vox-section-title">BLOCKED — {blocked.length}</h3>
           {blocked.length === 0 && (
             <div className="vox-empty-state compact" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
               <div className="vox-empty-desc">No blocked operatives.</div>
@@ -228,18 +228,18 @@ const FriendsPage: React.FC = () => {
           {blocked.map(user => {
             const userAvatar = resolveMediaUrl((user as any).avatarUrl || null);
             return (
-            <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--rim)' }}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                <div className="octagon" style={{ width: '36px', height: '36px', backgroundColor: 'var(--phantom)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div key={user.id} className="vox-friend-row">
+              <div className="vox-flex vox-gap-3 vox-items-center">
+                <div className="octagon" className="vox-avatar" style={{ backgroundColor: "var(--phantom)" }}>
                   {userAvatar ? (
-                    <img src={userAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={userAvatar} alt="" className="vox-object-cover" style={{ width: "100%", height: "100%" }} />
                   ) : (
-                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{user.username.slice(0, 1).toUpperCase()}</span>
+                    <span className="vox-text-primary vox-font-bold" style={{ color: "var(--bg-void)" }}>{user.username.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
                 <div>
-                  <div style={{ color: 'var(--ghost-white)', fontWeight: 'bold' }}>{user.username}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--blood)' }}>Blocked</div>
+                  <div className="vox-friend-name">{user.username}</div>
+                  <div className="vox-friend-status" style={{ color: "var(--blood)" }}>Blocked</div>
                 </div>
               </div>
               <button onClick={async () => {
@@ -265,15 +265,15 @@ const FriendsPage: React.FC = () => {
       : friends;
 
     return (
-      <div style={{ padding: '32px' }}>
-        <h3 style={{ fontSize: '12px', color: 'var(--ash)', marginBottom: '16px' }}>
+      <div className="vox-page">
+        <h3 className="vox-section-title">
           {activeTab} — {filteredFriends.length}
         </h3>
         {filteredFriends.length === 0 && (
-          <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center' }}>
-              <h1 style={{ fontSize: '64px', opacity: 0.1, margin: 0 }}>👥</h1>
-              <p style={{ color: 'var(--ash)', marginTop: '16px' }}>
+          <div className="vox-flex-center vox-flex-1">
+            <div className="vox-text-center">
+              <h1 className="vox-text-3xl" style={{ opacity: 0.1, margin: 0 }}>👥</h1>
+              <p className="vox-text-muted" style={{ marginTop: "16px" }}>
                 {activeTab === 'ONLINE' ? 'NO ONE ONLINE' : 'NO OPERATIVES IN YOUR NETWORK'}
               </p>
             </div>
@@ -282,23 +282,23 @@ const FriendsPage: React.FC = () => {
         {filteredFriends.map(f => {
           const friendAvatar = resolveMediaUrl((f as any).avatarUrl || null);
           return (
-          <div key={f.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--rim)', cursor: 'pointer' }} onClick={() => { if (myId) navigate(`/dm/${buildDmId(myId, f.id)}`); }}>
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <div style={{ position: 'relative' }}>
-                <div className="octagon" style={{ width: '36px', height: '36px', backgroundColor: 'var(--phantom)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div key={f.id} className="vox-friend-row" onClick={() => { if (myId) navigate(`/dm/${buildDmId(myId, f.id)}`); }}>
+            <div className="vox-flex vox-gap-3 vox-items-center">
+              <div className="vox-relative">
+                <div className="octagon" className="vox-avatar" style={{ backgroundColor: "var(--phantom)" }}>
                   {friendAvatar ? (
-                    <img src={friendAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={friendAvatar} alt="" className="vox-object-cover" style={{ width: "100%", height: "100%" }} />
                   ) : (
-                    <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{f.username.slice(0, 1).toUpperCase()}</span>
+                    <span className="vox-text-primary vox-font-bold" style={{ color: "var(--bg-void)" }}>{f.username.slice(0, 1).toUpperCase()}</span>
                   )}
                 </div>
-                <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--abyss)', padding: 1, display: 'flex' }}>
+                <div className="vox-avatar-status">
                   <StatusDot status={(f.status || 'offline').toLowerCase()} size={10} />
                 </div>
               </div>
               <div>
-                <div style={{ color: 'var(--ghost-white)', fontWeight: 'bold' }}>{f.username}</div>
-                <div style={{ fontSize: '12px', color: 'var(--ash)', textTransform: 'capitalize' }}>{(f.status || 'offline').toLowerCase()}</div>
+                <div className="vox-friend-name">{f.username}</div>
+                <div className="vox-friend-status">{(f.status || 'offline').toLowerCase()}</div>
               </div>
             </div>
           </div>
@@ -311,11 +311,11 @@ const FriendsPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden' }}>
       {/* DM Sidebar */}
-      <div className="sidebar" style={{ backgroundColor: 'var(--abyss)', borderRight: '1px solid var(--rim)', width: '240px', flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+      <div className="sidebar" className="vox-dm-sidebar">
         <div className="top-bar">
-          <h2 style={{ fontSize: '16px', color: 'var(--ghost-white)' }}>DIRECT MESSAGES</h2>
+          <h2 className="vox-text-lg vox-font-bold">DIRECT MESSAGES</h2>
         </div>
-        <div style={{ flex: 1, padding: '16px', color: 'var(--ash)', overflowY: 'auto' }}>
+        <div className="vox-flex-1 vox-p-4 vox-text-muted vox-overflow-y-auto">
           {friends.length === 0 && (
             <div className="vox-empty-state" style={{ padding: '24px 8px' }}>
               <div className="vox-empty-icon" style={{ fontSize: '28px' }}>👤</div>
@@ -393,26 +393,26 @@ const FriendsPage: React.FC = () => {
                   textAlign: 'left',
                 }}
               >
-                <div style={{ position: 'relative', flexShrink: 0 }}>
-                  <div className="octagon" style={{ width: '32px', height: '32px', backgroundColor: 'var(--chaos)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="vox-avatar-wrap">
+                  <div className="octagon" className="vox-avatar vox-avatar-sm" style={{ backgroundColor: "var(--chaos)" }}>
                     {friendAvatar ? (
-                      <img src={friendAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={friendAvatar} alt="" className="vox-object-cover" style={{ width: "100%", height: "100%" }} />
                     ) : (
-                      <span style={{ color: 'var(--bg-void)', fontWeight: 800, fontSize: '14px' }}>{f.username.slice(0, 1).toUpperCase()}</span>
+                      <span className="vox-text-primary vox-font-bold" style={{ color: "var(--bg-void)" }}>{f.username.slice(0, 1).toUpperCase()}</span>
                     )}
                   </div>
-                  <div style={{ position: 'absolute', bottom: -2, right: -2, background: 'var(--abyss)', padding: 1, display: 'flex' }}>
+                  <div className="vox-avatar-status">
                     <StatusDot status={(f.status || 'offline').toLowerCase()} size={10} />
                   </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ghost-white)', fontWeight: unreadCount > 0 ? 700 : 400 }}>
+                <div className="vox-flex-1 vox-flex-col" style={{ minWidth: 0, gap: "2px" }}>
+                  <span className="vox-flex vox-items-center vox-truncate" style={{ gap: "4px", color: "var(--ghost-white)", fontWeight: unreadCount > 0 ? 700 : 400 }}>
                     {f.username}
                     {isMuted && <VolumeX size={11} style={{ color: 'var(--ash)', flexShrink: 0 }} />}
                     {f.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}
                   </span>
                   {preview && (
-                    <span style={{ fontSize: '11px', color: 'var(--ash)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span className="vox-text-xs vox-text-muted vox-truncate">
                       {preview}
                     </span>
                   )}
@@ -445,10 +445,10 @@ const FriendsPage: React.FC = () => {
       </div>
 
       {/* Main Friends Area */}
-      <div className="main-content animated-bg" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <div className="top-bar" style={{ gap: '24px' }}>
-          <span style={{ color: 'var(--ghost-white)', fontWeight: 'bold', fontSize: '16px', marginRight: '16px' }}>👥 Friends</span>
-          <div style={{ display: 'flex', gap: '16px' }}>
+      <div className="main-content animated-bg" className="vox-flex-1 vox-flex-col vox-overflow-hidden">
+        <div className="top-bar" style={{ gap: "24px" }}>
+          <span className="vox-text-lg vox-font-bold" style={{ marginRight: "16px" }}>👥 Friends</span>
+          <div className="vox-flex vox-gap-4">
             {['ONLINE', 'ALL', 'PENDING', 'BLOCKED'].map(tab => (
               <span
                 key={tab}
