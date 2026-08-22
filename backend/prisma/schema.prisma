@@ -65,6 +65,8 @@ model User {
   dmsSent         DmMessage[]     @relation("dmMessagesSent")
   dmsReceived     DmMessage[]     @relation("dmMessagesReceived")
   ownedGroupDms    GroupDm[]
+  createdStickers   Sticker[]       @relation("StickerCreator")
+  createdStickerPacks StickerPack[]  @relation("StickerPackCreator")
   groupDmMemberships GroupDmMember[]
   groupDmsSent     GroupDmMessage[] @relation("GroupDmMessagesSent")
   friends         Friend[]        @relation("friend_requests_sent")
@@ -145,6 +147,7 @@ model Server {
   badges     Badge[]
   sounds     Sound[]
   automodConfig AutomodConfig?
+  stickers     Sticker[]       @relation("ServerStickers")
   moderationConfig ModerationConfig?
   strikes    Strike[]
 
@@ -1174,7 +1177,7 @@ model GroupDmMessage {
   
   // Relations
   groupDm     GroupDm  @relation(fields: [groupDmId], references: [id], onDelete: Cascade)
-  sender      User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sender      User     @relation("GroupDmMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
   
   @@index([groupDmId, createdAt])
   @@index([senderId])
@@ -1196,12 +1199,14 @@ model Sticker {
   usageCount  Int      @default(0)
   
   // Relations
-  server      Server?  @relation(fields: [serverId], references: [id], onDelete: Cascade)
-  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  server      Server?  @relation("ServerStickers", fields: [serverId], references: [id], onDelete: Cascade)
+  creator     User     @relation("StickerCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   
   @@index([serverId])
   @@index([creatorId])
   @@index([tags])
+  packId      String?
+  pack        StickerPack? @relation(fields: [packId], references: [id], onDelete: SetNull)
 }
 
 model StickerPack {
@@ -1212,7 +1217,7 @@ model StickerPack {
   stickers    Sticker[]
   createdAt   DateTime @default(now())
   
-  creator     User     @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  creator     User     @relation("StickerPackCreator", fields: [creatorId], references: [id], onDelete: Cascade)
   
   @@index([creatorId])
 }
