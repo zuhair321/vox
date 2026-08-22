@@ -31,6 +31,7 @@ import QuickSwitcher from './components/ui/QuickSwitcher';
 import ShortcutsModal from './components/ui/ShortcutsModal';
 import FriendsPage from './components/friends/FriendsPage';
 import DMConversation from './components/friends/DMConversation';
+import GroupDmConversation from './components/friends/GroupDmConversation';
 import LoginDummy from './components/ui/LoginDummy';
 import Profile from './pages/Profile';
 import RegisterPage from './pages/Register';
@@ -329,6 +330,7 @@ const { user, accessToken, isLoading } = useAuthStore();
             <Route path="/invite/:code" element={<PanelErrorBoundary panelName="Invite"><InviteAccept /></PanelErrorBoundary>} />
             <Route path="/friends" element={<PanelErrorBoundary panelName="Friends"><FriendsPage /></PanelErrorBoundary>} />
             <Route path="/dm/:dmId" element={<PanelErrorBoundary panelName="DM"><DMConversation /></PanelErrorBoundary>} />
+            <Route path="/group-dm/:id" element={<PanelErrorBoundary panelName="GroupDM"><GroupDmConversation /></PanelErrorBoundary>} />
             <Route path="/profile" element={<PanelErrorBoundary panelName="Profile"><Profile /></PanelErrorBoundary>} />
             <Route path="/settings" element={<PanelErrorBoundary panelName="Settings"><Settings /></PanelErrorBoundary>} />
             <Route path="/settings/account" element={<PanelErrorBoundary panelName="Account"><Account /></PanelErrorBoundary>} />
