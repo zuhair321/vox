@@ -1,0 +1,241 @@
+/* ════════════════════════════════════════════════════════════════
+   VOX — INTERACTION SYSTEM
+   Global hover states, focus-visible outlines, and transitions
+   for ALL interactive elements across the entire app.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── GLOBAL TRANSITIONS ───────────────────────────────────── */
+button, [role="button"], a, [role="link"], [role="tab"],
+input[type="submit"], input[type="button"] {
+  transition: background var(--transition-base),
+              color var(--transition-base),
+              border-color var(--transition-base),
+              box-shadow var(--transition-base),
+              transform var(--transition-fast),
+              opacity var(--transition-base);
+}
+
+/* ── FOCUS-VISIBLE (WCAG 2.1 AA) ─────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── BUTTON HOVER ─────────────────────────────────────────── */
+button:not(:disabled):hover,
+[role="button"]:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+button:not(:disabled):active,
+[role="button"]:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+button:hover svg, [role="button"]:hover svg {
+  transform: scale(1.1);
+  transition: transform var(--transition-fast);
+}
+
+/* ── ANGULAR BUTTON (legacy) ──────────────────────────────── */
+.angular-button { transition: all var(--transition-base); }
+.angular-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.angular-button:not(:disabled):active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.angular-button.primary:not(:disabled):hover {
+  background: var(--chaos);
+  border-color: var(--chaos);
+  box-shadow: var(--shadow-glow-crimson);
+}
+
+/* ── VOX BUTTON SYSTEM ────────────────────────────────────── */
+.vox-btn:hover:not(:disabled) {
+  background: var(--phantom);
+  border-color: var(--rim);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.vox-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.vox-btn-primary:hover:not(:disabled) {
+  background: var(--electric);
+  border-color: var(--electric);
+  box-shadow: var(--shadow-glow-crimson);
+}
+.vox-btn-danger:hover:not(:disabled) {
+  background: var(--blood);
+  border-color: var(--blood);
+  box-shadow: 0 0 20px rgba(204, 0, 0, 0.3);
+}
+.vox-btn-ghost:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+.vox-btn-gold:hover:not(:disabled) {
+  box-shadow: var(--shadow-glow-gold);
+  transform: translateY(-1px);
+}
+
+/* ── LINK HOVER ───────────────────────────────────────────── */
+a:not([class*="vox-"]):hover { color: var(--gold); }
+
+/* ── INPUT FOCUS ──────────────────────────────────────────── */
+input, textarea, select, [contenteditable] {
+  transition: border-color var(--transition-base),
+              box-shadow var(--transition-base),
+              background var(--transition-base);
+}
+input:focus, textarea:focus, select:focus, [contenteditable]:focus {
+  outline: none;
+  border-color: var(--chaos);
+  box-shadow: 0 0 0 3px rgba(177, 18, 27, 0.2);
+}
+
+/* ── TAB HOVER ────────────────────────────────────────────── */
+[role="tab"]:hover:not([aria-selected="true"]),
+.vox-tab:hover:not(.active) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+[role="tab"][aria-selected="true"],
+.vox-tab.active {
+  background: var(--chaos);
+  color: #fff;
+  border-color: var(--chaos);
+}
+
+/* ── ROW HOVER ────────────────────────────────────────────── */
+.vox-row:hover, .vox-friend-row:hover,
+.vox-settings-row:hover, .vox-perm-row:hover {
+  background: var(--bg-elevated);
+}
+.vox-row:active, .vox-friend-row:active,
+.vox-settings-row:active, .vox-perm-row:active {
+  background: var(--phantom);
+}
+
+/* ── MESSAGE BUBBLE HOVER ─────────────────────────────────── */
+.message-bubble:hover { background: rgba(255, 255, 255, 0.02); }
+
+/* ── EMOJI HOVER ──────────────────────────────────────────── */
+.vox-emoji-item:hover {
+  background: var(--bg-elevated);
+  transform: scale(1.2);
+}
+
+/* ── AVATAR HOVER ─────────────────────────────────────────── */
+.vox-avatar:hover { box-shadow: 0 0 0 2px var(--chaos); }
+.octagon:hover { box-shadow: 0 0 0 2px var(--chaos); }
+
+/* ── CARD HOVER ───────────────────────────────────────────── */
+.vox-card:hover, .vox-forum-post:hover {
+  border-color: var(--rim);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── VOICE CHANNEL HOVER ──────────────────────────────────── */
+.vox-voice-user:hover { background: var(--bg-elevated); }
+.voice-channel-item:hover {
+  background: rgba(177, 18, 27, 0.06);
+  border-left: 2px solid rgba(177, 18, 27, 0.25);
+}
+
+/* ── TOGGLE HOVER ─────────────────────────────────────────── */
+.vox-toggle-track:hover { border-color: var(--rim); }
+
+/* ── PILL HOVER ───────────────────────────────────────────── */
+.vox-pill:hover { background: var(--bg-elevated); border-color: var(--rim); }
+
+/* ── CONTEXT MENU HOVER ───────────────────────────────────── */
+.vox-context-menu-item:hover { background: var(--bg-elevated); }
+
+/* ── SCROLLBAR ────────────────────────────────────────────── */
+.vox-scroll::-webkit-scrollbar-thumb {
+  transition: background var(--transition-base);
+}
+.vox-scroll:hover::-webkit-scrollbar-thumb { background: var(--ghost); }
+
+/* ── MODAL ENTRANCE ───────────────────────────────────────── */
+.vox-modal-overlay { animation: vox-fadeIn 0.2s ease; }
+@keyframes vox-fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── TOAST ENTRANCE ───────────────────────────────────────── */
+.vox-toast { animation: vox-slideUp 0.3s var(--transition-spring); }
+@keyframes vox-slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── SEARCH BAR FOCUS ─────────────────────────────────────── */
+.vox-search-bar:focus-within {
+  border-color: var(--chaos);
+  box-shadow: 0 0 0 3px rgba(177, 18, 27, 0.15);
+}
+
+/* ── INVITE LINK HOVER ────────────────────────────────────── */
+.vox-invite-link:hover {
+  border-color: var(--rim);
+  background: var(--bg-elevated);
+}
+
+/* ── SKELETON SHIMMER ─────────────────────────────────────── */
+.vox-skeleton-line, .vox-skeleton-circle, .skeleton {
+  animation: vox-shimmer 1.5s ease-in-out infinite;
+}
+@keyframes vox-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── STATUS DOT PULSE ─────────────────────────────────────── */
+.vox-status-dot.online::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid var(--toxic);
+  animation: vox-statusPulse 2s ease-out infinite;
+  opacity: 0;
+}
+@keyframes vox-statusPulse {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+/* ── DISABLED STATE ───────────────────────────────────────── */
+button:disabled, [role="button"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ── RIPPLE (optional) ────────────────────────────────────── */
+.ripple-container { position: relative; overflow: hidden; }
+.ripple-container::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.12) 0%, transparent 60%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.ripple-container:active::after { opacity: 1; }
+
+/* ── REDUCED MOTION ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  button:hover, [role="button"]:hover { transform: none !important; }
+}

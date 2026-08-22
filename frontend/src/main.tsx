@@ -12,6 +12,7 @@ import './styles/micro-interactions.css'
 import './styles/animations.css'
 import './styles/atelier.css'
 import './styles/utilities.css'
+import './styles/interactions.css'
 import './styles/profile-card.css'
 
 
