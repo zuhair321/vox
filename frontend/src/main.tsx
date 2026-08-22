@@ -11,6 +11,7 @@ import './styles/advanced.css'
 import './styles/micro-interactions.css'
 import './styles/animations.css'
 import './styles/atelier.css'
+import './styles/utilities.css'
 import './styles/profile-card.css'
 
 
