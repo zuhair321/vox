@@ -9,6 +9,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const botsRouter = Router();
 
 async function authenticateBot(req) {
@@ -19,6 +21,10 @@ async function authenticateBot(req) {
 }
 
 // POST /api/servers/:id/bots  (admin/founder only).
+
+// Rate limiting
+botsRouter.use(rateLimit);
+
 botsRouter.post('/servers/:id/bots', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;

@@ -3,9 +3,15 @@ import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const blockRouter = Router();
 
 // Block a user
+
+// Rate limiting
+blockRouter.use(rateLimit);
+
 blockRouter.post('/blocks', requireAuth, async (req, res, next) => {
   try {
     const blockedId = String(req.body?.userId || '').trim();

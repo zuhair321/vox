@@ -3,6 +3,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const auditRouter = Router();
 
 async function requireAdmin(serverId, userId) {
@@ -15,6 +17,10 @@ async function requireAdmin(serverId, userId) {
 }
 
 // GET /api/servers/:id/audit
+
+// Rate limiting
+auditRouter.use(rateLimit);
+
 auditRouter.get('/servers/:id/audit', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;

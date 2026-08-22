@@ -13,6 +13,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import {
+
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
   generateLiveKitToken,
   isLiveKitConfigured,
 } from '../services/livekit.service.js';
@@ -20,6 +22,10 @@ import {
 export const voiceRouter = Router();
 
 // Public-ish config so the client can decide mesh vs SFU before joining.
+
+// Rate limiting
+voiceRouter.use(rateLimit);
+
 voiceRouter.get('/voice/config', requireAuth, async (_req, res) => {
   res.json({
     sfuEnabled: isLiveKitConfigured(),

@@ -10,6 +10,8 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { invalidateAutomodCache } from '../services/automod.service.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const automodRouter = Router();
 
 const STRIKE_TTL_DAYS = 30; // how long a strike stays "active" for the count
@@ -25,6 +27,10 @@ async function requireMember(serverId, userId, roles) {
 }
 
 // GET /api/servers/:id/automod
+
+// Rate limiting
+automodRouter.use(rateLimit);
+
 automodRouter.get('/servers/:id/automod', requireAuth, async (req, res, next) => {
   try {
     const { id: serverId } = req.params;

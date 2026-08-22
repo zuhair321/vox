@@ -10,6 +10,8 @@ import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
 import crypto from 'node:crypto';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const inviteRouter = Router();
 
 // Cryptographically-adequate short code. 6 chars of [A-Za-z0-9] gives ~57
@@ -33,6 +35,10 @@ const EXPIRY_MS = {
 };
 
 const MAX_USES_OPTIONS = new Set([0, 1, 5, 10, 25, 50, 100]);
+
+
+// Rate limiting
+inviteRouter.use(rateLimit);
 
 inviteRouter.post('/servers/:id/invites', requireAuth, async (req, res, next) => {
   try {

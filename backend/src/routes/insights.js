@@ -8,6 +8,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const insightsRouter = Router();
 
 const PERIOD_DAYS = { '7d': 7, '30d': 30, '90d': 90 };
@@ -20,6 +22,10 @@ async function assertCanManage(serverId, userId) {
     throw new HttpError(403, 'Insights are restricted to owners and admins.');
   }
 }
+
+
+// Rate limiting
+insightsRouter.use(rateLimit);
 
 insightsRouter.get('/servers/:id/insights', requireAuth, async (req, res, next) => {
   try {

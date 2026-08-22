@@ -7,6 +7,8 @@ import { checkServerPermission } from '../middleware/permissions.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const regionsRouter = Router();
 
 // Static catalog of voice regions. "auto" routes to the lowest-latency region.
@@ -26,6 +28,10 @@ const REGIONS = [
 ];
 
 // GET /api/voice/regions
+
+// Rate limiting
+regionsRouter.use(rateLimit);
+
 regionsRouter.get('/voice/regions', requireAuth, async (req, res, next) => {
   try {
     res.json({ regions: REGIONS });

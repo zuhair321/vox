@@ -38,3 +38,4 @@ export { regionsRouter } from './regions.routes.js';
 export { activityRouter } from './activity.routes.js';
 export { moderationRouter } from './moderation.routes.js';
 export { customPowersRouter } from './custom-powers.routes.js';
+export { docsRouter } from "./docs.js";

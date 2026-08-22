@@ -5,9 +5,15 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const notificationsRouter = Router();
 
 // GET /api/users/me/notifications — list this user's mutes + push registration.
+
+// Rate limiting
+notificationsRouter.use(rateLimit);
+
 notificationsRouter.get('/users/me/notifications', requireAuth, async (req, res, next) => {
   try {
     const mutes = await prisma.notificationSettings.findMany({

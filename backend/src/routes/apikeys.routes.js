@@ -14,6 +14,8 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const apiKeysRouter = Router();
 
 const VALID_SCOPES = ['read', 'write', 'admin'];
@@ -27,6 +29,10 @@ function generateKey() {
 }
 
 // POST /api/users/me/api-keys
+
+// Rate limiting
+apiKeysRouter.use(rateLimit);
+
 apiKeysRouter.post('/users/me/api-keys', requireAuth, async (req, res, next) => {
   try {
     const { name, scopes, expiresAt } = req.body || {};

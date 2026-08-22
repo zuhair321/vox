@@ -7,7 +7,13 @@ import { getMemberPermissions } from '../services/moderation.service.js';
 import { hasCustomPower, getExistingPowers } from '../services/custom-powers.service.js';
 import { Permissions, hasPermission } from '../lib/permissions.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const customPowersRouter = Router();
+
+
+// Rate limiting
+customPowersRouter.use(rateLimit);
 
 customPowersRouter.post('/servers/:serverId/custom-powers', requireAuth, async (req, res, next) => {
   try {

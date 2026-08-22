@@ -10,6 +10,8 @@ import dns from 'node:dns';
 import * as cheerio from 'cheerio';
 import { HttpError } from '../middleware/error.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 
 // C4: Resolve hostname and reject private/link-local/cloud-metadata IPs.
 const BLOCKED_RANGES = [
@@ -64,6 +66,10 @@ function isSafeUrl(raw) {
     return false;
   }
 }
+
+
+// Rate limiting
+linkPreviewRouter.use(rateLimit);
 
 linkPreviewRouter.get('/link-preview', async (req, res, next) => {
   try {

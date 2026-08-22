@@ -3,9 +3,15 @@ import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 const router = Router();
 
 // Submit feedback (public endpoint for testers)
+
+// Rate limiting
+router.use(rateLimit);
+
 router.post('/feedback', async (req, res, next) => {
   try {
     const { category, message, rating, userAgent, page } = req.body || {};

@@ -17,6 +17,8 @@ import { getIO } from '../sockets/index.js';
 import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 import { sanitize } from '../middleware/sanitize.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const forumsRouter = Router();
 
 const POST_INCLUDE = {
@@ -26,6 +28,10 @@ const POST_INCLUDE = {
 };
 
 // GET /api/channels/:id/forum-posts
+
+// Rate limiting
+forumsRouter.use(rateLimit);
+
 forumsRouter.get('/channels/:id/forum-posts', requireAuth, requirePermission('read'), async (req, res, next) => {
   try {
     const posts = await prisma.message.findMany({

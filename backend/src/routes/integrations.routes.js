@@ -7,11 +7,17 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const integrationsRouter = Router();
 
 const VALID_TYPES = ['SLACK', 'SPOTIFY', 'CALENDAR', 'DISCORD', 'MATRIX'];
 
 // List the current user's connected integrations.
+
+// Rate limiting
+integrationsRouter.use(rateLimit);
+
 integrationsRouter.get('/integrations', requireAuth, async (req, res, next) => {
   try {
     const items = await prisma.integration.findMany({

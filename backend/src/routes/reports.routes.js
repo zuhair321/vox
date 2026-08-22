@@ -4,9 +4,15 @@ import crypto from 'node:crypto';
 import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const reportsRouter = Router();
 
 // POST /api/reports — submit a report
+
+// Rate limiting
+reportsRouter.use(rateLimit);
+
 reportsRouter.post('/reports', requireAuth, async (req, res, next) => {
   try {
     const { reportedUserId, messageId, serverId, type, reason, details } = req.body || {};

@@ -10,6 +10,8 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const templatesRouter = Router();
 
 function newChannelId() {
@@ -47,6 +49,10 @@ async function snapshotServer(serverId) {
 }
 
 // POST /api/servers/:id/templates
+
+// Rate limiting
+templatesRouter.use(rateLimit);
+
 templatesRouter.post('/servers/:id/templates', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;

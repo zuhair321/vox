@@ -4,6 +4,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const keysRouter = Router();
 
 // Fingerprint a base64 X25519 public key (32 raw bytes) into a short hex string.
@@ -21,6 +23,10 @@ function fingerprint(publicKeyB64) {
 // Privacy: the server NEVER receives the private key. It only stores the
 // public half + a fingerprint so other users can verify "this key belongs to
 // the same person they messaged before." On rotation, keyVersion increments.
+
+// Rate limiting
+keysRouter.use(rateLimit);
+
 keysRouter.put('/users/me/keys', requireAuth, async (req, res, next) => {
   try {
     const { publicKey, keyVersion } = req.body || {};

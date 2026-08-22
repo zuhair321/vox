@@ -8,6 +8,8 @@ import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 import { getIO } from '../sockets/index.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const activityRouter = Router();
 
 const VALID_TYPES = ['PLAYING', 'LISTENING', 'WATCHING', 'STREAMING'];
@@ -21,6 +23,10 @@ const GAME_CATALOG = [
 ];
 
 // GET /api/activity/games — popular-game catalog for the activity picker.
+
+// Rate limiting
+activityRouter.use(rateLimit);
+
 activityRouter.get('/activity/games', requireAuth, async (req, res) => {
   res.json({ games: GAME_CATALOG });
 });

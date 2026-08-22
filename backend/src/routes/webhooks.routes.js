@@ -6,6 +6,8 @@ import { prisma } from '../lib/prisma.js';
 import { emitAll } from '../sockets/index.js';
 import { deliverWebhooks } from '../services/webhook.service.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const webhooksRouter = Router();
 
 async function requireAdmin(serverId, userId) {
@@ -18,6 +20,10 @@ async function requireAdmin(serverId, userId) {
 }
 
 // GET /api/servers/:id/webhooks
+
+// Rate limiting
+webhooksRouter.use(rateLimit);
+
 webhooksRouter.get('/servers/:id/webhooks', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;

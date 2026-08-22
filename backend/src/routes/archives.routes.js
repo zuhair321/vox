@@ -13,9 +13,15 @@ import { requirePermission } from '../middleware/permissions.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const archivesRouter = Router();
 
 // GET /api/channels/:id/archive
+
+// Rate limiting
+archivesRouter.use(rateLimit);
+
 archivesRouter.get('/channels/:id/archive', requireAuth, requirePermission('read'), async (req, res, next) => {
   try {
     const config = await prisma.channelArchiveConfig.findUnique({

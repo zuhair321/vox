@@ -5,9 +5,15 @@ import { requireServerAdmin, invalidateMembershipCache } from '../middleware/per
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const rolesRouter = Router();
 
 // GET /api/:serverId/roles — list all roles for a server
+
+// Rate limiting
+rolesRouter.use(rateLimit);
+
 rolesRouter.get('/:serverId/roles', requireAuth, async (req, res, next) => {
   try {
     const { serverId } = req.params;

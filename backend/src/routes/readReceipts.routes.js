@@ -7,9 +7,15 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import crypto from 'node:crypto';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const readReceiptRouter = Router();
 
 // POST /api/messages/:id/read — record that current user has read a message
+
+// Rate limiting
+readReceiptRouter.use(rateLimit);
+
 readReceiptRouter.post('/messages/:id/read', requireAuth, async (req, res, next) => {
   try {
     const userId = req.user.id;

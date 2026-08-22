@@ -3,6 +3,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import {
+
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
   executeModerationAction,
   getMemberPermissions,
   canModerate,
@@ -29,6 +31,10 @@ async function hasAnyModPerm(serverId, userId) {
   }
   return false;
 }
+
+
+// Rate limiting
+moderationRouter.use(rateLimit);
 
 moderationRouter.post('/servers/:serverId/moderation/kick', requireAuth, async (req, res, next) => {
   try {

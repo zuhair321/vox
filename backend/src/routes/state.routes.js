@@ -4,7 +4,13 @@ import { Router } from 'express';
 import { getState, claimNitro } from '../services/chat.service.js';
 import { mapChannel, mapMessage, mapMember } from '../lib/mappers.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const stateRouter = Router();
+
+
+// Rate limiting
+stateRouter.use(rateLimit);
 
 stateRouter.get('/state', async (req, res, next) => {
   try {

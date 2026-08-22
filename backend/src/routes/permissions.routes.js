@@ -3,6 +3,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const permissionsRouter = Router();
 
 async function requireAdmin(serverId, userId) {
@@ -15,6 +17,10 @@ async function requireAdmin(serverId, userId) {
 }
 
 // GET /api/channels/:channelId/permissions
+
+// Rate limiting
+permissionsRouter.use(rateLimit);
+
 permissionsRouter.get('/channels/:channelId/permissions', requireAuth, async (req, res, next) => {
   try {
     const { channelId } = req.params;

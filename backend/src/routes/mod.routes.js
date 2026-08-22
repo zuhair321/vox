@@ -4,10 +4,16 @@ import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const modRouter = Router();
 
 // POST /api/servers/:id/timeout/:userId
 // Set a timeout (mute) on a member. Moderator+ only.
+
+// Rate limiting
+modRouter.use(rateLimit);
+
 modRouter.post('/servers/:id/timeout/:userId', requireAuth, async (req, res, next) => {
   try {
     const { id: serverId, userId: targetId } = req.params;

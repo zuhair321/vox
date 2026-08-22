@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 const router = Router();
 
 // Middleware: require admin role
@@ -13,6 +15,10 @@ const requireAdmin = (req, res, next) => {
 };
 
 // ─── Dashboard Stats ──────────────────────────────────────────────
+
+// Rate limiting
+router.use(rateLimit);
+
 router.get('/stats', requireAdmin, async (req, res) => {
   try {
     const now = new Date();

@@ -5,9 +5,15 @@ import { prisma } from '../lib/prisma.js';
 import { HttpError } from '../middleware/error.js';
 import * as auth from '../services/auth.service.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const turboRouter = Router();
 
 // GET /api/turbo/status - Get current user's Turbo status
+
+// Rate limiting
+turboRouter.use(rateLimit);
+
 turboRouter.get('/status', requireAuth, async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({

@@ -9,9 +9,15 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const soundboardRouter = Router();
 
 // GET /api/sounds
+
+// Rate limiting
+soundboardRouter.use(rateLimit);
+
 soundboardRouter.get('/sounds', requireAuth, async (req, res, next) => {
   try {
     const { serverId } = req.query;

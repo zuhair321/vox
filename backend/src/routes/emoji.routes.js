@@ -15,6 +15,10 @@ async function requireAdmin(serverId, userId) {
 }
 
 // GET /api/servers/:id/emojis
+
+// Rate limiting
+emojiRouter.use(rateLimit);
+
 emojiRouter.get('/servers/:id/emojis', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;
@@ -81,6 +85,8 @@ import multer from 'multer';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
+
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 256 * 1024 } });
 

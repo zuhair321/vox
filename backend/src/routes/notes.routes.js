@@ -5,9 +5,15 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { sanitize } from '../middleware/sanitize.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const notesRouter = Router();
 
 // GET /api/users/:id/notes — get my note about a user
+
+// Rate limiting
+notesRouter.use(rateLimit);
+
 notesRouter.get('/users/:id/notes', requireAuth, async (req, res, next) => {
   try {
     const targetId = req.params.id;

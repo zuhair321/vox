@@ -11,6 +11,8 @@ import { prisma } from '../lib/prisma.js';
 import { getIO } from '../sockets/index.js';
 import { emitRealtimeEvent } from '../lib/redis_bridge.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const stagesRouter = Router();
 
 async function requireStageMod(userId, serverId) {
@@ -29,6 +31,10 @@ function mapSpeaker(s) {
 }
 
 // GET /api/channels/:id/stage/speakers
+
+// Rate limiting
+stagesRouter.use(rateLimit);
+
 stagesRouter.get('/channels/:id/stage/speakers', requireAuth, async (req, res, next) => {
   try {
     const speakers = await prisma.stageSpeaker.findMany({

@@ -11,6 +11,8 @@ import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { env } from '../lib/env.js';
 
+import { standard as rateLimit } from '../middleware/rateLimiter.js';
+
 export const widgetRouter = Router();
 
 function widgetUrl(serverId) {
@@ -29,6 +31,10 @@ async function getWidgetConfig(serverId) {
 }
 
 // GET /api/servers/:id/widget — owner/admin config + embed code
+
+// Rate limiting
+widgetRouter.use(rateLimit);
+
 widgetRouter.get('/servers/:id/widget', requireAuth, async (req, res, next) => {
   try {
     const serverId = req.params.id;
