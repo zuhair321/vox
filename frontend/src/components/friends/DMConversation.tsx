@@ -207,8 +207,7 @@ const DMConversation: React.FC = () => {
               height: '32px',
               transition: 'all 0.15s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'var(--ghost-white)'; }}
-            onMouseLeave={(e) => { if (!showSettings) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--ash)'; } }}
+            className="vox-hover-dm-header"
           >
             <Settings size={16} />
           </button>
@@ -237,8 +236,7 @@ const DMConversation: React.FC = () => {
                   color: dmPrefs.muted ? 'var(--toxic)' : 'var(--ghost-white)',
                   cursor: 'pointer', fontSize: '13px', textAlign: 'left',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+                className="vox-hover-subtle"
               >
                 {dmPrefs.muted ? <Volume2 size={15} /> : <VolumeX size={15} />}
                 {dmPrefs.muted ? 'Unmute Conversation' : 'Mute Conversation'}
@@ -255,8 +253,7 @@ const DMConversation: React.FC = () => {
                   padding: '10px 16px', background: 'none', border: 'none',
                   color: 'var(--ghost-white)', cursor: 'pointer', fontSize: '13px', textAlign: 'left',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+                className="vox-hover-subtle"
               >
                 {dmPrefs.showAvatar ? <EyeOff size={15} /> : <Eye size={15} />}
                 {dmPrefs.showAvatar ? "Hide Other's Avatar" : "Show Other's Avatar"}
@@ -271,8 +268,7 @@ const DMConversation: React.FC = () => {
                   padding: '10px 16px', background: 'none', border: 'none',
                   color: 'var(--ghost-white)', cursor: 'pointer', fontSize: '13px', textAlign: 'left',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+                className="vox-hover-subtle"
               >
                 {dmPrefs.showDisplayName ? <EyeOff size={15} /> : <Eye size={15} />}
                 {dmPrefs.showDisplayName ? "Hide Other's Display Name" : "Show Other's Display Name"}
@@ -289,8 +285,7 @@ const DMConversation: React.FC = () => {
                   padding: '10px 16px', background: 'none', border: 'none',
                   color: 'var(--ghost-white)', cursor: 'pointer', fontSize: '13px', textAlign: 'left',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+                className="vox-hover-subtle"
               >
                 <User size={15} />
                 View Profile
@@ -340,8 +335,7 @@ const DMConversation: React.FC = () => {
                     justifyContent: 'center', borderRadius: '6px', fontSize: '14px', zIndex: 20,
                     boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLElement).style.color = 'var(--ghost-white)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--dark-matter)'; (e.currentTarget as HTMLElement).style.color = 'var(--ash)'; }}
+                  className="vox-hover-action"
                 >
                   ⋯
                 </button>

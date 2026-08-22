@@ -33,8 +33,7 @@ const GroupDmList: React.FC = () => {
               background: 'transparent', cursor: 'pointer', textAlign: 'left',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            className="vox-hover-subtle"
           >
             {/* Stacked avatars */}
             <div style={{ position: 'relative', width: '34px', height: '34px', flexShrink: 0 }}>

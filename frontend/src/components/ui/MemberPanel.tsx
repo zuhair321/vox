@@ -340,8 +340,7 @@ const MemberPanel: React.FC<{ empty?: boolean }> = ({ empty }) => {
                         transition: 'background 0.1s',
                         minHeight: '40px'
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                      className="vox-hover-member"
                     >
                       {/* Avatar with status dot — hex shield frame */}
                       <div style={{ position: 'relative', width: '34px', height: '34px', flexShrink: 0 }}>

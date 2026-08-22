@@ -295,8 +295,7 @@ const InviteModal: React.FC = () => {
                           padding: '0 2px',
                           lineHeight: 1,
                         }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--blood)'; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--shadow)'; }}
+                        className="vox-hover-action"
                         title="Revoke"
                       >
                         ✕

@@ -150,8 +150,7 @@ const Toast = forwardRef<HTMLDivElement, ToastProps>(({ toast, onDismiss }, ref)
             lineHeight: 1,
             transition: 'color 0.15s ease',
           }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ghost-white)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--shadow)'; }}
+          className="vox-hover-action"
           aria-label="Dismiss"
         >
           ✕

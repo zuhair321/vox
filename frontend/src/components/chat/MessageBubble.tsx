@@ -403,8 +403,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
                 justifyContent: 'center', borderRadius: '4px', fontSize: '14px',
                 transition: 'background 0.1s, color 0.1s',
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLElement).style.color = 'var(--ghost-white)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'var(--ash)'; }}
+              className="vox-hover-action"
             >
               ⋯
             </button>
@@ -625,8 +624,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
                   overflow: 'hidden',
                 }}
                 title={'Jump to original message'}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderLeftColor = 'rgba(216,74,90,0.85)'; (e.currentTarget as HTMLElement).style.color = 'var(--ash)'; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderLeftColor = 'rgba(216,74,90,0.45)'; (e.currentTarget as HTMLElement).style.color = 'var(--shadow)'; }}
+                className="vox-hover-reply"
               >
                 <svg width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth={1.6} strokeLinecap='round' strokeLinejoin='round' style={{ flexShrink: 0, opacity: 0.7 }} aria-hidden>
   <path d='M9 14l-5-4 5-4' />
@@ -764,8 +762,7 @@ const MessageBubble: React.FC<Props> = React.memo(({ message, isGrouped, isOwn: 
                         fontSize: '13px',
                         transition: 'background 0.15s, border-color 0.15s',
                       }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(102,0,204,0.25)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(102,0,204,0.5)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(102,0,204,0.12)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(102,0,204,0.25)'; }}
+                      className="vox-hover-mention"
                     >
                       <span>{emoji}</span>
                       <span style={{ color: 'var(--chaos)', fontSize: '11px', fontWeight: 600 }}>{count}</span>

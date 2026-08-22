@@ -239,3 +239,98 @@ button:disabled, [role="button"]:disabled {
   }
   button:hover, [role="button"]:hover { transform: none !important; }
 }
+
+
+/* ════════════════════════════════════════════════════════════════
+   HOVER CLASSES — Replace inline onMouseEnter/onMouseLeave
+   Add these classNames instead of inline style handlers.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Subtle hover (rgba(255,255,255,0.04)) ──────────────────── */
+.vox-hover-subtle { transition: background var(--transition-fast); }
+.vox-hover-subtle:hover { background: rgba(255, 255, 255, 0.04); }
+
+/* ── Light hover (rgba(255,255,255,0.06)) ───────────────────── */
+.vox-hover-light { transition: background var(--transition-fast), color var(--transition-fast); }
+.vox-hover-light:hover { background: rgba(255, 255, 255, 0.06); color: var(--ghost-white); }
+
+/* ── Action button hover (icon in message toolbar) ──────────── */
+.vox-hover-action { transition: background var(--transition-fast), color var(--transition-fast); }
+.vox-hover-action:hover { background: rgba(255, 255, 255, 0.06); color: var(--ghost-white); }
+
+/* ── Mention/Reply hover (purple accent) ────────────────────── */
+.vox-hover-mention {
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.vox-hover-mention:hover {
+  background: rgba(102, 0, 204, 0.25);
+  border-color: rgba(102, 0, 204, 0.5);
+}
+
+/* ── Reply thread hover (crimson accent) ────────────────────── */
+.vox-hover-reply {
+  transition: border-left-color var(--transition-fast), color var(--transition-fast);
+}
+.vox-hover-reply:hover {
+  border-left-color: rgba(216, 74, 90, 0.85);
+  color: var(--ash);
+}
+
+/* ── Server rail icon hover ─────────────────────────────────── */
+.vox-hover-server {
+  transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.vox-hover-server:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--chaos);
+  box-shadow: 0 0 14px var(--chaos-glow), 0 4px 20px rgba(0,0,0,0.3);
+  transform: scale(1.05) translateY(-2px);
+}
+
+/* ── Member panel row hover ─────────────────────────────────── */
+.vox-hover-member {
+  transition: background var(--transition-fast);
+}
+.vox-hover-member:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ── DM conversation header hover ───────────────────────────── */
+.vox-hover-dm-header {
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.vox-hover-dm-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ghost-white);
+}
+
+/* ── Voice user status hover ────────────────────────────────── */
+.vox-hover-voice-status {
+  transition: background var(--transition-fast);
+}
+.vox-hover-voice-status:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ── Tooltip show on hover (for server names, etc.) ─────────── */
+.vox-has-tooltip { position: relative; }
+.vox-tooltip-content {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 8px;
+  background: var(--phantom);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  z-index: 100;
+}
+.vox-has-tooltip:hover .vox-tooltip-content {
+  opacity: 1;
+}
