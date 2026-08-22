@@ -48,7 +48,7 @@ const EditHistoryModal: React.FC<Props> = ({ messageId, onClose }) => {
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
               <History size={18} color="var(--gold)" />
               <div style={{ marginLeft: 10, fontFamily: 'var(--serif)', color: 'var(--gold)', letterSpacing: '0.06em', fontSize: 14 }}>EDIT HISTORY</div>
-              <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--shadow)', cursor: 'pointer' }}>
+              <button onClick={onClose} aria-label="Close edit history" style={{ marginLeft: 'auto', background: 'transparent', border: 'none', color: 'var(--shadow)', cursor: 'pointer' }}>
                 <X size={16} />
               </button>
             </div>

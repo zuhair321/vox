@@ -55,7 +55,7 @@ stagesRouter.post('/channels/:id/stage/speakers/request', requireAuth, async (re
     });
 
     const io = getIO();
-    emitRealtimeEvent('stage:speakers', req.params.id, { speakers: [mapSpeaker(speaker)] });
+    emitRealtimeEvent('stage:speakers', `voice:${req.params.id}`, { speakers: [mapSpeaker(speaker)] });
     res.status(201).json({ speaker: mapSpeaker(speaker) });
   } catch (e) { next(e); }
 });
@@ -74,7 +74,7 @@ stagesRouter.post('/channels/:id/stage/speakers/:userId/approve', requireAuth, a
       include: { user: { select: { id: true, username: true, displayName: true, avatarUrl: true } } },
     });
     const io = getIO();
-    emitRealtimeEvent('stage:speakers', req.params.id, { speakers: [mapSpeaker(speaker)] });
+    emitRealtimeEvent('stage:speakers', `voice:${req.params.id}`, { speakers: [mapSpeaker(speaker)] });
     res.json({ speaker: mapSpeaker(speaker) });
   } catch (e) { next(e); }
 });
@@ -93,7 +93,7 @@ stagesRouter.post('/channels/:id/stage/speakers/:userId/mod', requireAuth, async
       include: { user: { select: { id: true, username: true, displayName: true, avatarUrl: true } } },
     });
     const io = getIO();
-    emitRealtimeEvent('stage:speakers', req.params.id, { speakers: [mapSpeaker(speaker)] });
+    emitRealtimeEvent('stage:speakers', `voice:${req.params.id}`, { speakers: [mapSpeaker(speaker)] });
     res.json({ speaker: mapSpeaker(speaker) });
   } catch (e) { next(e); }
 });
@@ -111,7 +111,7 @@ stagesRouter.delete('/channels/:id/stage/speakers/:userId', requireAuth, async (
 
     await prisma.stageSpeaker.deleteMany({ where: { channelId: req.params.id, userId: req.params.userId } });
     const io = getIO();
-    emitRealtimeEvent('stage:speaker-removed', req.params.id, { userId: req.params.userId });
+    emitRealtimeEvent('stage:speaker-removed', `voice:${req.params.id}`, { userId: req.params.userId });
     res.json({ removed: true });
   } catch (e) { next(e); }
 });

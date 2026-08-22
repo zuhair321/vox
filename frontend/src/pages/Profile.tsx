@@ -35,6 +35,15 @@ interface CropState {
 const AVATAR_FRAME = { w: 300, h: 300 };
 const BANNER_FRAME = { w: 400, h: 150 };
 
+const PARTICLE_COLORS = [
+    { id: 'crimson', color: '#a5182f', label: 'Crimson' },
+    { id: 'gold', color: '#c9a24b', label: 'Gold' },
+    { id: 'violet', color: '#7b2fbe', label: 'Violet' },
+    { id: 'toxic', color: '#00c853', label: 'Toxic' },
+    { id: 'solar', color: '#ff6d00', label: 'Solar' },
+    { id: 'ocean', color: '#0277bd', label: 'Ocean' },
+  ] as const;
+
 const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useUiStore();
@@ -44,6 +53,7 @@ const Profile: React.FC = () => {
   const [bioDraft, setBioDraft] = useState(profile.bio);
   const [uploading, setUploading] = useState<UploadKind | null>(null);
   const [crop, setCrop] = useState<CropState | null>(null);
+  const [particleColor, setParticleColor] = useState<string>(() => localStorage.getItem('vox_particle_color') || '#a5182f');
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -223,6 +233,41 @@ const Profile: React.FC = () => {
           <button type="button" aria-label="Settings" onClick={() => navigate('/settings')}><Settings size={22} /></button>
         </div>
       </header>
+
+      {/* Rising Particles */}
+      <div className="rising-particles" style={{ '--pc': particleColor } as React.CSSProperties} aria-hidden="true">
+        {Array.from({ length: 25 }, (_, i) => (
+          <span
+            key={i}
+            className="rp"
+            style={{
+              '--x': `${5 + Math.random() * 90}%`,
+              '--d': `${Math.random() * 8}s`,
+              '--dur': `${5 + Math.random() * 7}s`,
+              '--sz': `${2 + Math.random() * 3}px`,
+              '--rise': `${150 + Math.random() * 350}px`,
+            } as React.CSSProperties}
+          />
+        ))}
+      </div>
+
+      {/* Color Picker */}
+      <div className="particle-color-picker">
+        {PARTICLE_COLORS.map(({ id, color, label }) => (
+          <button
+            key={id}
+            type="button"
+            className={`pc-swatch ${particleColor === color ? 'active' : ''}`}
+            style={{ '--swatch': color } as React.CSSProperties}
+            title={label}
+            onClick={() => {
+              setParticleColor(color);
+              localStorage.setItem('vox_particle_color', color);
+            }}
+            aria-label={`${label} particles`}
+          />
+        ))}
+      </div>
 
       <section className="profile-shell">
         <div className="profile-banner">

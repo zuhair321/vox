@@ -216,10 +216,11 @@ const MessageArea: React.FC<{ channelId: string; messageId?: string }> = ({ chan
             exit={{ opacity: 0, y: 10 }}
             transition={{ duration: 0.18 }}
             onClick={jumpToBottom}
-            className="jump-to-bottom"
+            className="vox-jump-pill"
             aria-label="Jump to most recent messages"
           >
-            ↓{newCount > 0 ? ` (${newCount} NEW)` : ''}
+            <span>↓</span>
+            {newCount > 0 ? `${newCount} new transmissions` : 'new transmissions'}
           </motion.button>
         )}
       </AnimatePresence>

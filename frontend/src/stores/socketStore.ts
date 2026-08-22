@@ -18,6 +18,7 @@ const presenceMap = new Map<string, string>();
 interface SocketStore {
   socket: Socket | null;
   connected: boolean;
+  reconnecting: boolean;
 
   connect: () => void;
   disconnect: () => void;
@@ -44,6 +45,7 @@ export const useSocketStore = create<SocketStore>((set, get) => {
   return {
   socket: null,
   connected: false,
+  reconnecting: false,
 
   connect: () => {
     const token = useAuthStore.getState().accessToken;
@@ -66,11 +68,11 @@ export const useSocketStore = create<SocketStore>((set, get) => {
     });
 
     socket.on('connect', () => {
-      set({ connected: true });
+      set({ connected: true, reconnecting: false });
       reconnectAttempts = 0;
     });
     socket.on('disconnect', (reason) => {
-      set({ connected: false });
+      set({ connected: false, reconnecting: reason !== 'io client disconnect' });
       if (reason !== 'io client disconnect') {
         reconnectAttempts++;
       }
@@ -80,9 +82,8 @@ export const useSocketStore = create<SocketStore>((set, get) => {
       reconnectAttempts++;
     });
     socket.on('reconnect', (attemptNumber) => {
-      console.log('[Socket] reconnected after', attemptNumber, 'attempts');
       reconnectAttempts = 0;
-      set({ connected: true });
+      set({ connected: true, reconnecting: false });
     });
     socket.on('reconnect_failed', () => {
       console.error('[Socket] reconnection failed after', MAX_RECONNECT_ATTEMPTS, 'attempts');
@@ -200,6 +201,37 @@ export const useSocketStore = create<SocketStore>((set, get) => {
       }
     });
 
+    // ── Live message edits + reaction updates ────────────────────
+    // The backend emits 'message:updated' when a message is edited (PATCH)
+    // or when a reaction is toggled via the socket path (message:react).
+    socket.on('message:updated', ({ message }) => {
+      if (!message?.id || !message?.channelId) return;
+      useMessageStore.getState().updateMessage(message.channelId, message);
+    });
+
+    // REST-path reactions emit a dedicated 'message:reactions' event with
+    // just the id, channelId, and updated reactions array.
+    socket.on('message:reactions', ({ id, channelId, reactions }) => {
+      if (!id || !channelId) return;
+      const store = useMessageStore.getState();
+      const msgs = store.messages[channelId] || [];
+      const existing = msgs.find((m) => m.id === id);
+      if (existing) {
+        useMessageStore.getState().updateMessage(channelId, { ...existing, reactions });
+      }
+    });
+
+    // ── Live pin/unpin broadcasts ───────────────────────────────
+    socket.on('message:pinned', ({ message, pinned, channelId }) => {
+      if (!message?.id || !channelId) return;
+      const store = useMessageStore.getState();
+      const msgs = store.messages[channelId] || [];
+      const existing = msgs.find((m) => m.id === message.id);
+      if (existing) {
+        useMessageStore.getState().updateMessage(channelId, { ...existing, pinned });
+      }
+    });
+
     // ── Threads ───────────────────────────────────────────────
     // Live `thread:reply` delivery:
     //   * If the user has this thread panel open, the reply drops into the
@@ -257,7 +289,6 @@ export const useSocketStore = create<SocketStore>((set, get) => {
 
     socket.on('dm:read', ({ dmId, by }) => {
       // Read receipt from the other user — could be used for read indicators
-      console.log('[DM] read receipt for', dmId, 'by', by);
     });
 
     set({ socket });
@@ -266,7 +297,6 @@ export const useSocketStore = create<SocketStore>((set, get) => {
   disconnect: () => {
     const { socket } = get();
     if (socket) {
-      console.log('[Socket] Disconnecting and cleaning up listeners');
       // Unregister all listeners to prevent memory leaks
       socket.removeAllListeners();
       socket.disconnect();

@@ -8,7 +8,7 @@ import SettingsRow from '../../components/settings/SettingsRow';
 import VoxCard from '../../components/settings/VoxCard';
 import { useProfileStore } from '../../stores/profileStore';
 import { useUiStore } from '../../stores/uiStore';
-import { API_BASE } from '../../api/client';
+import { api } from '../../api/client';
 
 const Account: React.FC = () => {
   const navigate = useNavigate();
@@ -29,14 +29,11 @@ const Account: React.FC = () => {
   const changePassword = async () => {
     if (newPw !== confirmPw) { addToast('Passwords do not match.', 'error'); return; }
     if (newPw.length < 5) { addToast('Password must be at least 5 characters.', 'error'); return; }
-    const token = localStorage.getItem('vox_token');
     try {
-      const res = await fetch(`${API_BASE}/api/auth/change-password`, {
+      await api('/api/auth/change-password', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw })
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
       });
-      if (!res.ok) throw new Error('Failed');
       addToast('Password changed successfully.', 'success');
       setPwModal(false);
       setCurrentPw('');
@@ -48,14 +45,8 @@ const Account: React.FC = () => {
   };
 
   const deleteAccount = async () => {
-    const token = localStorage.getItem('vox_token');
     try {
-      const res = await fetch(`${API_BASE}/api/auth/me`, {
-        method: 'DELETE',
-        headers: {}
-      });
-      if (!res.ok) throw new Error('Failed');
-      localStorage.removeItem('vox_token');
+      await api('/api/auth/me', { method: 'DELETE' });
       localStorage.removeItem('vox_user');
       addToast('Account deleted. Redirecting...', 'info');
       setTimeout(() => { window.location.href = '/'; }, 1500);

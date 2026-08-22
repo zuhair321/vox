@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Pin } from 'lucide-react';
-import { API_BASE } from '../../api/client';
+import { api } from '../../api/client';
 import { useUiStore } from '../../stores/uiStore';
 import { useServerStore } from '../../stores/serverStore';
 import RichText from '../chat/RichText';
@@ -15,27 +15,19 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
   const [loading, setLoading] = useState(true);
   const { addToast } = useUiStore();
   const { selectedServer } = useServerStore();
-  const token = localStorage.getItem('vox_token');
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/channels/${channelId}/messages/pinned`, {
-      headers: {}
-    })
-      .then((r) => r.json())
-      .then((data) => {
+    api(`/api/channels/${channelId}/messages/pinned`)
+      .then((data: any) => {
         setMessages(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [channelId, token]);
+  }, [channelId]);
 
   const unpin = async (messageId: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/messages/${messageId}/pin`, {
-        method: 'DELETE',
-        headers: {}
-      });
-      if (!res.ok) throw new Error('Failed');
+      await api(`/api/messages/${messageId}/pin`, { method: 'DELETE' });
       setMessages((prev) => prev.filter((m) => m.id !== messageId));
       addToast('Unpinned', 'success');
     } catch (e) {
@@ -72,7 +64,7 @@ const PinnedMessagesPanel: React.FC<Props> = ({ channelId, onClose }) => {
           <Pin size={14} />
           PINNED MESSAGES
         </span>
-        <button className="profile-close-button" onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+        <button className="profile-close-button" onClick={onClose} aria-label="Close pinned messages" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
           <X size={18} />
         </button>
       </div>

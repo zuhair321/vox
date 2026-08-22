@@ -53,3 +53,42 @@
   --z-overlay: 10;
   --z-modal: 20;
 }
+
+/* ════════════════════════════════════════════════════════════════
+   VOX — ATELIER TOKEN SET (design brief pass)
+   Canonical names used by the new surface work in atelier.css.
+   Existing legacy tokens above remain fully functional.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Backgrounds ─────────────────────────────────────────── */
+  --bg-void: #0a0a0d;        /* window background */
+  --bg-surface: #131217;     /* sidebars, panels */
+  --bg-elevated: #1c1a20;    /* cards, hover surfaces */
+  --border-hairline: #2a2730;
+
+  /* ── Accents — the covenant palette ──────────────────────── */
+  --crimson: #a5182f;
+  --crimson-glow: rgba(165, 24, 47, 0.35);
+  --gold: #c9a24b;
+  --gold-dim: #8a6f34;
+
+  /* ── Text — parchment hierarchy ──────────────────────────── */
+  --text-primary: #e9e4d8;
+  --text-muted: #8b8790;
+  --text-faint: #5a5660;
+
+  /* ── Motif — the wax seal ────────────────────────────────── */
+  --seal-ring: rgba(201, 162, 75, 0.55);
+  --seal-wax: #6d1b24;
+  --seal-wax-hi: #a5182f;
+  --seal-glow: rgba(165, 24, 47, 0.28);
+}
+
+/* Rebind the legacy aliases the rest of the app already reads so the
+   whole surface shares the covenant palette (keeps old names working). */
+:root {
+  --ghost-white: #e9e4d8;
+  --ash: #c9c2b4;
+  --shadow: #8b8790;
+}

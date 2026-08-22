@@ -1462,3 +1462,95 @@
     height: 120px;
   }
 }
+
+
+/* ════════════════════════════════════════════════════════════════
+   RISING PARTICLES — bottom-to-top flow with color picker
+   ════════════════════════════════════════════════════════════════ */
+
+.rising-particles {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  --pc: #a5182f;
+}
+
+.rp {
+  position: absolute;
+  bottom: -10px;
+  left: var(--x, 50%);
+  width: var(--sz, 3px);
+  height: var(--sz, 3px);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pc), transparent);
+  box-shadow: 0 0 calc(var(--sz, 3px) * 2) var(--pc);
+  opacity: 0;
+  animation: riseUp var(--dur, 6s) ease-out infinite;
+  animation-delay: var(--d, 0s);
+}
+
+@keyframes riseUp {
+  0% { opacity: 0; transform: translateY(0) scale(0.3); }
+  10% { opacity: 0.8; }
+  70% { opacity: 0.3; }
+  100% { opacity: 0; transform: translateY(calc(-1 * var(--rise, 250px))) scale(0); }
+}
+
+/* Color picker — small, unobtrusive, top right */
+.particle-color-picker {
+  position: fixed;
+  top: 44px;
+  right: 16px;
+  display: flex;
+  gap: 5px;
+  z-index: 100;
+}
+
+.pc-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  padding: 0;
+}
+
+.pc-swatch:hover {
+  transform: scale(1.2);
+  border-color: rgba(255,255,255,0.3);
+}
+
+.pc-swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 8px var(--swatch);
+  transform: scale(1.15);
+}
+
+.pc-swatch[title]::after {
+  content: attr(title);
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  background: rgba(0,0,0,0.8);
+  border-radius: 3px;
+  color: #fff;
+  font-size: 9px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+
+.pc-swatch:hover[title]::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rp { animation: none !important; }
+}

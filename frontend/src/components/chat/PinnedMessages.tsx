@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Pin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { useUiStore } from '../../stores/uiStore';
@@ -136,7 +137,7 @@ const PinnedMessages: React.FC = () => {
 
             {!loading && pinned.length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-                <div style={{ fontSize: '36px', opacity: 0.3, marginBottom: '12px' }}>📌</div>
+                <div style={{ color: "var(--text-faint, #5a5660)", marginBottom: "12px" }}><Pin size={36} strokeWidth={1} /></div>
                 <div
                   style={{
                     fontFamily: "'Cinzel Decorative', serif",

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Settings, VolumeX, Volume2, Eye, EyeOff, User } from 'lucide-react';
 import { useDMStore } from '../../stores/dmStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { useSocketStore } from '../../stores/socketStore';
@@ -10,6 +10,7 @@ import AttachmentList from '../chat/AttachmentList';
 import ConfirmDialog from '../settings/ConfirmDialog';
 import ContextMenu from '../ui/ContextMenu';
 import { useUiStore } from '../../stores/uiStore';
+import { useDmPrefStore } from '../../stores/dmPrefStore';
 import { fetchDMMessages } from '../../api/dm';
 import { api, API_BASE } from '../../api/client';
 import { format } from 'date-fns';
@@ -34,13 +35,34 @@ const DMConversation: React.FC = () => {
   const { messages, setMessages, selectDM, markRead, typing, purgeExpiredTyping } = useDMStore() as any;
   const { friends } = useFriendStore();
   const { sendDmRead } = useSocketStore();
+  const dmPrefStore = useDmPrefStore();
   const dmMessages = messages[dmId || ''] || [];
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Derive the other participant from the dmId (`idA_idB`, sorted). We drop our
-  // own id from the parts; the remainder is the friend. Then resolve their
-  // username/status from the friend store so the header shows real info instead
-  // of the old hardcoded "@User".
+  // Settings dropdown state
+  const [showSettings, setShowSettings] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  // Fetch DM preferences on mount
+  useEffect(() => {
+    if (dmId) dmPrefStore.fetchPrefs(dmId);
+  }, [dmId]);
+
+  const dmPrefs = dmId ? dmPrefStore.getPrefs(dmId) : { muted: false, mutedUntil: null, showAvatar: true, showDisplayName: true };
+
+  // Close settings dropdown on outside click
+  useEffect(() => {
+    if (!showSettings) return;
+    const handler = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setShowSettings(false);
+      }
+    };
+    document.addEventListener('mousedown', handler, true);
+    return () => document.removeEventListener('mousedown', handler, true);
+  }, [showSettings]);
+
+  // Derive the other participant from the dmId
   const friend = useMemo(() => {
     if (!dmId) return null;
     let myId = '';
@@ -49,6 +71,8 @@ const DMConversation: React.FC = () => {
     if (!otherId) return null;
     return friends.find((f) => f.id === otherId) || { id: otherId, username: 'Unknown', status: 'offline' };
   }, [dmId, friends]);
+
+  const { addToast } = useUiStore();
 
   useEffect(() => {
     if (!dmId) return;
@@ -68,20 +92,17 @@ const DMConversation: React.FC = () => {
     return () => { alive = false; selectDM(null); };
   }, [dmId, selectDM, setMessages, markRead, sendDmRead]);
 
-  // Clear unread badge on mount — no redundant sends per-message
   useEffect(() => {
     if (dmId && dmMessages.length > 0) {
       markRead(dmId);
     }
   }, [dmId]);
 
-  // Purge expired typing indicators every 2 seconds
   useEffect(() => {
     const interval = setInterval(() => { purgeExpiredTyping(); }, 2000);
     return () => clearInterval(interval);
   }, [purgeExpiredTyping]);
 
-  const { addToast } = useUiStore();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -98,7 +119,7 @@ const DMConversation: React.FC = () => {
       });
       setEditingId(null);
       addToast('Message edited', 'success');
-      useDMStore.getState().updateMessage({ ...(useDMStore.getState().messages[dmId || '']?.find(m => m.id === msgId) || {}), body: editValue.trim() } as any);
+      useDMStore.getState().updateMessage({ ...(useDMStore.getState().messages[dmId || '']?.find((m: any) => m.id === msgId) || {}), body: editValue.trim() } as any);
     } catch (e: any) {
       addToast(e?.message || 'Edit failed', 'error');
     }
@@ -115,7 +136,6 @@ const DMConversation: React.FC = () => {
     }
   };
 
-  // Close the hover action popover on outside click / Escape.
   useEffect(() => {
     if (!popover) return;
     const onPointer = (e: MouseEvent) => {
@@ -162,7 +182,122 @@ const DMConversation: React.FC = () => {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
           <span style={{ color: 'var(--ghost-white)', fontWeight: 'bold' }}>@{friend?.username || 'Unknown'}{friend?.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}</span>
-          <span style={{ fontSize: '11px', color: 'var(--ash)', textTransform: 'capitalize' }}>{(friend?.status || 'offline').toLowerCase()}</span>
+          <span style={{ fontSize: '11px', color: 'var(--ash)', textTransform: 'capitalize' }}>
+            {(friend?.status || 'offline').toLowerCase()}
+            {dmPrefs.muted && <span style={{ marginLeft: '6px', color: 'var(--toxic)' }}>(muted)</span>}
+          </span>
+        </div>
+
+        {/* Settings dropdown */}
+        <div style={{ marginLeft: 'auto', position: 'relative' }} ref={settingsRef}>
+          <button
+            type="button"
+            onClick={() => setShowSettings(!showSettings)}
+            aria-label="DM Settings"
+            style={{
+              background: showSettings ? 'rgba(255,255,255,0.06)' : 'none',
+              border: '1px solid var(--rim)',
+              borderRadius: '6px',
+              color: showSettings ? 'var(--ghost-white)' : 'var(--ash)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '32px',
+              height: '32px',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'var(--ghost-white)'; }}
+            onMouseLeave={(e) => { if (!showSettings) { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--ash)'; } }}
+          >
+            <Settings size={16} />
+          </button>
+          {showSettings && createPortal(
+            <div
+              style={{
+                position: 'fixed',
+                top: '48px',
+                right: '16px',
+                background: 'var(--obsidian)',
+                border: '1px solid var(--rim)',
+                borderRadius: '8px',
+                padding: '8px 0',
+                minWidth: '240px',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                zIndex: 1000,
+              }}
+            >
+              {/* Mute toggle */}
+              <button
+                type="button"
+                onClick={() => { dmPrefStore.updatePrefs(dmId!, { muted: !dmPrefs.muted }); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  color: dmPrefs.muted ? 'var(--toxic)' : 'var(--ghost-white)',
+                  cursor: 'pointer', fontSize: '13px', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+              >
+                {dmPrefs.muted ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                {dmPrefs.muted ? 'Unmute Conversation' : 'Mute Conversation'}
+              </button>
+
+              <div style={{ height: '1px', background: 'var(--rim)', margin: '4px 0' }} />
+
+              {/* Privacy: Hide avatar */}
+              <button
+                type="button"
+                onClick={() => dmPrefStore.updatePrefs(dmId!, { showAvatar: !dmPrefs.showAvatar })}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  color: 'var(--ghost-white)', cursor: 'pointer', fontSize: '13px', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+              >
+                {dmPrefs.showAvatar ? <EyeOff size={15} /> : <Eye size={15} />}
+                {dmPrefs.showAvatar ? "Hide Other's Avatar" : "Show Other's Avatar"}
+              </button>
+
+              {/* Privacy: Hide display name */}
+              <button
+                type="button"
+                onClick={() => dmPrefStore.updatePrefs(dmId!, { showDisplayName: !dmPrefs.showDisplayName })}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  color: 'var(--ghost-white)', cursor: 'pointer', fontSize: '13px', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+              >
+                {dmPrefs.showDisplayName ? <EyeOff size={15} /> : <Eye size={15} />}
+                {dmPrefs.showDisplayName ? "Hide Other's Display Name" : "Show Other's Display Name"}
+              </button>
+
+              <div style={{ height: '1px', background: 'var(--rim)', margin: '4px 0' }} />
+
+              {/* View profile */}
+              <button
+                type="button"
+                onClick={() => { setShowSettings(false); addToast('Profile card coming soon', 'info'); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+                  padding: '10px 16px', background: 'none', border: 'none',
+                  color: 'var(--ghost-white)', cursor: 'pointer', fontSize: '13px', textAlign: 'left',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+              >
+                <User size={15} />
+                View Profile
+              </button>
+            </div>,
+            document.body
+          )}
         </div>
       </div>
 
@@ -181,7 +316,7 @@ const DMConversation: React.FC = () => {
             const senderAvatar = resolveMediaUrl(msg.sender?.avatarUrl);
             const menuOpen = popover?.msgId === msg.id;
             return (
-            <div key={msg.id} className={`dm-message-row dm-message-animate`} style={{ display: 'flex', gap: '16px', animationDelay: `${Math.min(idx * 30, 300)}ms`, flexDirection: isOwn ? 'row-reverse' : 'row', position: 'relative' }}
+            <div key={msg.id} className="dm-message-row dm-message-animate" style={{ display: 'flex', gap: '16px', animationDelay: `${Math.min(idx * 30, 300)}ms`, flexDirection: isOwn ? 'row-reverse' : 'row', position: 'relative' }}
               onMouseEnter={() => setHoveredId(msg.id)}
               onMouseLeave={() => setHoveredId((cur) => (cur === msg.id ? null : cur))}
             >
@@ -199,9 +334,7 @@ const DMConversation: React.FC = () => {
                     setPopover({ msgId: msg.id, x: Math.max(8, rect.right - MENU_W), y: rect.bottom + 8 });
                   }}
                   style={{
-                    position: 'absolute',
-                    top: '-10px',
-                    left: '12px',
+                    position: 'absolute', top: '-10px', left: '12px',
                     width: '28px', height: '28px', border: '1px solid var(--rim)', background: 'var(--dark-matter)',
                     color: 'var(--ash)', cursor: 'pointer', display: 'flex', alignItems: 'center',
                     justifyContent: 'center', borderRadius: '6px', fontSize: '14px', zIndex: 20,
@@ -213,16 +346,35 @@ const DMConversation: React.FC = () => {
                   ⋯
                 </button>
               )}
-              <div className="octagon" style={{ width: '32px', height: '32px', backgroundColor: isOwn ? 'var(--accent)' : 'var(--chaos)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {senderAvatar ? (
-                  <img src={senderAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{(msg.sender?.username || '?').slice(0, 1).toUpperCase()}</span>
-                )}
-              </div>
+
+              {/* Avatar — respects privacy toggle for other person's messages */}
+              {!isOwn && dmPrefs.showAvatar ? (
+                <div className="octagon" style={{ width: '32px', height: '32px', backgroundColor: 'var(--chaos)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {senderAvatar ? (
+                    <img src={senderAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{(msg.sender?.username || '?').slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+              ) : isOwn ? (
+                <div className="octagon" style={{ width: '32px', height: '32px', backgroundColor: 'var(--accent)', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {senderAvatar ? (
+                    <img src={senderAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ color: '#0b0d11', fontWeight: 800, fontSize: '14px' }}>{(msg.sender?.username || '?').slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ width: '32px', flexShrink: 0 }} />
+              )}
+
               <div style={{ maxWidth: '70%', textAlign: isOwn ? 'right' : 'left' }}>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'baseline', justifyContent: isOwn ? 'flex-end' : 'flex-start' }}>
-                  <span style={{ color: isOwn ? 'var(--accent)' : 'var(--ghost-white)', fontWeight: 'bold' }}>{msg.sender?.username || 'Unknown'}{msg.sender?.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}</span>
+                  {(!isOwn && dmPrefs.showDisplayName) || isOwn ? (
+                    <span style={{ color: isOwn ? 'var(--accent)' : 'var(--ghost-white)', fontWeight: 'bold' }}>{msg.sender?.username || 'Unknown'}{msg.sender?.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}</span>
+                  ) : (
+                    <span style={{ color: 'var(--ash)', fontWeight: 'bold', fontStyle: 'italic' }}>Anonymous</span>
+                  )}
                   <span style={{ fontSize: '12px', color: 'var(--ash)' }}>{format(new Date(msg.createdAt), 'h:mm a')}</span>
                 </div>
                 {editingId === msg.id ? (

@@ -343,51 +343,32 @@ const MemberPanel: React.FC<{ empty?: boolean }> = ({ empty }) => {
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
                     >
-                      {/* Avatar with status dot */}
-                      <div style={{ position: 'relative', width: '32px', height: '32px', flexShrink: 0 }}>
-                        {/* Main avatar */}
-                        {avatarUrl ? (
-                          <img
-                            src={avatarUrl}
-                            alt=""
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '50%',
-                              objectFit: 'cover',
-                              background: 'var(--obsidian)',
-                              display: 'block'
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '50%',
-                              background: 'var(--obsidian)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'var(--ghost-white)',
-                              fontWeight: 700,
-                              fontSize: '14px'
-                            }}
-                          >
-                            {String(user.username || '?').slice(0, 1).toUpperCase()}
-                          </div>
-                        )}
+                      {/* Avatar with status dot — hex shield frame */}
+                      <div style={{ position: 'relative', width: '34px', height: '34px', flexShrink: 0 }}>
+                        <div className={`member-avatar-frame ${status === 'online' ? 'online' : ''}`}>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt="" />
+                          ) : (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: 'var(--ghost-white)', fontWeight: 700, fontSize: '13px'
+                            }}>
+                              {String(user.username || '?').slice(0, 1).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
                         {/* Status dot — bottom-right */}
                         <div
                           style={{
                             position: 'absolute',
-                            bottom: 0,
-                            right: 0,
-                            width: '12px',
-                            height: '12px',
+                            bottom: 1,
+                            right: 2,
+                            width: '11px',
+                            height: '11px',
                             borderRadius: '50%',
                             background: statusColor,
-                            border: '2.5px solid var(--abyss)'
+                            border: '2.5px solid var(--abyss)',
+                            zIndex: 1
                           }}
                         />
                       </div>

@@ -54,8 +54,7 @@ const GifPicker: React.FC<GifPickerProps> = ({ open, gifs, onClose, onPick }) =>
 
           <div className="gif-picker-categories">
             {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
+              <button key={cat}
                 type="button"
                 className={`gif-category ${category === cat ? 'active' : ''}`}
                 onClick={() => {

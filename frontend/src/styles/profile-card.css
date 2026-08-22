@@ -1,0 +1,932 @@
+/* ════════════════════════════════════════════════════════════════
+   VOX — PROFILE CARD  (v2 — production-grade)
+   Palette presets, custom mode, auto-derived tokens, contrast-safe
+   text, loading skeleton, empty states, staggered entrance, and full
+   prefers-reduced-motion support.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Palette presets ───────────────────────────────────────────────
+   Each preset sets --pc-primary, --pc-secondary, and auto-derives
+   glow alphas, particle gradients, hover tints, ring colors. */
+.vox-profile-card,
+.vox-profile-card[data-preset="crimson-court"] {
+  --pc-primary: #a5182f;
+  --pc-secondary: #c9a24b;
+  --pc-banner-from: #2a0f16;
+  --pc-banner-mid: #120a10;
+  --pc-banner-to: #0a0a0d;
+}
+.vox-profile-card[data-preset="ashen-requiem"] {
+  --pc-primary: #5a5660;
+  --pc-secondary: #e9e4d8;
+  --pc-banner-from: #1a1a1e;
+  --pc-banner-mid: #121214;
+  --pc-banner-to: #0a0a0d;
+}
+.vox-profile-card[data-preset="verdant-coven"] {
+  --pc-primary: #1f6b4a;
+  --pc-secondary: #c0c4b8;
+  --pc-banner-from: #0f1f16;
+  --pc-banner-mid: #0a140e;
+  --pc-banner-to: #0a0a0d;
+}
+.vox-profile-card[data-preset="obsidian-veil"] {
+  --pc-primary: #3a2557;
+  --pc-secondary: #8a6fb0;
+  --pc-banner-from: #1a1028;
+  --pc-banner-mid: #100a1a;
+  --pc-banner-to: #0a0a0d;
+}
+.vox-profile-card[data-preset="ember-wilds"] {
+  --pc-primary: #b5501f;
+  --pc-secondary: #d9a44c;
+  --pc-banner-from: #2a180e;
+  --pc-banner-mid: #1a0f08;
+  --pc-banner-to: #0a0a0d;
+}
+
+/* ── Derived tokens (auto from primary/secondary) ──────────────── */
+.vox-profile-card {
+  --pc-primary-rgb: 165, 24, 47;
+  --pc-secondary-rgb: 201, 162, 75;
+  --pc-primary-glow: color-mix(in srgb, var(--pc-primary) 40%, transparent);
+  --pc-secondary-glow: color-mix(in srgb, var(--pc-secondary) 45%, transparent);
+  --pc-primary-dim: color-mix(in srgb, var(--pc-primary) 20%, transparent);
+  --pc-secondary-dim: color-mix(in srgb, var(--pc-secondary) 15%, transparent);
+  --pc-bg: var(--bg-elevated, #1c1a20);
+  --pc-bg-surface: var(--bg-surface, #131217);
+  --pc-border: var(--border-hairline, #2a2730);
+}
+
+/* ── Custom mode: CSS custom properties override everything ────── */
+.vox-profile-card[data-preset="custom"] {
+  --pc-primary: var(--pc-custom-primary, #a5182f);
+  --pc-secondary: var(--pc-custom-secondary, #c9a24b);
+  --pc-primary-glow: color-mix(in srgb, var(--pc-custom-primary, #a5182f) 40%, transparent);
+  --pc-secondary-glow: color-mix(in srgb, var(--pc-custom-secondary, #c9a24b) 45%, transparent);
+  --pc-primary-dim: color-mix(in srgb, var(--pc-custom-primary, #a5182f) 20%, transparent);
+  --pc-secondary-dim: color-mix(in srgb, var(--pc-custom-secondary, #c9a24b) 15%, transparent);
+  --pc-banner-from: var(--pc-custom-primary, #a5182f);
+  --pc-banner-mid: #120a10;
+  --pc-banner-to: #0a0a0d;
+}
+
+/* ── Contrast-safe text helper ──────────────────────────────────── */
+.vox-profile-card {
+  --pc-text-on-primary: #e9e4d8; /* overridden by inline style when custom */
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-profile-card {
+  position: relative;
+  width: 320px;
+  border-radius: 14px;
+  overflow: hidden;
+  isolation: isolate;
+  font-family: var(--font-ui, 'Share Tech Mono', monospace);
+}
+
+/* ── Rotating card border ─────────────────────────────────────── */
+.vox-profile-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from 0deg,
+    var(--pc-primary),
+    var(--pc-secondary),
+    var(--pc-primary),
+    var(--pc-secondary),
+    var(--pc-primary)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: pc-border-spin 7s linear infinite;
+  pointer-events: none;
+  z-index: 5;
+}
+
+@keyframes pc-border-spin {
+  from { filter: hue-rotate(0deg); }
+  to   { filter: hue-rotate(360deg); }
+}
+
+/* ── Card body ────────────────────────────────────────────────── */
+.vox-pc-body {
+  position: relative;
+  background: var(--pc-bg);
+  border-radius: inherit;
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BANNER
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-banner {
+  position: relative;
+  height: 90px;
+  background:
+    linear-gradient(135deg, var(--pc-banner-from), var(--pc-banner-mid) 50%, var(--pc-banner-to));
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+}
+
+.vox-pc-banner-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+/* Banner shimmer sweep */
+.vox-pc-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 30%,
+    rgba(201, 162, 75, 0.08) 45%,
+    rgba(201, 162, 75, 0.14) 50%,
+    rgba(201, 162, 75, 0.08) 55%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  animation: pc-shimmer 4.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes pc-shimmer {
+  0%, 100% { background-position: 200% 0; }
+  20%      { background-position: -100% 0; }
+  40%      { background-position: -100% 0; }
+}
+
+/* Banner edit affordance (own profile) */
+.vox-pc-banner-edit {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  color: var(--text-primary);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.vox-pc-banner:hover .vox-pc-banner-edit { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════
+   EMBER PARTICLES
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-embers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.vox-pc-ember {
+  position: absolute;
+  bottom: -4px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pc-secondary) 0%, var(--pc-primary) 50%, transparent 100%);
+  opacity: 0;
+  animation: pc-ember-rise var(--pc-ember-dur, 8s) ease-in var(--pc-ember-delay, 0s) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes pc-ember-rise {
+  0%   { transform: translateY(0) translateX(0) scale(1);   opacity: 0; }
+  8%   { opacity: 0.7; }
+  50%  { transform: translateY(-40px) translateX(var(--pc-ember-drift, 10px)) scale(0.8); opacity: 0.5; }
+  85%  { opacity: 0.2; }
+  100% { transform: translateY(-86px) translateX(var(--pc-ember-drift2, -5px)) scale(0.4); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AVATAR — overlaps banner bottom
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-avatar-wrap {
+  position: relative;
+  margin: -30px 0 0 16px;
+  width: 68px;
+  height: 68px;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.vox-pc-avatar-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, var(--pc-primary), var(--pc-secondary), var(--pc-primary));
+  animation: pc-ring-spin 5s linear infinite;
+}
+
+@keyframes pc-ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.vox-pc-avatar-ring-mask {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--pc-bg);
+}
+
+.vox-pc-avatar-img {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  object-fit: cover;
+  z-index: 2;
+  display: block;
+}
+
+.vox-pc-avatar-fallback {
+  position: relative;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--seal-wax, #6d1b24), var(--obsidian, #26191d));
+  font-family: var(--font-display, 'Cinzel Decorative', serif);
+  font-size: 26px;
+  color: var(--text-primary);
+}
+
+.vox-pc-avatar-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pc-primary-glow) 0%, transparent 70%);
+  z-index: 0;
+  animation: pc-avatar-breathe 3s ease-in-out infinite;
+}
+
+@keyframes pc-avatar-breathe {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.08); }
+}
+
+/* Avatar edit affordance (own profile) */
+.vox-pc-avatar-edit {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 3;
+  color: var(--text-primary);
+  font-size: 18px;
+}
+.vox-pc-avatar-wrap:hover .vox-pc-avatar-edit { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════
+   PRESENCE DOT
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-presence {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid var(--pc-bg);
+  z-index: 4;
+}
+
+.vox-pc-presence-dot {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #3ba55c;
+  position: relative;
+}
+
+.vox-pc-presence-ping {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid #3ba55c;
+  animation: pc-presence-ping 2s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pc-presence-ping {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+.vox-pc-presence.idle .vox-pc-presence-dot  { background: #faa61a; }
+.vox-pc-presence.idle .vox-pc-presence-ping { border-color: #faa61a; }
+.vox-pc-presence.dnd .vox-pc-presence-dot   { background: #ed4245; }
+.vox-pc-presence.dnd .vox-pc-presence-ping  { border-color: #ed4245; }
+.vox-pc-presence.offline .vox-pc-presence-dot  { background: #747f8d; }
+.vox-pc-presence.offline .vox-pc-presence-ping { border-color: #747f8d; animation: none; }
+
+/* ═══════════════════════════════════════════════════════════════
+   IDENTITY ROW — username + stacked role pills
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-identity {
+  padding: 10px 16px 0;
+}
+
+.vox-pc-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vox-pc-display-name {
+  font-family: var(--font-display, 'Cinzel Decorative', serif);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.vox-pc-username {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  margin-top: 1px;
+}
+
+/* ── Role pills — stack horizontally ─────────────────────────────── */
+.vox-pc-role-pills {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.vox-pc-role-pill {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  /* Default: gold on dark */
+  color: var(--pc-secondary);
+  background: var(--pc-secondary-dim);
+  border: 1px solid color-mix(in srgb, var(--pc-secondary) 25%, transparent);
+}
+
+/* Role-specific overrides — these stack ON TOP of preset colors */
+.vox-pc-role-pill[data-role="admin"] {
+  color: #d84a5a;
+  background: rgba(216, 74, 90, 0.12);
+  border-color: rgba(216, 74, 90, 0.25);
+}
+.vox-pc-role-pill[data-role="mod"] {
+  color: #d9c98d;
+  background: rgba(217, 201, 141, 0.12);
+  border-color: rgba(217, 201, 141, 0.25);
+}
+.vox-pc-role-pill[data-role="founder"] {
+  color: var(--text-primary);
+  background: rgba(233, 228, 216, 0.08);
+  border-color: rgba(233, 228, 216, 0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STATS STRIP — quiet mono numbers
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-stats {
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px 0;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.vox-pc-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.vox-pc-stat-value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.vox-pc-stat-label {
+  color: var(--text-faint);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BIO
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-bio {
+  padding: 10px 16px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
+.vox-pc-bio-empty {
+  padding: 10px 16px 0;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-style: italic;
+  letter-spacing: 0.06em;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION LABEL
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-section-label {
+  padding: 14px 16px 5px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DIVIDER
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-divider {
+  height: 1px;
+  margin: 10px 16px;
+  background: linear-gradient(90deg, transparent, var(--pc-border), transparent);
+  position: relative;
+}
+
+.vox-pc-divider::after {
+  content: '\2726';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--pc-bg);
+  padding: 0 8px;
+  color: var(--pc-secondary);
+  font-size: 7px;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CONNECTIONS
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-connections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px;
+}
+
+.vox-pc-conn-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  background: var(--pc-bg-surface);
+  border: 1px solid var(--pc-border);
+  border-radius: 6px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.vox-pc-conn-chip:hover {
+  transform: translateY(-1px);
+  color: var(--pc-secondary);
+  border-color: color-mix(in srgb, var(--pc-secondary) 40%, transparent);
+  box-shadow: 0 2px 8px var(--pc-secondary-glow);
+}
+
+.vox-pc-conn-icon {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.vox-pc-conn-chip:hover .vox-pc-conn-icon { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SIGILS (achievement badges)
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-sigils {
+  display: flex;
+  gap: 10px;
+  padding: 0 16px;
+  flex-wrap: wrap;
+}
+
+.vox-pc-sigil {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 35% 30%, var(--seal-wax, #6d1b24), #3f0f15 80%);
+  border: 1px solid var(--seal-ring, rgba(201, 162, 75, 0.55));
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  font-size: 15px;
+}
+
+.vox-pc-sigil::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  border: 1px solid rgba(201, 162, 75, 0.15);
+  pointer-events: none;
+}
+
+.vox-pc-sigil-glow {
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--pc-secondary-glow) 0%, transparent 70%);
+  opacity: 0;
+  animation: pc-sigil-twinkle var(--pc-twinkle-dur, 3.8s) ease-in-out var(--pc-twinkle-delay, 0s) infinite;
+  pointer-events: none;
+}
+
+@keyframes pc-sigil-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.95); }
+  50%      { opacity: 0.7; transform: scale(1.1); }
+}
+
+.vox-pc-sigil:hover {
+  transform: scale(1.12);
+  box-shadow: 0 0 16px var(--pc-secondary-glow);
+}
+
+.vox-pc-sigil:hover .vox-pc-sigil-glow {
+  animation-duration: 1.5s;
+}
+
+/* Sigil tooltip */
+.vox-pc-sigil[data-title]:hover::before {
+  content: attr(data-title);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  background: var(--pc-bg-surface);
+  border: 1px solid var(--pc-border);
+  border-radius: 4px;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ACTION ROW (other profiles)
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+
+.vox-pc-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: 1px solid var(--pc-border);
+  border-radius: 6px;
+  background: var(--pc-bg-surface);
+  color: var(--text-muted);
+  font-family: var(--font-ui, 'Share Tech Mono', monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.vox-pc-btn:hover {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--pc-secondary) 40%, transparent);
+  background: var(--pc-bg);
+  box-shadow: 0 0 12px var(--pc-secondary-glow);
+}
+
+.vox-pc-btn.primary {
+  background: linear-gradient(135deg, var(--pc-primary-dim), transparent);
+  border-color: color-mix(in srgb, var(--pc-primary) 40%, transparent);
+  color: var(--text-primary);
+}
+
+.vox-pc-btn.primary:hover {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--pc-primary) 40%, transparent), var(--pc-primary-dim));
+  border-color: var(--pc-primary);
+  box-shadow: 0 0 16px var(--pc-primary-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VOICE STATUS
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-voice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 8px 16px 0;
+  background: rgba(0, 255, 65, 0.06);
+  border: 1px solid rgba(0, 255, 65, 0.18);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--toxic, #3ba55c);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LOADING SKELETON
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-skeleton .vox-pc-banner {
+  background: var(--pc-bg-surface) !important;
+}
+
+.vox-pc-skeleton .vox-pc-banner::after { animation: none; }
+
+.vox-pc-skeleton .vox-pc-embers { display: none; }
+
+.vox-pc-skeleton .vox-pc-avatar-fallback,
+.vox-pc-skeleton .vox-pc-avatar-img {
+  visibility: hidden;
+}
+
+.vox-pc-skeleton .vox-pc-avatar-ring {
+  background: var(--pc-border);
+  animation: none;
+}
+
+.vox-pc-skeleton .vox-pc-avatar-glow { animation: none; opacity: 0.2; }
+
+.vox-pc-skeleton .vox-pc-presence { display: none; }
+
+.vox-pc-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--pc-bg-surface) 25%,
+    color-mix(in srgb, var(--pc-border) 50%, var(--pc-bg-surface)) 50%,
+    var(--pc-bg-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.vox-pc-shimmer-name {
+  width: 140px;
+  height: 15px;
+}
+
+.vox-pc-shimmer-username {
+  width: 80px;
+  height: 10px;
+}
+
+.vox-pc-shimmer-role {
+  width: 60px;
+  height: 14px;
+}
+
+.vox-pc-shimmer-bio {
+  width: 100%;
+  height: 11px;
+  margin-top: 10px;
+}
+
+.vox-pc-shimmer-bio2 {
+  width: 75%;
+  height: 11px;
+  margin-top: 4px;
+}
+
+.vox-pc-shimmer-sigil {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+}
+
+.vox-pc-shimmer-label {
+  width: 80px;
+  height: 8px;
+  margin: 14px 16px 5px;
+}
+
+.vox-pc-shimmer-chip {
+  width: 70px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NOTE (below card, in popup)
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.vox-pc-note-edit {
+  background: none;
+  border: none;
+  color: var(--pc-primary);
+  cursor: pointer;
+  font-family: var(--font-ui, 'Share Tech Mono', monospace);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.15s ease;
+}
+.vox-pc-note-edit:hover { color: var(--text-primary); }
+
+.vox-pc-note-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 0;
+}
+.vox-pc-note-text.empty { color: var(--text-faint); font-style: italic; }
+
+.vox-pc-note-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--pc-bg-surface);
+  border: 1px solid var(--pc-border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-family: var(--font-ui, 'Share Tech Mono', monospace);
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.vox-pc-note-input:focus {
+  border-color: color-mix(in srgb, var(--pc-secondary) 40%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ENTRANCE / EXIT
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-enter {
+  animation: pc-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pc-enter {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.vox-pc-exit {
+  animation: pc-exit 0.2s ease-in forwards;
+}
+
+@keyframes pc-exit {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96) translateY(4px); }
+}
+
+/* Staggered child reveal */
+.vox-pc-stagger > * {
+  opacity: 0;
+  animation: pc-stagger-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.vox-pc-stagger > *:nth-child(1) { animation-delay: 0.06s; }
+.vox-pc-stagger > *:nth-child(2) { animation-delay: 0.12s; }
+.vox-pc-stagger > *:nth-child(3) { animation-delay: 0.18s; }
+.vox-pc-stagger > *:nth-child(4) { animation-delay: 0.24s; }
+.vox-pc-stagger > *:nth-child(5) { animation-delay: 0.30s; }
+.vox-pc-stagger > *:nth-child(6) { animation-delay: 0.36s; }
+.vox-pc-stagger > *:nth-child(7) { animation-delay: 0.42s; }
+.vox-pc-stagger > *:nth-child(8) { animation-delay: 0.48s; }
+
+@keyframes pc-stagger-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   KEYBOARD FOCUS
+   ═══════════════════════════════════════════════════════════════ */
+
+.vox-pc-btn:focus-visible,
+.vox-pc-conn-chip:focus-visible,
+.vox-pc-sigil:focus-visible,
+.vox-pc-banner-edit:focus-visible,
+.vox-pc-avatar-edit:focus-visible {
+  outline: 2px solid var(--pc-secondary);
+  outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 480px) {
+  .vox-profile-card { width: 280px; }
+  .vox-pc-banner { height: 70px; }
+  .vox-pc-stats { flex-wrap: wrap; gap: 10px; }
+  /* Gap 3: drop particles entirely on mobile to protect frame rate */
+  .vox-pc-embers { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   REDUCED MOTION — full stop, no exceptions
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .vox-profile-card::before,
+  .vox-pc-banner::after,
+  .vox-pc-ember,
+  .vox-pc-avatar-ring,
+  .vox-pc-avatar-glow,
+  .vox-pc-presence-ping,
+  .vox-pc-sigil-glow,
+  .vox-pc-enter,
+  .vox-pc-exit,
+  .vox-pc-stagger > *,
+  .vox-pc-shimmer {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .vox-profile-card::before { filter: none; }
+  .vox-pc-banner::after { opacity: 0.06; }
+  .vox-pc-presence-ping { opacity: 0.3; transform: scale(1.5); }
+  .vox-pc-sigil-glow { opacity: 0.2; }
+  .vox-pc-avatar-ring { transform: none; }
+  .vox-pc-conn-chip:hover { transform: none; }
+  .vox-pc-sigil:hover { transform: none; }
+  .vox-pc-enter { opacity: 1; transform: none; }
+  .vox-pc-stagger > * { opacity: 1; transform: none; }
+}

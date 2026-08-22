@@ -8,7 +8,7 @@ import SettingsRow from '../../components/settings/SettingsRow';
 import ToggleRow from '../../components/settings/ToggleRow';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useUiStore } from '../../stores/uiStore';
-import { API_BASE } from '../../api/client';
+import { api } from '../../api/client';
 
 const Social: React.FC = () => {
   const navigate = useNavigate();
@@ -18,14 +18,9 @@ const Social: React.FC = () => {
   const [blockedCount, setBlockedCount] = useState(0);
 
   useEffect(() => {
-    const token = localStorage.getItem('vox_token');
-    if (!token) return;
-    fetch(`${API_BASE}/api/blocks`, { headers: {} })
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data?.blocks)) setBlockedCount(data.blocks.length);
-      })
-      .catch(() => {});
+    api('/api/blocks').then((data: any) => {
+      if (Array.isArray(data?.blocks)) setBlockedCount(data.blocks.length);
+    }).catch(() => {});
   }, []);
 
   return (

@@ -1,21 +1,176 @@
+# ═══════════════════════════════════════════════════════════════
+# VOX — Docker Compose for Oracle Cloud Free Tier
+# ═══════════════════════════════════════════════════════════════
+# One-command production stack: docker compose up -d
+#
+# Services:
+#   - postgres:  PostgreSQL 16 (Always Free: runs on compute)
+#   - redis:     Redis 7 cache/pubsub (optional, ~50 MB RAM)
+#   - backend:   VOX Node.js API + Socket.io
+#   - nginx:     Reverse proxy + SSL termination + SPA serving
+#
+# Oracle Free Tier budget:
+#   Ampere A1: 4 OCPU / 24 GB RAM
+#   VOX uses:  ~800 MB total (postgres 300 + redis 50 + backend 450)
+#   Headroom:  ~23 GB for future scaling
+# ═══════════════════════════════════════════════════════════════
+
 services:
+  # ── PostgreSQL ──────────────────────────────────────────────
   postgres:
-    image: postgres:17-bookworm
+    image: postgres:16-alpine
     container_name: vox-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: vox
-      POSTGRES_PASSWORD: vox
-      POSTGRES_DB: vox_dev
-    ports:
-      - "127.0.0.1:5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-vox_prod}
+      POSTGRES_USER: ${POSTGRES_USER:-vox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
-      - vox-postgres-data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"  # Bind to localhost only — nginx proxies
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U vox -d vox_dev"]
-      interval: 2s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vox} -d ${POSTGRES_DB:-vox_prod}"]
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  # ── Redis ──────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: vox-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 64mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
+
+  # ── VOX Backend ────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: vox-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://vox:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vox_prod}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in .env}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-30m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-14d}
+      TWO_FACTOR_APP_NAME: ${TWO_FACTOR_APP_NAME:-VOX}
+      TWO_FACTOR_ENCRYPTION_KEY: ${TWO_FACTOR_ENCRYPTION_KEY:?Set TWO_FACTOR_ENCRYPTION_KEY in .env}
+      RESEND_API_KEY: ${RESEND_API_KEY:-dev}
+      RESEND_FROM_ADDRESS: ${RESEND_FROM_ADDRESS:-"VOX <noreply@vox.app>"}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-https://localhost}
+      EXTRA_CORS_ORIGINS: ${EXTRA_CORS_ORIGINS:-}
+      SERVE_FRONTEND: "1"
+      FRONTEND_DIST: /app/frontend/dist
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
+      LIVEKIT_URL: ${LIVEKIT_URL:-}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+    volumes:
+      - uploads_data:/app/backend/uploads
+    ports:
+      - "127.0.0.1:4000:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>{if(!r.ok)throw 1}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M
+
+  # ── Nginx (reverse proxy + SSL) ────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: vox-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot_etc:/etc/letsencrypt:ro
+      - certbot_var:/var/lib/letsencrypt
+      - web_root:/var/www/html
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # ── Certbot (Let's Encrypt SSL) ───────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: vox-certbot
+    volumes:
+      - certbot_etc:/etc/letsencrypt
+      - certbot_var:/var/lib/letsencrypt
+      - web_root:/var/www/html
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/html --quiet; done;'"
+    depends_on:
+      - nginx
 
 volumes:
-  vox-postgres-data:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  uploads_data:
+    driver: local
+  certbot_etc:
+    driver: local
+  certbot_var:
+    driver: local
+  web_root:
+    driver: local

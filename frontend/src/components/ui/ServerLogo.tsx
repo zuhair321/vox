@@ -7,6 +7,8 @@ interface ServerLogoProps {
   className?: string;
   style?: React.CSSProperties;
   onClick?: () => void;
+  /** When true, renders as a perfect circle instead of an octagon. */
+  circle?: boolean;
 }
 
 const ServerLogo: React.FC<ServerLogoProps> = ({
@@ -16,14 +18,20 @@ const ServerLogo: React.FC<ServerLogoProps> = ({
   className = '',
   style = {},
   onClick,
+  circle = false,
 }) => {
   const [imgError, setImgError] = useState(false);
   const initials = name.slice(0, 2).toUpperCase();
   const showImage = src && !imgError;
 
+  // When circle=true, skip the octagon class and use clip-path: circle(50%)
+  // to ensure a perfect round shape regardless of CSS class overrides.
+  const shapeClass = circle ? 'server-logo' : 'server-logo octagon';
+  const shapeClip = circle ? { clipPath: 'circle(50%)' } : {};
+
   return (
     <div
-      className={`server-logo octagon ${className}`}
+      className={`${shapeClass} ${className}`}
       onClick={onClick}
       style={{
         width: size,
@@ -36,6 +44,7 @@ const ServerLogo: React.FC<ServerLogoProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         cursor: onClick ? 'pointer' : 'default',
+        ...shapeClip,
         ...style,
       }}
       title={name}

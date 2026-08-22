@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
+import jwt from 'jsonwebtoken';
 import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
@@ -452,3 +453,107 @@ authRouter.get('/export', requireAuth, async (req, res, next) => {
     });
   } catch (e) { next(e); }
 });
+
+
+// ── Google OAuth ────────────────────────────────────────────
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:4000/api/auth/google/callback';
+
+authRouter.get('/google', (req, res) => {
+  if (!GOOGLE_CLIENT_ID) {
+    return res.status(503).json({ error: 'Google OAuth is not configured.' });
+  }
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: GOOGLE_REDIRECT_URI,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'offline',
+    prompt: 'consent',
+  });
+  res.json({ url: 'https://accounts.google.com/o/oauth2/v2/auth?' + params.toString() });
+});
+
+authRouter.get('/google/callback', async (req, res, next) => {
+  try {
+    const { code, error } = req.query;
+    const frontendUrl = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
+    if (error || !code) {
+      return res.redirect(frontendUrl + '/login?error=google_cancelled');
+    }
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, redirect_uri: GOOGLE_REDIRECT_URI, grant_type: 'authorization_code' }),
+    });
+    const tokenData = await tokenRes.json();
+    if (tokenData.error) throw new HttpError(400, 'Google OAuth failed: ' + (tokenData.error_description || tokenData.error));
+    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: 'Bearer ' + tokenData.access_token },
+    });
+    const googleUser = await userInfoRes.json();
+    if (!googleUser.id || !googleUser.email) throw new HttpError(400, 'Failed to fetch user info from Google.');
+    const email = googleUser.email.toLowerCase();
+    const googleId = String(googleUser.id);
+    const displayName = googleUser.name || email.split('@')[0];
+    const avatarUrl = googleUser.picture || null;
+    let user = await prisma.user.findFirst({ where: { OR: [{ email }, { botPublicKey: 'google:' + googleId }] } });
+    if (user) {
+      if (!user.botPublicKey) user = await prisma.user.update({ where: { id: user.id }, data: { botPublicKey: 'google:' + googleId } });
+      if (!user.avatarUrl && avatarUrl) user = await prisma.user.update({ where: { id: user.id }, data: { avatarUrl } });
+    } else {
+      let base = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24) || 'user';
+      let username = base; let s = 0;
+      while (await prisma.user.findUnique({ where: { username }, select: { id: true } })) { s++; username = base + s; }
+      user = await prisma.user.create({ data: { email, username, displayName, passwordHash: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10), avatarUrl, botPublicKey: 'google:' + googleId, emailVerified: true, color: '#5865f2' } });
+    }
+    const refreshToken = jwt.sign({ sub: user.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '14d' });
+    const accessToken = jwt.sign({ sub: user.id }, process.env.JWT_ACCESS_SECRET, { expiresIn: '30m' });
+    await prisma.refreshToken.create({ data: { userId: user.id, tokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'), expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), deviceInfo: 'Google OAuth', ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() } });
+    const { setAuthCookies } = await import('../services/auth.service.js');
+    setAuthCookies(res, accessToken, refreshToken);
+    res.redirect(frontendUrl + '/login?google=success');
+  } catch (e) {
+    const frontendUrl = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
+    res.redirect(frontendUrl + '/login?error=' + encodeURIComponent(e.message || 'Google login failed'));
+  }
+});
+
+authRouter.post('/google', authLimiter, async (req, res, next) => {
+  try {
+    const { code } = req.body;
+    if (!code) throw new HttpError(400, 'Missing authorization code.');
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET, redirect_uri: GOOGLE_REDIRECT_URI, grant_type: 'authorization_code' }),
+    });
+    const tokenData = await tokenRes.json();
+    if (tokenData.error) throw new HttpError(400, 'Google OAuth failed: ' + (tokenData.error_description || tokenData.error));
+    const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', { headers: { Authorization: 'Bearer ' + tokenData.access_token } });
+    const googleUser = await userInfoRes.json();
+    if (!googleUser.id || !googleUser.email) throw new HttpError(400, 'Failed to fetch user info from Google.');
+    const email = googleUser.email.toLowerCase();
+    const googleId = String(googleUser.id);
+    const displayName = googleUser.name || email.split('@')[0];
+    const avatarUrl = googleUser.picture || null;
+    let user = await prisma.user.findFirst({ where: { OR: [{ email }, { botPublicKey: 'google:' + googleId }] } });
+    if (user) {
+      if (!user.botPublicKey) user = await prisma.user.update({ where: { id: user.id }, data: { botPublicKey: 'google:' + googleId } });
+      if (!user.avatarUrl && avatarUrl) user = await prisma.user.update({ where: { id: user.id }, data: { avatarUrl } });
+    } else {
+      let base = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 24) || 'user';
+      let username = base; let s = 0;
+      while (await prisma.user.findUnique({ where: { username }, select: { id: true } })) { s++; username = base + s; }
+      user = await prisma.user.create({ data: { email, username, displayName, passwordHash: await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10), avatarUrl, botPublicKey: 'google:' + googleId, emailVerified: true, color: '#5865f2' } });
+    }
+    const refreshToken = jwt.sign({ sub: user.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '14d' });
+    const accessToken = jwt.sign({ sub: user.id }, process.env.JWT_ACCESS_SECRET, { expiresIn: '30m' });
+    await prisma.refreshToken.create({ data: { userId: user.id, tokenHash: crypto.createHash('sha256').update(refreshToken).digest('hex'), expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), deviceInfo: req.headers['user-agent'], ipAddress: (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim(), userAgent: req.headers['user-agent'] } });
+    const { setAuthCookies } = await import('../services/auth.service.js');
+    setAuthCookies(res, accessToken, refreshToken);
+    const { publicUser } = await import('../services/auth.service.js');
+    res.json({ user: publicUser(user) });
+  } catch (e) { next(e); }
+});
+

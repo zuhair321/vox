@@ -9,6 +9,7 @@ import { leaveServer } from '../../api/discover';
 import { API_BASE } from '../../api/client';
 import ServerLogo from '../ui/ServerLogo';
 import VoxLogo from '../ui/VoxLogo';
+import RailActions from '../ui/RailActions';
 
 /* ═══════════════════════════════════════════════════════════════
    PS5-STYLE HORIZONTAL SERVER RAIL
@@ -73,7 +74,16 @@ const ServerRail: React.FC = () => {
 
     setSelectedServer(server);
     if (server.channels.length > 0) {
-      navigate(`/channels/${server.id}/${server.channels[0].id}`);
+      // Restore last active channel for this server
+      let targetChannelId = server.channels[0].id;
+      try {
+        const saved = JSON.parse(localStorage.getItem('vox_last_channel') || '{}');
+        const lastId = saved[server.id];
+        if (lastId && server.channels.some((c: any) => c.id === lastId)) {
+          targetChannelId = lastId;
+        }
+      } catch {}
+      navigate(`/channels/${server.id}/${targetChannelId}`);
     }
   };
 
@@ -227,6 +237,7 @@ const ServerRail: React.FC = () => {
 
   return (
     <div className="server-rail" style={{ position: 'relative' }}>
+      <RailActions />
       {/* Ambient glow line — now horizontal at bottom */}
       <div style={{
         position: 'absolute',
@@ -312,7 +323,7 @@ const ServerRail: React.FC = () => {
       {/* Scrollable server list */}
       <div ref={scrollRef} className="server-rail-scroll-container">
         {servers.length === 0 && (
-          <div className="vox-empty-state" style={{ padding: '8px 16px', flexShrink: 0 }}>
+          <div className="vox-empty-state compact" style={{ padding: '8px 16px', flexShrink: 0 }}>
             <div className="vox-empty-icon" style={{ fontSize: '22px' }}>🌑</div>
             <div className="vox-empty-title" style={{ fontSize: '11px' }}>NO REALMS</div>
           </div>

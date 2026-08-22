@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Open the OS-level privacy settings for a device (microphone/camera).
   // Returns the URL that was opened (or null if the OS doesn't support it).
   openDeviceSettings: (kind) => ipcRenderer.invoke('open-device-settings', kind),
+    // Clear Electron's cached permission decisions before getUserMedia.
+  clearPermissionCache: () => ipcRenderer.invoke('clear-permission-cache'),
+    // Diagnostic: query current permission state for mic
+  queryMicPermission: () => ipcRenderer.invoke('query-mic-permission'),
   flashFrame: () => ipcRenderer.send('flash-frame'),
   flashFrame: () => ipcRenderer.send('flash-frame'),
   openExternal: (url) => ipcRenderer.send('open-external', url),

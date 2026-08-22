@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
 import { useNotificationStore } from '../../stores/notificationStore';
@@ -148,7 +149,7 @@ const NotificationCenter: React.FC = () => {
             <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
               {filtered.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-                  <div style={{ fontSize: '36px', opacity: 0.3, marginBottom: '12px' }}>🔔</div>
+                  <div style={{ color: "var(--text-faint, #5a5660)", marginBottom: "12px" }}><Bell size={36} strokeWidth={1} /></div>
                   <div
                     style={{
                       fontFamily: "'Cinzel Decorative', serif",

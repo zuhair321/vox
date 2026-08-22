@@ -118,49 +118,21 @@ const VoiceChannelPanel: React.FC = () => {
         sfuConnRef.current = conn;
         playJoinVoice();
         addToast('Connected via LiveKit SFU', 'success', { duration: 4000 });
+        voice.setJoinInProgress(false);
         return;
       }
 
       voice.setTransport('mesh');
-      const raw = await getMicrophoneStream();
-      // Apply spectral noise-suppression pipeline if user has set a level > 0
-      let processedStream: MediaStream = raw;
-      if (settings.voiceNoiseLevel && settings.voiceNoiseLevel > 0) {
-        const ns = applyNoiseSuppression(raw, settings.voiceNoiseLevel);
-        noiseSuppressionCleanupRef.current = ns.cleanup;
-        const dst = new MediaStream();
-        ns.stream.getAudioTracks().forEach(t => dst.addTrack(t));
-        processedStream = dst;
-      }
-      voice.setLocalStream(processedStream);
-
-      // Set up voice activity detection on processed stream
-      const cleanup = setupVoiceActivityDetection(
-        processedStream,
-        () => voice.setLocalSpeaking(true),
-        () => voice.setLocalSpeaking(false),
-        (amplitude) => voice.setUserAmplitude('local', amplitude)
-      );
-
-      // Store cleanup function to be called when leaving
-      voiceActivityCleanupRef.current = cleanup;
-
+      // Join VC muted — mic will be requested lazily on first unmute.
+      voice.setLocalMuted(true);
       voice.setChannel(channelId, serverId);
       voice.setJoinedAt(Date.now());
       setMicError(null);
       setMicErrorOpen(false);
       playJoinVoice();
-      console.log('[Voice] Joined channel', channelId);
 
-      // Emit join event
-      socket.socket?.emit('voice:join', { channelId, serverId }, (err?: string) => {
-        if (err) {
-          console.error('[Voice] Server rejected join:', err);
-          addToast(`Failed to join voice: ${err}`, 'error');
-          leaveChannel();
-          voice.setJoinInProgress(false);
-        }
-      });
+      socket.socket?.emit('voice:join', { channelId, serverId });
+      voice.setJoinInProgress(false);
     } catch (err: unknown) {
       const info = classifyMediaError(err);
       console.error('[Voice] Error joining channel:', err);
@@ -193,6 +165,10 @@ const VoiceChannelPanel: React.FC = () => {
       noiseSuppressionCleanupRef.current();
       noiseSuppressionCleanupRef.current = null;
     }
+    // Stop all local media tracks so the OS mic indicator turns off
+    if (voice.localStream) {
+      voice.localStream.getTracks().forEach(t => { t.stop(); });
+    }
     stopPushToTalk();
     setPttActive(false);
     socket.socket?.emit('voice:leave');
@@ -203,17 +179,51 @@ const VoiceChannelPanel: React.FC = () => {
   }, [voice, socket]);
 
   // Mute toggle — disabled while push-to-talk owns mute state.
-  const toggleMute = useCallback(() => {
+  const toggleMute = useCallback(async () => {
     if (settings.pushToTalk) return;
+    const unmuting = voice.localMuted;
+
+    // On first unmute: lazily acquire the mic stream.
+    if (unmuting && !voice.localStream) {
+      try {
+        const raw = await getMicrophoneStream();
+        let processedStream: MediaStream = raw;
+        if (settings.voiceNoiseLevel && settings.voiceNoiseLevel > 0) {
+          const ns = applyNoiseSuppression(raw, settings.voiceNoiseLevel);
+          noiseSuppressionCleanupRef.current = ns.cleanup;
+          const dst = new MediaStream();
+          ns.stream.getAudioTracks().forEach(t => dst.addTrack(t));
+          processedStream = dst;
+        }
+        voice.setLocalStream(processedStream);
+        const cleanup = setupVoiceActivityDetection(
+          processedStream,
+          () => voice.setLocalSpeaking(true),
+          () => voice.setLocalSpeaking(false),
+          (amplitude) => voice.setUserAmplitude('local', amplitude)
+        );
+        voiceActivityCleanupRef.current = cleanup;
+        // Wire stream to existing peers
+        voice.peers.forEach(async (pc) => {
+          processedStream.getTracks().forEach(track => pc.addTrack(track, processedStream));
+          const offer = await createOffer(pc);
+          const peerSocketId = Array.from(voice.peers.entries()).find(([, p]) => p === pc)?.[0];
+          if (peerSocketId) socket.socket?.emit('voice:offer', { to: peerSocketId, offer });
+        });
+      } catch (err: unknown) {
+        const info = classifyMediaError(err);
+        console.error('[Voice] Mic acquisition failed:', err);
+        showMediaError('microphone', info);
+        return; // Keep muted
+      }
+    }
+
     const next = !voice.localMuted;
     voice.setLocalMuted(next);
     socket.socket?.emit('voice:mute', { muted: next });
-    // On SFU, also push the new mute state into the LiveKit LocalAudioTrack so
-    // other participants actually stop hearing us. Mesh path doesn't need this
-    // because RTCPeerConnection tracks are muted separately per-peer.
     if (voice.transport === 'sfu') applySfuMute();
-    if (next) playMuteSelf(); else playUnmuteSelf();
-  }, [voice, socket, settings.pushToTalk]);
+    if (next) playUnmuteSelf(); else playMuteSelf();
+  }, [voice, socket, settings.pushToTalk, settings.voiceNoiseLevel]);
 
   // Deafen toggle
   const toggleDeafen = useCallback(() => {
@@ -493,11 +503,11 @@ const VoiceChannelPanel: React.FC = () => {
       voice.updateVoiceUser(socketId, { screenSharing: video } as any);
     };
 
-    const handleScreenRequest = ({ requesterId }: { requesterId: string }) => {
-      // Handle screen share request (simplified)
-      if (voice.localScreenStream) {
+    const handleScreenRequest = ({ from }: { from: string }) => {
+      // Handle screen share request — backend sends { from, fromUser }
+      if (voice.localScreenStream && from) {
         socket.socket?.emit('voice:screen-response', { 
-          to: requesterId, 
+          to: from, 
           streamId: voice.localScreenStream.id 
         });
       }
@@ -1051,6 +1061,23 @@ const VoiceChannelPanel: React.FC = () => {
           )}
         </div>
 
+        {/* Music queue */}
+        <button
+          type="button"
+          onClick={() => setMusicBarOpen((v) => !v)}
+          title={'Music queue (' + (musicBarOpen ? 'hide' : 'show') + ')'}
+          aria-label="Music queue"
+          style={{
+            width: 36, height: 36, borderRadius: '50%', border: 'none',
+            background: musicBarOpen ? 'var(--gold)' : 'transparent',
+            color: musicBarOpen ? '#0E0E12' : 'var(--gold)',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.15s, color 0.15s',
+          }}
+        >
+          <Music size={16} />
+        </button>
+
         {/* Leave */}
         <button
           type="button"
@@ -1070,21 +1097,6 @@ const VoiceChannelPanel: React.FC = () => {
             transition: 'background 0.15s',
           }}
         >
-                    <button
-            type="button"
-            onClick={() => setMusicBarOpen((v) => !v)}
-            title={'Music queue (' + (musicBarOpen ? 'hide' : 'show') + ')'}
-            aria-label="Music queue"
-            style={{
-              width: 36, height: 36, borderRadius: '50%', border: 'none',
-              background: musicBarOpen ? 'var(--gold)' : 'transparent',
-              color: musicBarOpen ? '#0E0E12' : 'var(--gold)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.15s, color 0.15s',
-            }}
-          >
-            <Music size={16} />
-          </button>
           <PhoneOff size={16} />
         </button>
       </div>

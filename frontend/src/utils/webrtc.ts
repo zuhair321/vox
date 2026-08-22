@@ -93,6 +93,15 @@ export async function addIceCandidate(
 
 // Get microphone media stream
 export async function getMicrophoneStream(): Promise<MediaStream> {
+  // Clear Electron's cached permission decisions before requesting mic.
+  // Prevents a stale denial from blocking subsequent getUserMedia calls.
+  try {
+    const w = window as unknown as { electronAPI?: { clearPermissionCache?: () => Promise<boolean> } };
+    if (w.electronAPI?.clearPermissionCache) {
+      await w.electronAPI.clearPermissionCache();
+    }
+  } catch { /* non-Electron or unavailable */ }
+
   return navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: true,

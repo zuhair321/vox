@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState, lazy, Suspense, useRef } from 'react';
+import { trackPageView } from './utils/analytics';
 import { Routes, Route, useNavigate, useLocation, useParams } from 'react-router-dom';
 import { registerNavigate } from './utils/nav';
 import { useSocketStore } from './stores/socketStore';
@@ -18,8 +19,8 @@ import Sidebar from './components/ui/Sidebar';
 import MainContent from './components/ui/MainContent';
 import MemberPanel from './components/ui/MemberPanel';
 import ToastContainer from './components/ui/ToastContainer';
-import TitleBar from './components/layout/TitleBar';
 import OfflineBanner from './components/ui/OfflineBanner';
+import TitleBar from './components/layout/TitleBar';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import PanelErrorBoundary from './components/ui/PanelErrorBoundary';
 import ProfilePopup from './components/ui/ProfilePopup';
@@ -86,6 +87,34 @@ const AppLayout = () => {
   const { fetchFriends } = useFriendStore();
   const { applyServerTheme } = useThemeStore();
   const location = useLocation();
+
+  // Persist the last active channel per server from the URL so that
+  // navigating away (e.g. to server settings) and back restores it.
+  useEffect(() => {
+    const match = location.pathname.match(/^\/channels\/([^/]+)\/([^/]+)$/);
+    if (match) {
+      try {
+        const saved = JSON.parse(localStorage.getItem('vox_last_channel') || '{}');
+        saved[match[1]] = match[2];
+        localStorage.setItem('vox_last_channel', JSON.stringify(saved));
+      } catch {}
+    }
+  }, [location.pathname]);
+
+  
+  // Track page views
+  useEffect(() => {
+    trackPageView(location.pathname);
+    // Set page title based on route
+    const titles: Record<string, string> = {
+      '/friends': 'Friends — VOX',
+      '/settings': 'Settings — VOX',
+      '/profile': 'Profile — VOX',
+      '/login': 'Login — VOX',
+      '/register': 'Register — VOX',
+    };
+    document.title = titles[location.pathname] || 'VOX';
+  }, [location.pathname]);
   const { hydrateFromUser } = useProfileStore();
   const ui = useUiStore();
   const navigate = useNavigate();
@@ -427,7 +456,6 @@ const { user, accessToken, isLoading } = useAuthStore();
       )}
 
       <ToastContainer />
-      <ProfilePopup />
       {/* Source picker — the Electron main process stashes getDisplayMedia
           callbacks and asks us to pick a screen/window. The picker fetches
           sources via IPC and calls back with the chosen id. */}

@@ -61,7 +61,7 @@ forumsRouter.post('/channels/:id/forum-posts', requireAuth, requirePermission('w
     });
 
     const io = getIO();
-    emitRealtimeEvent('forum:post', req.params.id, { post });
+    emitRealtimeEvent('forum:post', `channel:${req.params.id}`, { post });
     res.status(201).json({ post });
   } catch (e) { next(e); }
 });
@@ -112,7 +112,7 @@ forumsRouter.post('/forum-posts/:id/replies', requireAuth, async (req, res, next
     });
 
     const io = getIO();
-    emitRealtimeEvent('forum:reply', parent.channelId, { postId: parent.id, reply });
+    emitRealtimeEvent('forum:reply', `channel:${parent.channelId}`, { postId: parent.id, reply });
     res.status(201).json({ reply });
   } catch (e) { next(e); }
 });

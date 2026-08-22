@@ -52,8 +52,8 @@ const GifPicker: React.FC<{ onSelect: (url: string) => void }> = ({ onSelect }) 
     <div style={{ position: 'fixed', bottom: 72, left: '50%', transform: 'translateX(-50%)', width: 480, maxHeight: 400, background: 'var(--dark-matter)', border: '1px solid var(--rim)', borderRadius: 8, zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: 12, borderBottom: '1px solid var(--rim)', display: 'flex', gap: 8 }}>
         <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKey} placeholder="Search GIFs..." className="angular-input" style={{ flex: 1 }} />
-        <button className="angular-button primary" onClick={() => searchGifs(query)} style={{ padding: '6px 12px', fontSize: 12 }}>SEARCH</button>
-        <button className="angular-button" onClick={() => setShowEmojiPicker(false)} style={{ padding: '6px 12px', fontSize: 12, background: 'var(--obsidian)' }}>✕</button>
+        <button className="angular-button primary" onClick={() => searchGifs(query)} aria-label="Search GIFs" style={{ padding: '6px 12px', fontSize: 12 }}>SEARCH</button>
+        <button className="angular-button" onClick={() => setShowEmojiPicker(false)} aria-label="Close GIF picker" style={{ padding: '6px 12px', fontSize: 12, background: 'var(--obsidian)' }}>✕</button>
       </div>
       <div style={{ overflowY: 'auto', padding: 12, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {loading && <p style={{ color: 'var(--ash)', gridColumn: '1 / -1', textAlign: 'center' }}>Loading...</p>}

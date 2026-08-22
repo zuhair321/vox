@@ -53,3 +53,21 @@ export const deleteDM = (dmId: string, messageId: string) =>
   api(`/api/dm/${dmId}/messages/${messageId}`, {
     method: 'DELETE'
   });
+
+// ─── DM Preferences ─────────────────────────────────────────
+
+export interface DmPreferences {
+  muted: boolean;
+  mutedUntil: string | null;
+  showAvatar: boolean;
+  showDisplayName: boolean;
+}
+
+export const fetchDmPreferences = (dmId: string) =>
+  api(`/api/dm/${dmId}/preferences`) as Promise<DmPreferences>;
+
+export const updateDmPreferences = (dmId: string, prefs: Partial<DmPreferences>) =>
+  api(`/api/dm/${dmId}/preferences`, {
+    method: 'PUT',
+    body: JSON.stringify(prefs),
+  }) as Promise<DmPreferences>;

@@ -170,7 +170,7 @@ const ThreadPanel: React.FC = () => {
               </span>
             )}
           </div>
-          <button type="button" onClick={() => setThreadMessageId(null)}
+          <button type="button" onClick={() => setThreadMessageId(null)} aria-label="Close thread"
             style={{
               background: 'none', border: 'none', color: 'var(--shadow)',
               cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 4px',

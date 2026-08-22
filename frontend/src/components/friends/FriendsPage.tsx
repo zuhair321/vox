@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useNavigate } from 'react-router-dom';
@@ -6,9 +6,14 @@ import { useUiStore } from '../../stores/uiStore';
 import { API_BASE } from '../../api/client';
 import { validateUsername } from '../../utils/validation';
 import { buildDmId } from '../../api/dm';
+import { useDmPrefStore } from '../../stores/dmPrefStore';
+import { useContextMenu } from '../../hooks/useContextMenu';
+import ContextMenu from '../ui/ContextMenu';
 import StatusDot from '../void/StatusDot';
 import UserOperativeBar from '../ui/UserOperativeBar';
 import MemberPanel from '../ui/MemberPanel';
+import { createPortal } from 'react-dom';
+import { VolumeX, Eye, EyeOff, User, Ban, Volume2 } from 'lucide-react';
 
 function resolveMediaUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;
@@ -19,16 +24,27 @@ function resolveMediaUrl(url: string | null | undefined): string | undefined {
 const FriendsPage: React.FC = () => {
   const { friends, incoming, outgoing, blocked, sendRequest, acceptRequest, declineRequest } = useFriendStore();
   const { unread, messages } = useDMStore();
+  const dmPrefStore = useDmPrefStore();
+  const dmContextMenu = useContextMenu();
+  const { addToast } = useUiStore();
   const [activeTab, setActiveTab] = useState<'ONLINE' | 'ALL' | 'PENDING' | 'BLOCKED' | 'ADD'>('ONLINE');
   const [addUsername, setAddUsername] = useState('');
-  const { addToast } = useUiStore();
   const navigate = useNavigate();
 
-  // Current user id is needed to derive each conversation's dmId so we can
-  // look up its unread badge from the DM store.
+  // Current user id — memoized to avoid re-computing per render
   const myId = (() => {
     try { return JSON.parse(localStorage.getItem('vox_user') || '{}').id as string; } catch { return ''; }
   })();
+
+  // Load DM preferences on mount
+  useEffect(() => {
+    friends.forEach(f => {
+      if (myId && f.id) {
+        const dmId = buildDmId(myId, f.id);
+        dmPrefStore.fetchPrefs(dmId);
+      }
+    });
+  }, [friends, myId]);
 
   // Build a map of dmId -> last message for preview display
   const lastMessages = React.useMemo(() => {
@@ -42,7 +58,7 @@ const FriendsPage: React.FC = () => {
     return map;
   }, [messages]);
 
-  const openDM = (friendId: string, username: string) => {
+  const openDM = (friendId: string, _username: string) => {
     if (!myId || !friendId) {
       addToast('Cannot open this conversation.', 'error');
       return;
@@ -65,6 +81,52 @@ const FriendsPage: React.FC = () => {
     } catch (err: any) {
       addToast(err.message, 'error');
     }
+  };
+
+  // ─── DM sidebar right-click context menu ────────────────────
+  const buildDmContextMenu = (friend: any) => {
+    if (!myId || !friend.id) return;
+    const dmId = buildDmId(myId, friend.id);
+    const isMuted = dmPrefStore.isMuted(dmId);
+    const pref = dmPrefStore.getPrefs(dmId);
+
+    dmContextMenu.show(0, 0, [
+      {
+        id: 'view-profile',
+        label: 'View Profile',
+        icon: <User size={14} />,
+        onClick: () => addToast('Profile card coming soon', 'info'),
+      },
+      { id: 'div1', label: '', divider: true },
+      {
+        id: 'toggle-mute',
+        label: isMuted ? 'Unmute Conversation' : 'Mute Conversation',
+        icon: isMuted ? <Volume2 size={14} /> : <VolumeX size={14} />,
+        color: isMuted ? 'var(--toxic)' : undefined,
+        onClick: () => dmPrefStore.updatePrefs(dmId, { muted: !isMuted }),
+      },
+      {
+        id: 'toggle-avatar',
+        label: pref.showAvatar ? "Hide Other's Avatar" : "Show Other's Avatar",
+        icon: pref.showAvatar ? <EyeOff size={14} /> : <Eye size={14} />,
+        onClick: () => dmPrefStore.updatePrefs(dmId, { showAvatar: !pref.showAvatar }),
+      },
+      { id: 'div2', label: '', divider: true },
+      {
+        id: 'block',
+        label: 'Block Operative',
+        icon: <Ban size={14} />,
+        danger: true,
+        onClick: async () => {
+          try {
+            const { blockUser } = await import('../../api/friends');
+            await blockUser(friend.id);
+            useFriendStore.getState().fetchFriends();
+            addToast(`Blocked ${friend.username}.`, 'success');
+          } catch (e: any) { addToast(e?.message || 'Failed to block.', 'error'); }
+        },
+      },
+    ]);
   };
 
   const renderContent = () => {
@@ -92,7 +154,7 @@ const FriendsPage: React.FC = () => {
         <div style={{ padding: '32px' }}>
           <h3 style={{ fontSize: '12px', color: 'var(--ash)', marginBottom: '16px' }}>INCOMING — {incoming.length}</h3>
           {incoming.length === 0 && (
-            <div className="vox-empty-state" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
+            <div className="vox-empty-state compact" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
               <div className="vox-empty-desc">No incoming transmissions.</div>
             </div>
           )}
@@ -123,7 +185,7 @@ const FriendsPage: React.FC = () => {
           
           <h3 style={{ fontSize: '12px', color: 'var(--ash)', marginTop: '32px', marginBottom: '16px' }}>OUTGOING — {outgoing.length}</h3>
           {outgoing.length === 0 && (
-            <div className="vox-empty-state" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
+            <div className="vox-empty-state compact" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
               <div className="vox-empty-desc">No outgoing transmissions.</div>
             </div>
           )}
@@ -159,7 +221,7 @@ const FriendsPage: React.FC = () => {
         <div style={{ padding: '32px' }}>
           <h3 style={{ fontSize: '12px', color: 'var(--ash)', marginBottom: '16px' }}>BLOCKED — {blocked.length}</h3>
           {blocked.length === 0 && (
-            <div className="vox-empty-state" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
+            <div className="vox-empty-state compact" style={{ padding: '24px 16px', alignItems: 'flex-start' }}>
               <div className="vox-empty-desc">No blocked operatives.</div>
             </div>
           )}
@@ -264,6 +326,7 @@ const FriendsPage: React.FC = () => {
           {friends.map(f => {
             const dmId = myId && f.id ? buildDmId(myId, f.id) : '';
             const unreadCount = dmId ? (unread[dmId] || 0) : 0;
+            const isMuted = dmId ? dmPrefStore.isMuted(dmId) : false;
             const lastMsg = dmId ? lastMessages[dmId] : null;
             const preview = lastMsg
               ? (lastMsg.senderId === myId ? 'You: ' : '') + (lastMsg.content || '...').slice(0, 30)
@@ -274,8 +337,49 @@ const FriendsPage: React.FC = () => {
                 key={f.id}
                 type="button"
                 onClick={() => openDM(f.id, f.username)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  // Position context menu at cursor
+                  dmContextMenu.show(e.clientX, e.clientY, [
+                    {
+                      id: 'view-profile',
+                      label: 'View Profile',
+                      icon: <User size={14} />,
+                      onClick: () => addToast('Profile card coming soon', 'info'),
+                    },
+                    { id: 'div1', label: '', divider: true },
+                    {
+                      id: 'toggle-mute',
+                      label: isMuted ? 'Unmute Conversation' : 'Mute Conversation',
+                      icon: isMuted ? <Volume2 size={14} /> : <VolumeX size={14} />,
+                      color: isMuted ? 'var(--toxic)' : undefined,
+                      onClick: () => dmPrefStore.updatePrefs(dmId, { muted: !isMuted }),
+                    },
+                    {
+                      id: 'toggle-avatar',
+                      label: dmPrefStore.getPrefs(dmId).showAvatar ? "Hide Other's Avatar" : "Show Other's Avatar",
+                      icon: dmPrefStore.getPrefs(dmId).showAvatar ? <EyeOff size={14} /> : <Eye size={14} />,
+                      onClick: () => dmPrefStore.updatePrefs(dmId, { showAvatar: !dmPrefStore.getPrefs(dmId).showAvatar }),
+                    },
+                    { id: 'div2', label: '', divider: true },
+                    {
+                      id: 'block',
+                      label: 'Block Operative',
+                      icon: <Ban size={14} />,
+                      danger: true,
+                      onClick: async () => {
+                        try {
+                          const { blockUser } = await import('../../api/friends');
+                          await blockUser(f.id);
+                          useFriendStore.getState().fetchFriends();
+                          addToast(`Blocked ${f.username}.`, 'success');
+                        } catch (e: any) { addToast(e?.message || 'Failed to block.', 'error'); }
+                      },
+                    },
+                  ]);
+                }}
                 className="dm-friend-item"
-                title={`Message @${f.username}`}
+                title={`Message @${f.username} — Right-click for options`}
                 style={{
                   width: '100%',
                   padding: '8px',
@@ -302,8 +406,9 @@ const FriendsPage: React.FC = () => {
                   </div>
                 </div>
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ghost-white)', fontWeight: unreadCount > 0 ? 700 : 400 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--ghost-white)', fontWeight: unreadCount > 0 ? 700 : 400 }}>
                     {f.username}
+                    {isMuted && <VolumeX size={11} style={{ color: 'var(--ash)', flexShrink: 0 }} />}
                     {f.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}
                   </span>
                   {preview && (
@@ -312,7 +417,7 @@ const FriendsPage: React.FC = () => {
                     </span>
                   )}
                 </div>
-                {unreadCount > 0 && (
+                {unreadCount > 0 && !isMuted && (
                   <span
                     style={{
                       background: 'var(--blood)',
@@ -372,7 +477,7 @@ const FriendsPage: React.FC = () => {
                 border: '1px solid var(--rim)',
                 color: 'var(--ghost-white)',
                 boxShadow: '0 0 12px rgba(231, 237, 245, 0.08)'
-              }}
+              }} 
               onClick={() => setActiveTab('ADD')}
             >
               + ADD FRIEND
@@ -383,8 +488,19 @@ const FriendsPage: React.FC = () => {
         {renderContent()}
       </div>
 
-      {/* Operatives panel — always a bare dark void in DM space (matches layout) */}
+      {/* Operatives panel */}
       <MemberPanel empty />
+
+      {/* Context Menu Portal */}
+      {dmContextMenu.contextMenu && createPortal(
+        <ContextMenu
+          x={dmContextMenu.contextMenu.x}
+          y={dmContextMenu.contextMenu.y}
+          items={dmContextMenu.contextMenu.items}
+          onClose={() => dmContextMenu.hide()}
+        />,
+        document.body
+      )}
     </div>
   );
 };

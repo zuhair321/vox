@@ -61,7 +61,7 @@ const UpdateModal: React.FC = () => {
     reset();
   }, [reset]);
 
-  const isOpen = state.available || state.error;
+  const isOpen = state.available;
 
   return (
     <AnimatePresence>

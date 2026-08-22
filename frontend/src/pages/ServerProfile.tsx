@@ -6,6 +6,7 @@ import { useUiStore } from '../stores/uiStore';
 import { API_BASE } from '../api/client';
 import { uploadServerIcon, uploadServerBanner } from '../api/uploads';
 import ServerLogo from '../components/ui/ServerLogo';
+import { Users, Hash, Volume2, Camera, Mail, Settings, Image, Search } from 'lucide-react';
 
 const ServerProfile: React.FC = () => {
   const { serverId } = useParams<{ serverId: string }>();
@@ -34,7 +35,7 @@ const ServerProfile: React.FC = () => {
         gap: '16px',
         color: 'var(--ash)',
       }}>
-        <div style={{ fontSize: '48px', opacity: 0.3 }}>🔭</div>
+        <div style={{ opacity: 0.3, color: 'var(--ash)' }}><Search size={48} /></div>
         <div style={{ fontSize: '18px', color: 'var(--ghost-white)' }}>Realm not found.</div>
         <button
           className="angular-button"
@@ -58,9 +59,7 @@ const ServerProfile: React.FC = () => {
     return `linear-gradient(135deg, hsl(${h1},45%,10%) 0%, hsl(${h2},38%,7%) 40%, hsl(${(h1 + 80) % 360},32%,5%) 100%)`;
   })();
 
-  // DEBUG — remove after fix
-  if (typeof window !== 'undefined') {
-  }
+  
 
   const bannerUrl = server.banner
     ? (server.banner.startsWith('http') ? server.banner : `${API_BASE}${server.banner}`)
@@ -70,9 +69,7 @@ const ServerProfile: React.FC = () => {
     ? (server.icon.startsWith('http') ? server.icon : `${API_BASE}${server.icon}`)
     : null;
 
-  // DEBUG — remove after fix
-  if (typeof window !== 'undefined') {
-  }
+  
 
   const effectiveBannerBg = bannerUrl ? undefined : serverGradient;
 
@@ -201,7 +198,7 @@ const ServerProfile: React.FC = () => {
             gap: '8px',
             pointerEvents: 'none',
           }}>
-            <span style={{ fontSize: '28px', opacity: 0.3 }}>🌄</span>
+            <Image size={28} style={{ opacity: 0.3, color: 'var(--ash)' }} />
             {!canManage && (
               <span style={{ color: 'var(--ash)', fontSize: '11px', opacity: 0.5, fontFamily: "'Share Tech Mono', monospace", letterSpacing: '0.06em' }}>
                 NO BANNER SET
@@ -233,7 +230,7 @@ const ServerProfile: React.FC = () => {
               bannerInputRef.current?.click();
             }}
           >
-            <span style={{ fontSize: '20px' }}>📷</span>
+            <Camera size={20} style={{ color: 'var(--gold)' }} />
             <span style={{ color: 'var(--ghost-white)', fontSize: '12px', fontFamily: "'Share Tech Mono', monospace", letterSpacing: '0.05em' }}>
               {bannerUrl ? 'CHANGE BANNER' : 'UPLOAD BANNER'}
             </span>
@@ -288,6 +285,7 @@ const ServerProfile: React.FC = () => {
               src={iconUrl}
               name={server.name}
               size={88}
+              circle
             />
 
             {/* Camera overlay */}
@@ -311,7 +309,7 @@ const ServerProfile: React.FC = () => {
                 onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
                 onClick={() => iconInputRef.current?.click()}
               >
-                <span style={{ fontSize: '16px' }}>📷</span>
+                <Camera size={16} style={{ color: 'var(--gold)' }} />
                 <span style={{ fontSize: '8px', color: 'rgba(255,255,255,0.7)', fontFamily: "'Share Tech Mono', monospace" }}>
                   {iconUrl ? 'CHANGE' : 'SET ICON'}
                 </span>
@@ -354,7 +352,7 @@ const ServerProfile: React.FC = () => {
               style={{ fontSize: '12px', padding: '6px 14px' }}
               onClick={() => setInviteModalOpen(server.id)}
             >
-              ✉️ Invite
+              Invite
             </button>
             {canManage && (
               <button
@@ -362,7 +360,7 @@ const ServerProfile: React.FC = () => {
                 style={{ fontSize: '12px', padding: '6px 14px' }}
                 onClick={() => navigate(`/server-settings/${server.id}`)}
               >
-                ⚙️ Settings
+                Settings
               </button>
             )}
           </div>
@@ -376,9 +374,9 @@ const ServerProfile: React.FC = () => {
           flexWrap: 'wrap',
         }}>
           {[
-            { icon: '👤', label: 'Members', value: server.members?.length || 0 },
-            { icon: '📝', label: 'Text Channels', value: textChannels.length },
-            { icon: '🔊', label: 'Voice Channels', value: voiceChannels.length },
+            { icon: 'users', label: 'Members', value: server.members?.length || 0 },
+            { icon: 'hash', label: 'Text Channels', value: textChannels.length },
+            { icon: 'volume', label: 'Voice Channels', value: voiceChannels.length },
           ].map((stat) => (
             <div
               key={stat.label}
@@ -392,7 +390,7 @@ const ServerProfile: React.FC = () => {
                 clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%)',
               }}
             >
-              <span style={{ fontSize: '16px', filter: 'grayscale(0.2)' }}>{stat.icon}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--gold)' }}>{stat.icon === 'users' ? null : stat.icon === 'hash' ? null : null}</span>
               <span style={{ color: 'var(--ghost-white)', fontSize: '18px', fontWeight: 700, fontFamily: "'Share Tech Mono', monospace" }}>
                 {stat.value}
               </span>

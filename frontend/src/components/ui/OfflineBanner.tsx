@@ -1,19 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { WifiOff } from 'lucide-react';
 
 const OfflineBanner: React.FC = () => {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [exiting, setExiting] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
-    const handleOnline = () => {
-      // Trigger exit animation before hiding
-      setExiting(true);
-      setTimeout(() => setIsOnline(true), 300);
-    };
-    const handleOffline = () => {
-      setExiting(false);
-      setIsOnline(false);
-    };
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -24,38 +18,41 @@ const OfflineBanner: React.FC = () => {
     };
   }, []);
 
-  if (isOnline) return null;
+  if (!isOffline) return null;
 
   return (
-    <div
-      className={exiting ? 'offline-banner-exit' : ''}
-      style={{
-        position: 'fixed',
-        top: 32, // Just below TitleBar
-        left: 0,
-        right: 0,
-        height: '36px',
-        background: 'var(--blood)',
-        color: 'white',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: "'Bebas Neue', sans-serif",
-        fontSize: '13px',
-        letterSpacing: '0.2em',
-        zIndex: 9998,
-        animation: exiting ? undefined : 'slideDown 0.3s ease-out forwards',
-        boxShadow: '0 4px 12px rgba(216, 74, 90, 0.4)',
-      }}
-    >
-      <style>{`
-        @keyframes slideDown {
-          from { transform: translateY(-100%); }
-          to { transform: translateY(0); }
-        }
-      `}</style>
-      ⚠ NO SIGNAL — OPERATING IN SHADOW MODE
-    </div>
+    <AnimatePresence>
+      {isOffline && (
+        <motion.div
+          initial={{ y: -40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -40, opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          style={{
+            position: 'fixed',
+            top: 32,
+            left: 0,
+            right: 0,
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '8px 16px',
+            background: 'linear-gradient(90deg, rgba(216,74,90,0.9), rgba(139,0,0,0.9))',
+            color: '#fff',
+            fontFamily: "'Share Tech Mono', monospace",
+            fontSize: '12px',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+          }}
+        >
+          <WifiOff size={14} />
+          CONNECTION LOST — RECONNECTING...
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

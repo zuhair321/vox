@@ -133,3 +133,11 @@ export async function deleteLoginHistoryEntry(id: string): Promise<{ deleted: bo
 export async function clearLoginHistory(): Promise<{ cleared: boolean }> {
   return api('/api/auth/login-history', { method: 'DELETE' });
 }
+
+export async function googleAuth(code: string): Promise<AuthResponse> {
+  return api('/api/auth/google', { method: 'POST', body: JSON.stringify({ code }), skipAuth: true } as any);
+}
+
+export async function getGoogleAuthUrl(): Promise<{ url: string }> {
+  return api('/api/auth/google', { method: 'GET', skipAuth: true } as any);
+}

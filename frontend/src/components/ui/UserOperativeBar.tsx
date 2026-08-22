@@ -5,6 +5,103 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { API_BASE } from '../../api/client';
 import { useProfileStore } from '../../stores/profileStore';
 import StatusPicker from '../ui/StatusPicker';
+import { useSocketStore } from '../../stores/socketStore';
+import { useServerStore } from '../../stores/serverStore';
+import { Headphones as DockHeadphones, Mic as DockMic, PhoneOff } from 'lucide-react';
+
+/**
+ * Voice Dock — renders above the operative bar ONLY while connected to a
+ * voice channel: channel name, stacked member avatars (speaking glow),
+ * and mute/deafen/leave controls. Collapses to nothing when not in a call.
+ */
+const VoiceDock: React.FC = () => {
+  const voice = useVoiceStore();
+  const socket = useSocketStore((st) => st.socket);
+  const { selectedServer } = useServerStore();
+  const localMuted = useVoiceStore((st) => st.localMuted);
+  const localDeafened = useVoiceStore((st) => st.localDeafened);
+  const setLocalMuted = useVoiceStore((st) => st.setLocalMuted);
+  const setLocalDeafened = useVoiceStore((st) => st.setLocalDeafened);
+
+  if (!voice.connected || !voice.channelId) return null;
+
+  const channelName = (() => {
+    try {
+      const ch = (selectedServer?.channels || []).find((c: { id: string }) => c.id === voice.channelId);
+      return ch?.name || 'Voice channel';
+    } catch { return 'Voice channel'; }
+  })();
+
+  const leave = () => {
+    socket?.emit('voice:leave');
+    voice.clearChannel();
+  };
+
+  const members = [
+    { id: 'you', username: 'You', avatarUrl: null, speaking: false, muted: localMuted, deafened: localDeafened },
+    ...voice.voiceUsers,
+  ];
+
+  return (
+    <div className="vox-voice-dock">
+      <div className="vox-voice-dock-head">voice link</div>
+      <div className="vox-voice-dock-name">{channelName}</div>
+      <div className="vox-voice-dock-users">
+        {members.slice(0, 6).map((m: { id?: string; socketId?: string; speaking: boolean; muted: boolean; deafened: boolean; username: string; avatarUrl?: string | null }) => (
+          <div
+            key={m.id || m.socketId}
+            className={`vox-voice-dock-avatar ${m.speaking ? 'speaking' : ''} ${m.muted || m.deafened ? 'muted' : ''}`}
+            title={m.username}
+          >
+            {m.avatarUrl ? <img src={resolveMediaUrl(m.avatarUrl) || undefined} alt="" /> : (m.username || '?').slice(0, 1).toUpperCase()}
+          </div>
+        ))}
+      </div>
+      <div className="vox-voice-dock-actions">
+        <button
+          type="button"
+          className={`vox-voice-dock-btn ${localMuted ? 'toggled' : ''}`}
+          onClick={async () => {
+            // Lazy mic: if unmuting and no stream, request mic first
+            if (localMuted && !voice.localStream) {
+              try {
+                const w = window as unknown as { electronAPI?: { clearPermissionCache?: () => Promise<boolean> } };
+                if (w.electronAPI?.clearPermissionCache) await w.electronAPI.clearPermissionCache();
+                const raw = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
+                voice.setLocalStream(raw);
+              } catch {
+                return; // Keep muted if mic fails
+              }
+            }
+            setLocalMuted(!localMuted);
+          }}
+          aria-label={localMuted ? 'Unmute microphone' : 'Mute microphone'}
+          title={localMuted ? 'Unmute' : 'Mute'}
+        >
+          <DockMic size={13} />
+        </button>
+        <button
+          type="button"
+          className={`vox-voice-dock-btn ${localDeafened ? 'toggled' : ''}`}
+          onClick={() => setLocalDeafened(!localDeafened)}
+          aria-label={localDeafened ? 'Undeafen' : 'Deafen'}
+          title={localDeafened ? 'Undeafen' : 'Deafen'}
+        >
+          <DockHeadphones size={13} />
+        </button>
+        <button
+          type="button"
+          className="vox-voice-dock-btn danger"
+          onClick={leave}
+          aria-label="Leave voice channel"
+          title="Leave channel"
+        >
+          <PhoneOff size={13} />
+        </button>
+      </div>
+    </div>
+  );
+};
 
 function resolveMediaUrl(url: string | null | undefined) {
   if (!url) return null;
@@ -30,8 +127,10 @@ const UserOperativeBar: React.FC = () => {
   const setLocalDeafened = useVoiceStore((st) => st.setLocalDeafened);
 
   return (
-    <div
-      className="vox-user-panel"
+    <>
+      <VoiceDock />
+      <div
+        className="vox-user-panel"
       style={{ position: 'relative', gridTemplateColumns: 'minmax(0, 1fr) 30px 30px 30px' }}
     >
       {statusPickerOpen && <StatusPicker onClose={() => setStatusPickerOpen(false)} />}
@@ -69,7 +168,8 @@ const UserOperativeBar: React.FC = () => {
       <button type="button" className="vox-panel-icon ripple-container" onClick={() => navigate('/settings')} aria-label="Settings">
         <Settings size={17} />
       </button>
-    </div>
+      </div>
+    </>
   );
 };
 

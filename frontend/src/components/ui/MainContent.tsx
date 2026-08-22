@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Search, Pin, Hash } from 'lucide-react';
 import { useServerStore } from '../../stores/serverStore';
 import { useUiStore } from '../../stores/uiStore';
 import MessageArea from '../chat/MessageArea';
@@ -9,6 +10,7 @@ import PinnedMessages from '../chat/PinnedMessages';
 import SearchPanel from '../search/SearchPanel';
 import NotificationBell from './NotificationBell';
 import NotificationLevelPicker from '../chat/NotificationLevelPicker';
+import PinnedStrip from '../chat/PinnedStrip';
 
 const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
   const { selectedChannel } = useServerStore();
@@ -103,9 +105,7 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
             }}
             title="Search (Ctrl+F)"
             aria-label="Search messages"
-          >
-            🔍
-          </button>
+          ><Search size={15} strokeWidth={1.5} /></button>
           <NotificationLevelPicker serverId={selectedChannel?.serverId} channelId={selectedChannel?.id} />
           <NotificationBell />
           <button
@@ -117,11 +117,11 @@ const MainContent: React.FC<{ messageId?: string }> = ({ messageId }) => {
             }}
             title="Pinned messages"
             aria-label="Pinned messages"
-          >
-            📌
-          </button>
+          ><Pin size={15} strokeWidth={1.5} /></button>
         </motion.div>
       </div>
+
+      <PinnedStrip channelId={selectedChannel.id} onOpen={() => setShowPinnedPanel(true)} />
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         {(threadMessageId || showSearchPanel || showPinnedPanel) && (

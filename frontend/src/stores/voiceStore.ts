@@ -40,6 +40,11 @@ interface VoiceStore {
   // Spatial audio ───────────────────────────────────────────────
   /** Seat positions for spatial audio (userId -> {x, y} where x,y are in [-1, 1] range) */
   seatPositions: Record<string, { x: number; y: number }>;
+  // Cleanup functions ───────────────────────────────────────────
+  /** Cleanup function for voice activity detection */
+  vadCleanup: (() => void) | null;
+  /** Cleanup function for noise suppression */
+  noiseSuppressionCleanup: (() => void) | null;
   setLocalVideo: (enabled: boolean) => void;
   setScreenSharing: (enabled: boolean) => void;
   setLocalScreenStream: (stream: MediaStream | null) => void;
@@ -70,6 +75,10 @@ interface VoiceStore {
   setChannel: (channelId: string, serverId: string) => void;
   /** Set the active media transport. Pass null when leaving a channel. */
   setTransport: (transport: 'mesh' | 'sfu' | null) => void;
+  /** Set VAD cleanup function */
+  setVadCleanup: (cleanup: (() => void) | null) => void;
+  /** Set noise suppression cleanup function */
+  setNoiseSuppressionCleanup: (cleanup: (() => void) | null) => void;
   pendingPeers: Set<string>;
   pendingCandidates: Map<string, RTCIceCandidateInit[]>;
   clearAll: () => void;
@@ -96,6 +105,9 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   remoteVideoStreams: new Map(),
   // Spatial audio
   seatPositions: {},
+  // Cleanup functions
+  vadCleanup: null,
+  noiseSuppressionCleanup: null,
   pendingPeers: new Set(),
   pendingCandidates: new Map(),
 
@@ -109,8 +121,13 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
 
   setTransport: (transport) => set({ transport }),
 
+  setVadCleanup: (cleanup) => set({ vadCleanup: cleanup }),
+  setNoiseSuppressionCleanup: (cleanup) => set({ noiseSuppressionCleanup: cleanup }),
+
   clearChannel: () => {
-    const { localStream, localScreenStream, peers, remoteStreams, remoteVideoStreams } = get();
+    const { localStream, localScreenStream, peers, remoteStreams, remoteVideoStreams, vadCleanup, noiseSuppressionCleanup } = get();
+    vadCleanup?.();
+    noiseSuppressionCleanup?.();
     localStream?.getTracks().forEach(t => t.stop());
     localScreenStream?.getTracks().forEach(t => t.stop());
     remoteVideoStreams.forEach(stream => stream.getTracks().forEach(t => t.stop()));
@@ -133,6 +150,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       localVideo: false,
       screenSharing: false,
       transport: null,
+      vadCleanup: null,
+      noiseSuppressionCleanup: null,
     });
   },
 

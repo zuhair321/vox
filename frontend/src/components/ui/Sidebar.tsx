@@ -3,6 +3,7 @@ import { useServerStore } from '../../stores/serverStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useSocketStore } from '../../stores/socketStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { useNavigate } from 'react-router-dom';
 import { MicOff, VolumeX, Monitor } from 'lucide-react';
 import { API_BASE } from '../../api/client';
@@ -12,6 +13,8 @@ import ContextMenu from '../ui/ContextMenu';
 import VoiceTimer from '../voice/VoiceTimer';
 import { getMicrophoneStream } from '../../utils/webrtc';
 import { classifyMediaError } from '../../utils/mediaErrors';
+import { applyNoiseSuppression } from '../../utils/noiseSuppression';
+import { setupVoiceActivityDetection } from '../../utils/voiceActivityDetection';
 import ChannelSettings from '../server/ChannelSettings';
 import ServerLogo from './ServerLogo';
 import UserOperativeBar from './UserOperativeBar';
@@ -91,30 +94,28 @@ const VoiceChannelRow: React.FC<{
     : voice.voiceUsers;
   const hasParticipants = channelUsers.length > 0;
 
+  const settings = useSettingsStore();
+
+  const handleJoinVoice = async () => {
+    if (isInThisChannel || voice.connected || voice.joinInProgress) return;
+    // Join VC muted — mic is requested lazily on first unmute.
+    // The user enters the channel silently; the mic permission prompt
+    // only appears when they actually unmute.
+    voice.setJoinInProgress(true);
+    voice.setTransport('mesh');
+    voice.setLocalMuted(true);
+    voice.setChannel(channel.id, selectedServer.id);
+    voice.setJoinedAt(Date.now());
+    socket.socket?.emit('voice:join', { channelId: channel.id, serverId: selectedServer.id });
+    voice.setJoinInProgress(false);
+  };
+
   return (
     <div key={channel.id}>
       <div
         className="channel-item ripple-container voice-channel-item"
         onClick={() => {
-          if (isInThisChannel) return;
-          // All voice channels in this build go through the mesh WebRTC path.
-          // Mesh scales fine to ~6 participants; a LiveKit SFU path is
-          // scaffolded in livekitVoice.ts but not wired end-to-end yet.
-          voice.setTransport('mesh');
-          getMicrophoneStream()
-            .then(stream => {
-              voice.setLocalStream(stream);
-              voice.setChannel(channel.id, selectedServer.id);
-              voice.setJoinedAt(Date.now());
-              socket.socket?.emit('voice:join', { channelId: channel.id, serverId: selectedServer.id });
-            })
-            .catch((err: unknown) => {
-              const m = classifyMediaError(err);
-              addToast(`${m.title}. ${m.fix}`, m.kind === 'permission_denied' ? 'warning' : 'error', { duration: 6000 });
-              if (m.kind === 'permission_denied' && m.steps.length > 0) {
-                addToast(m.steps[0], 'info', { duration: 7000 });
-              }
-            });
+          handleJoinVoice();
         }}
         onContextMenu={(e) => { e.preventDefault(); channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel)); }}
         style={{
@@ -310,6 +311,12 @@ const Sidebar: React.FC = () => {
     setSelectedChannel(channel);
     useMessageStore.getState().markAsRead(channel.id);
     navigate(`/channels/${selectedServer.id}/${channel.id}`);
+    // Remember last active channel per server for navigation restore
+    try {
+      const saved = JSON.parse(localStorage.getItem('vox_last_channel') || '{}');
+      saved[selectedServer.id] = channel.id;
+      localStorage.setItem('vox_last_channel', JSON.stringify(saved));
+    } catch {}
   };
 
   const leaveServer = async () => {
@@ -454,7 +461,7 @@ const Sidebar: React.FC = () => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '24px' }}>
           {textChannels.length === 0 && (
-            <div className="vox-empty-state" style={{ padding: '16px 8px' }}>
+            <div className="vox-empty-state compact" style={{ padding: '16px 8px' }}>
               <div className="vox-empty-icon" style={{ fontSize: '24px' }}>📜</div>
               <div className="vox-empty-title" style={{ fontSize: '11px' }}>NO TEXT CHANNELS</div>
               <div className="vox-empty-desc" style={{ fontSize: '10px' }}>Open a channel to begin.</div>
@@ -470,17 +477,11 @@ const Sidebar: React.FC = () => {
               <div key={cat.id} style={{ marginBottom: '2px' }}>
                 <button
                   onClick={() => toggleCategory(cat.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '4px',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    padding: '4px 2px', width: '100%',
-                    color: 'var(--ash)', fontSize: '11px', fontWeight: 'bold',
-                    letterSpacing: '0.05em', textTransform: 'uppercase',
-                    textAlign: 'left',
-                  }}
+                  className={`vox-cat-head ${isCollapsed ? 'collapsed' : ''}`}
                 >
-                  <span style={{ fontSize: '8px', transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+                  <span className="vox-cat-diamond">◆</span>
                   {cat.name}
+                  <span className="vox-cat-chevron">▼</span>
                 </button>
                 {!isCollapsed && catChannels.map(channel => (
                   <ChannelRow key={channel.id} channel={channel} selectedChannel={selectedChannel} unread={unread} onSelect={selectChannel} onContextMenu={(e) => channelMenu.show(e.clientX, e.clientY, buildChannelMenu(channel))} />
@@ -501,7 +502,7 @@ const Sidebar: React.FC = () => {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {voiceChannels.length === 0 && (
-            <div className="vox-empty-state" style={{ padding: '16px 8px' }}>
+            <div className="vox-empty-state compact" style={{ padding: '16px 8px' }}>
               <div className="vox-empty-icon" style={{ fontSize: '24px' }}>🔇</div>
               <div className="vox-empty-title" style={{ fontSize: '11px' }}>NO VOICE CHANNELS</div>
               <div className="vox-empty-desc" style={{ fontSize: '10px' }}>Silence reigns.</div>
@@ -517,17 +518,11 @@ const Sidebar: React.FC = () => {
               <div key={`voice-cat-${cat.id}`} style={{ marginBottom: '2px' }}>
                 <button
                   onClick={() => toggleCategory(`voice-${cat.id}`)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '4px',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    padding: '4px 2px', width: '100%',
-                    color: 'var(--ash)', fontSize: '11px', fontWeight: 'bold',
-                    letterSpacing: '0.05em', textTransform: 'uppercase',
-                    textAlign: 'left',
-                  }}
+                  className={`vox-cat-head ${isCollapsed ? 'collapsed' : ''}`}
                 >
-                  <span style={{ fontSize: '8px', transition: 'transform 0.2s', transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)' }}>▼</span>
+                  <span className="vox-cat-diamond">◆</span>
                   {cat.name}
+                  <span className="vox-cat-chevron">▼</span>
                 </button>
                 {!isCollapsed && catChannels.map((channel: any) => (
                   <VoiceChannelRow key={channel.id} channel={channel} voice={voice} profile={profile} socket={socket} selectedServer={selectedServer} channelMenu={channelMenu} buildChannelMenu={buildChannelMenu} addToast={addToast} />

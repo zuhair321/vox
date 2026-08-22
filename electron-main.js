@@ -8,6 +8,16 @@
 const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, globalShortcut, nativeImage, desktopCapturer, dialog } = require('electron');
 const { spawn, spawnSync } = require('child_process');
 const path = require('path');
+// ─── Auto-updater publish config ──────────────────────────────────
+// Configure where electron-updater checks for releases.
+// For GitHub releases, set GH_TOKEN env var before building.
+const PUBLISH_CONFIG = {
+  provider: 'github',
+  owner: 'zuhair321',
+  repo: 'vox',
+  releaseType: 'release',
+};
+
 const fs = require('fs');
 
 const PROJECT_ROOT = path.join(__dirname);
@@ -203,6 +213,12 @@ app.commandLine.appendSwitch('log-level', '3');
 app.commandLine.appendSwitch('v', '0');
 app.commandLine.appendSwitch('disable-logging');
 
+// ── Media permission: auto-grant getUserMedia for VOX voice channels ──────
+// This flag prevents Chromium from blocking getUserMedia due to cached
+// permission denials or OS-level privacy settings being off.
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+
 // ── Suppress Chromium internal noise from console ───────────────────
 const NOISE_PATTERNS = [
   /cache_util_win\.cc/, /disk_cache\.cc/, /gpu_disk_cache\.cc/,
@@ -372,7 +388,7 @@ function waitForServer(url, timeout = 15000) {
 // listening") instead of blindly sleeping or hammering /health (which runs a
 // DB query every 300ms). Resolves as soon as the process is actually serving,
 // or after `timeout` so startup never deadlocks.
-async function waitForDbHealth(timeout = 25000) {
+async function waitForDbHealth(timeout = 15000) {
   const deadline = Date.now() + timeout;
   for (;;) {
     try {
@@ -387,7 +403,7 @@ async function waitForDbHealth(timeout = 25000) {
   }
 }
 
-function waitForBackendReady(proc, timeout = 35000) {
+function waitForBackendReady(proc, timeout = 40000) {
   return new Promise((resolve) => {
     let done = false;
     const finish = (up) => { if (!done) { done = true; resolve(up); } };
@@ -433,7 +449,15 @@ function setupScreenCapture(win) {
     win.webContents.send('screen-capture:request');
   });
   win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
-    callback(['media', 'mediaKeySystem', 'notifications', 'fullscreen', 'display-capture'].includes(permission));
+    const granted = ['media', 'mediaKeySystem', 'notifications', 'fullscreen', 'display-capture'].includes(permission);
+    console.log('[Permissions] Request:', permission, '→', granted);
+    callback(granted);
+  });
+  // Electron 30+ uses setPermissionCheckHandler for synchronous media checks.
+  win.webContents.session.setPermissionCheckHandler((_wc, permission, _requestingOrigin, _details) => {
+    const granted = ['media', 'mediaKeySystem', 'notifications', 'fullscreen', 'display-capture'].includes(permission);
+    console.log('[Permissions] Check:', permission, '→', granted, 'origin=' + _requestingOrigin);
+    return granted;
   });
 }
 
@@ -490,6 +514,50 @@ async function ensureDatabaseExists(dbUrl) {
   }
 }
 
+// Runs `sc query <svc>` and returns the raw output ('' if the service doesn't
+// exist). Queries never require elevation.
+function scQueryService(svc) {
+  return new Promise((resolve) => {
+    try {
+      const sc = spawn('sc', ['query', svc], { windowsHide: true });
+      let output = '';
+      sc.stdout.on('data', (d) => { output += d.toString(); });
+      sc.stderr.on('data', (d) => { output += d.toString(); });
+      sc.on('close', () => resolve(output));
+      sc.on('error', () => resolve(''));
+    } catch { resolve(''); }
+  });
+}
+
+// Tries `sc start <svc>` (requires elevation — ignored when the current process
+// lacks rights), then polls `sc query` until the service reports RUNNING. A
+// cold-starting PostgreSQL service takes 5-15s, so the old single 2s snapshot
+// wrongly declared the start a failure and left boot to limp on.
+async function scStartServiceAndWait(svc, waitMs = 12000) {
+  try {
+    const started = spawn('sc', ['start', svc], { windowsHide: true });
+    let startOut = '';
+    started.stdout.on('data', (d) => { startOut += d.toString(); });
+    started.stderr.on('data', (d) => { startOut += d.toString(); });
+    await new Promise((resolve) => started.on('close', resolve));
+    // Failure modes polling can never fix: service not installed (1060) or we
+    // lack rights to start it. Bail immediately instead of burning the whole
+    // poll window per candidate — 9 candidates × 12s would stall boot for ~2
+    // minutes on machines with no PostgreSQL service at all.
+    if (/1060|does not exist|Access is denied|OpenService FAILED/.test(startOut)) {
+      console.warn(`[Bootstrap] Cannot start service "${svc}": ${String(startOut).trim().split('\n').pop()}`);
+      return false;
+    }
+  } catch { return false; }
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const out = await scQueryService(svc);
+    if (/RUNNING/.test(out)) return true;
+    if (Date.now() > deadline) return false;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+}
+
 async function ensurePostgresRunning() {
   const serviceNames = [
     'postgresql-x64-18',
@@ -504,25 +572,15 @@ async function ensurePostgresRunning() {
   ];
   try {
     for (const svc of serviceNames) {
-      const sc = spawn('sc', ['query', svc], { windowsHide: true });
-      let output = '';
-      sc.stdout.on('data', (d) => { output += d.toString(); });
-      await new Promise((resolve) => sc.on('close', resolve));
-      if (output.includes('RUNNING')) {
+      const out = await scQueryService(svc);
+      if (/RUNNING/.test(out)) {
         console.log(`[Bootstrap] PostgreSQL service "${svc}" is already running.`);
         return true;
       }
     }
     console.log('[Bootstrap] PostgreSQL service not running — attempting to start it...');
     for (const svc of serviceNames) {
-      const start = spawn('sc', ['start', svc], { windowsHide: true });
-      await new Promise((resolve) => start.on('close', resolve));
-      await new Promise((r) => setTimeout(r, 2000));
-      const check = spawn('sc', ['query', svc], { windowsHide: true });
-      let output = '';
-      check.stdout.on('data', (d) => { output += d.toString(); });
-      await new Promise((resolve) => check.on('close', resolve));
-      if (output.includes('RUNNING')) {
+      if (await scStartServiceAndWait(svc)) {
         console.log(`[Bootstrap] Started PostgreSQL service "${svc}".`);
         return true;
       }
@@ -531,6 +589,37 @@ async function ensurePostgresRunning() {
   } catch (e) {
     console.warn('[Bootstrap] Could not ensure PostgreSQL is running:', e.message);
     return false;
+  }
+}
+
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+// Registers a per-user Windows logon auto-start (HKCU\...\Run) that brings the
+// bundled PostgreSQL up BEFORE VOX launches, so a cold boot finds port 5433
+// already open and skips straight to the fast path. HKCU needs no admin rights.
+// The .vbs wrapper launches pg_ctl hidden (no console flash). Best-effort —
+// never blocks or fails boot.
+function registerPostgresAutoStart(pgCtl, dataDir, logFile, port) {
+  try {
+    const vbsPath = path.join(VOX_USER_DATA, 'vox-pg-start.vbs');
+    const esc = (s) => String(s).replace(/"/g, '""');
+    const cmdLine =
+      '"' + pgCtl + '" -D "' + dataDir + '" -l "' + logFile + '" -o "-p ' + port + ' -h 127.0.0.1" start';
+    const vbs =
+      'On Error Resume Next\n' +
+      'Set sh = CreateObject("Wscript.Shell")\n' +
+      // Whole command line must be ONE VBS string literal (embedded quotes
+      // doubled via esc); bare tokens between literals are a syntax error
+      // in VBScript and make wscript hang on an invisible error dialog.
+      'sh.Run "' + esc(cmdLine) + '", 0, False\n';
+    fs.writeFileSync(vbsPath, vbs, 'utf8');
+    const runKey = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+    const value = 'wscript.exe "' + vbsPath + '"';
+    const reg = spawnSync('reg', ['add', runKey, '/v', 'VOX-Postgres', '/t', 'REG_SZ', '/d', value, '/f'], { windowsHide: true, encoding: 'utf8' });
+    const detail = reg.status === 0 ? 'registered (logon auto-start).' : 'registration failed: ' + String(reg.stderr || reg.stdout || '').trim().split('\n')[0];
+    console.log('[Bootstrap] PostgreSQL auto-start ' + detail);
+  } catch (e) {
+    console.warn('[Bootstrap] Could not register PostgreSQL auto-start:', e.message);
   }
 }
 
@@ -553,58 +642,96 @@ async function startBundledPostgres() {
   }
   const pgCtl = path.join(pgBin, 'pg_ctl.exe');
   const initDb = path.join(pgBin, 'initdb.exe');
+  const psql = path.join(pgBin, 'psql.exe');
 
   const dataDir = path.join(VOX_USER_DATA, 'pgdata');
   const logFile = path.join(VOX_USER_DATA, 'pgdata.log');
   const port = '5433';
 
-  if (!fs.existsSync(path.join(dataDir, 'PG_VERSION'))) {
-    console.log('[Bootstrap] Initialising bundled PostgreSQL data directory...');
-    try {
-      await new Promise((resolve, reject) => {
-        const child = spawn(initDb, ['-D', dataDir, '-U', 'postgres', '--auth=trust', '-A', 'trust'], {
-          windowsHide: true,
-          stdio: 'pipe'
-        });
-        let stderr = '';
-        child.stderr.on('data', (d) => { stderr += d.toString(); });
-        child.on('close', (code) => {
-          if (code === 0) resolve();
-          else reject(new Error(`initdb failed (code ${code}): ${stderr}`));
-        });
-        child.on('error', (err) => reject(err));
+  // Stale postmaster.pid cleanup: a crash / hard power-off leaves a pid file
+  // pointing at a dead process, and pg_ctl refuses to start until it is gone.
+  // Only delete when the recorded PID is no longer alive, so a live server is
+  // never disturbed.
+  let serverRunning = false;
+  try {
+    const pidFile = path.join(dataDir, 'postmaster.pid');
+    if (fs.existsSync(pidFile)) {
+      const firstLine = fs.readFileSync(pidFile, 'utf8').split('\n')[0].trim();
+      const pid = parseInt(firstLine, 10);
+      const alive = Number.isInteger(pid) && pid > 0 &&
+        spawnSync('tasklist', ['/FI', 'PID eq ' + pid], { windowsHide: true, encoding: 'utf8' }).stdout.includes(String(pid));
+      if (alive) {
+        serverRunning = true;
+        console.log('[Bootstrap] Bundled PostgreSQL already running (pid ' + pid + ') — skipping pg_ctl, waiting for readiness.');
+      } else {
+        console.warn('[Bootstrap] Removing stale postmaster.pid (dead pid ' + pid + ') from a prior unclean shutdown.');
+        fs.unlinkSync(pidFile);
+      }
+    }
+  } catch { /* ignore */ }
+
+  if (!serverRunning) {
+    if (!fs.existsSync(path.join(dataDir, 'PG_VERSION'))) {
+      console.log('[Bootstrap] Initialising bundled PostgreSQL data directory...');
+      const initdbOk = await new Promise((resolve) => {
+        let settled = false;
+        let timer = null;
+        const done = (ok) => { if (!settled) { settled = true; if (timer) clearTimeout(timer); resolve(ok); } };
+        try {
+          const child = spawn(initDb, ['-D', dataDir, '-U', 'postgres', '--auth=trust', '-A', 'trust'], {
+            windowsHide: true,
+            stdio: 'pipe'
+          });
+          let stderr = '';
+          child.stderr.on('data', (d) => { stderr += d.toString(); });
+          child.on('close', (code) => {
+            if (code === 0) done(true);
+            else { console.warn('[Bootstrap] initdb failed (code ' + code + '): ' + stderr); done(false); }
+          });
+          child.on('error', (err) => { console.warn('[Bootstrap] initdb spawn error:', err.message); done(false); });
+        } catch (e) { console.warn('[Bootstrap] initdb error:', e.message); done(false); }
+        // initdb can legitimately take 30-60s on a fresh install; never hang
+        // boot past 90s waiting for it.
+        timer = setTimeout(() => { console.warn('[Bootstrap] initdb exceeded 90s — continuing anyway.'); done(false); }, 90000);
+        timer.unref?.();
       });
-    } catch (e) {
-      console.warn('[Bootstrap] initdb failed:', e.message);
+      if (!initdbOk) return null;
+    }
+
+    console.log('[Bootstrap] Starting bundled PostgreSQL...');
+    const startOk = await new Promise((resolve) => {
+      let settled = false;
+      let timer = null;
+      const done = (ok) => { if (!settled) { settled = true; if (timer) clearTimeout(timer); resolve(ok); } };
+      try {
+        // stdio:'ignore' (not 'pipe') — pg_ctl spawns postgres as a child that
+        // inherits the pipe handles; with 'pipe' Node's 'close' only fires once
+        // EVERY handle closes (i.e. when postgres exits) and boot would hang.
+        const child = spawn(pgCtl, ['-D', dataDir, '-l', logFile, '-o', '-p ' + port + ' -h 127.0.0.1', 'start'], {
+          windowsHide: true,
+          stdio: 'ignore'
+        });
+        child.on('close', (code) => { if (code === 0) done(true); else done(false); });
+        child.on('error', () => done(false));
+      } catch { done(false); }
+      timer = setTimeout(() => { console.warn('[Bootstrap] pg_ctl start exceeded 30s — continuing.'); done(false); }, 30000);
+      timer.unref?.();
+    });
+    if (!startOk) {
+      // Surface the real reason instead of a bare "pg_ctl start failed".
+      try {
+        const tail = fs.readFileSync(logFile, 'utf8').split('\n').slice(-20).join('\n').trim();
+        if (tail) console.warn('[Bootstrap] pg_ctl start failed — last log lines:\n' + tail);
+      } catch { /* no log file yet */ }
+      console.warn('[Bootstrap] pg_ctl start failed — see ' + logFile);
       return null;
     }
   }
 
-  console.log('[Bootstrap] Starting bundled PostgreSQL...');
-  try {
-    await new Promise((resolve, reject) => {
-      // IMPORTANT: use stdio:'ignore' (not 'pipe') — pg_ctl spawns postgres as a
-      // child that inherits the pipe handles. With 'pipe', Node's 'close' event
-      // only fires once EVERY handle is closed, i.e. when postgres itself exits,
-      // so this promise would never resolve while the DB runs and boot would
-      // hang forever on the splash screen. Logs go to -l logFile anyway.
-      const child = spawn(pgCtl, ['-D', dataDir, '-l', logFile, '-o', `-p ${port} -h 127.0.0.1`, 'start'], {
-        windowsHide: true,
-        stdio: 'ignore'
-      });
-      child.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`pg_ctl start failed (code ${code}) — see ${logFile}`));
-      });
-      child.on('error', (err) => reject(err));
-    });
-  } catch (e) {
-    console.warn('[Bootstrap] pg_ctl start failed:', e.message);
-    return null;
-  }
-
+  // Wait for the server to actually accept TCP connections.
   const start = Date.now();
-  const timeout = 15000;
+  const timeout = 20000;
+  let connected = false;
   while (Date.now() - start < timeout) {
     try {
       const net = require('net');
@@ -614,15 +741,49 @@ async function startBundledPostgres() {
         socket.once('error', () => reject());
         setTimeout(() => { socket.destroy(); reject(); }, 1000);
       });
-      console.log(`[Bootstrap] Bundled PostgreSQL ready on port ${port}`);
-      return `postgresql://postgres@127.0.0.1:${port}/vox_dev`;
+      connected = true;
+      break;
     } catch {
-      await new Promise((r) => setTimeout(r, 500));
+      await sleep(500);
     }
   }
+  if (!connected) {
+    console.warn('[Bootstrap] Bundled PostgreSQL did not become ready in time.');
+    return null;
+  }
+  console.log('[Bootstrap] Bundled PostgreSQL ready on port ' + port);
 
-  console.warn('[Bootstrap] Bundled PostgreSQL did not become ready in time.');
-  return null;
+  // Provision the credentials the app is actually configured with. A fresh
+  // initdb creates only the 'postgres' superuser; if the configured URL asks
+  // for vox:vox (the default), the backend fails to authenticate and the
+  // splash stalls on "Waking backend…" (74%). Idempotent — no-ops when the
+  // role and database already exist. Trust auth means no password is needed.
+  try {
+    if (fs.existsSync(psql)) {
+      const conf = new URL(resolveBackendDatabaseUrl());
+      const role = (conf.username || 'vox').replace(/"/g, '""');
+      const pass = (conf.password || 'vox');
+      const dbName = (conf.pathname.replace(/^\//, '') || 'vox_dev').replace(/"/g, '""');
+      // role is interpolated into a SQL *string literal* here (single-quoted),
+      // so escape single quotes — identifier-style double-quote doubling is only
+      // correct for the CREATE ROLE "..." statement below.
+      const roleLiteral = role.replace(/'/g, "''");
+      const hasRole = spawnSync(psql, ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-tAq', '-c', "SELECT 'x' FROM pg_roles WHERE rolname = '" + roleLiteral + "'"], { windowsHide: true, encoding: 'utf8' });
+      if (!hasRole.stdout.includes('x')) {
+        spawnSync(psql, ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-c', 'CREATE ROLE "' + role + '" LOGIN PASSWORD \'' + pass.replace(/'/g, "''") + '\' SUPERUSER'], { windowsHide: true, encoding: 'utf8' });
+        console.log('[Bootstrap] Created role "' + role + '" on bundled PostgreSQL.');
+      }
+      spawnSync(psql, ['-h', '127.0.0.1', '-p', port, '-U', 'postgres', '-d', 'postgres', '-c', 'CREATE DATABASE "' + dbName + '" OWNER "' + role + '"'], { windowsHide: true, encoding: 'utf8' });
+    }
+  } catch (e) {
+    console.warn('[Bootstrap] Could not provision bundled PostgreSQL credentials:', e.message);
+  }
+
+  // Make sure the bundled instance is up BEFORE the next VOX launch: per-user
+  // logon auto-start (no admin). Best-effort, idempotent.
+  registerPostgresAutoStart(pgCtl, dataDir, logFile, port);
+
+  return 'postgresql://postgres@127.0.0.1:' + port + '/vox_dev';
 }
 
 function stopBundledPostgres() {
@@ -751,8 +912,10 @@ async function runDbBootstrap() {
     console.log('[Bootstrap] prisma CLI not found — skipping schema apply.');
     return;
   }
+  try { setSplashStatus('Connecting vault…'); } catch {}
   console.log('[Bootstrap] Applying database migrations (first run)...');
-  await new Promise((resolve) => {
+  await Promise.race([
+    new Promise((resolve) => {
     const child = spawn(
       portableNode ? prismaBin : nodeBin,
       portableNode ? ['migrate', 'deploy'] : [prismaBin, 'migrate', 'deploy'],
@@ -781,7 +944,15 @@ async function runDbBootstrap() {
       resolve();
     });
     child.on('error', (err) => { console.error('[Bootstrap] spawn error:', err.message); resolve(); });
-  });
+    }),
+    new Promise((resolve) => {
+      const mt = setTimeout(() => {
+        console.warn('[Bootstrap] migrate deploy exceeded 120s — continuing boot.');
+        resolve();
+      }, 120000);
+      mt.unref?.();
+    }),
+  ]);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -849,10 +1020,13 @@ const SPLASH_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
   const fill = document.getElementById('fill');
   const st = document.getElementById('st');
   const pc = document.getElementById('pc');
-  const PER = { 'Booting kernel…': 12, 'Connecting vault…': 42, 'Waking backend…': 74, 'Opening interface…': 92 };
+  const PER = { 'Booting kernel…': 12, 'Starting vault…': 32, 'Connecting vault…': 50, 'Waking backend…': 74, 'Opening interface…': 92 };
   const STEPS = {
     'Booting kernel…': [
       '> initialising secure kernel', '  [ ok ] memory regions locked', '  [ ok ] integrity verified'
+    ],
+    'Starting vault…': [
+      '> starting data vault', '  [ ok ] postgres online · 127.0.0.1:5433'
     ],
     'Connecting vault…': [
       '> connecting data vault', '  [ ok ] vault unlocked · 127.0.0.1:5433', '  [ ok ] schema ready'
@@ -983,6 +1157,17 @@ async function startBackend() {
     backendProc.on('exit', (c) => console.log('[Backend] exited:', c));
     const ready = await waitForBackendReady(backendProc);
     if (!ready) {
+      // Backend didn't announce readiness, but it may still be serving:
+      //  - server.js exits cleanly (code 0) on EADDRINUSE to reuse an
+      //    existing backend that owns the port;
+      //  - or the process may still be alive but silent (Redis/init stall).
+      // Never show a false "VOX could not start" when /health is genuinely
+      // answering — probe once and reuse the healthy backend.
+      const exitedCleanly = backendProc && (backendProc.exitCode === null || backendProc.exitCode === 0);
+      if (exitedCleanly && await waitForServer('http://127.0.0.1:4000/health', 5000)) {
+        console.warn('[Backend] Backend silent/unavailable but /health is healthy — reusing the running backend.');
+        return { ready: true };
+      }
       return { ready: false, stderr: backendStderr.slice(-500) };
     }
     return { ready: true };
@@ -1028,6 +1213,17 @@ async function startBackend() {
   backendProc.on('exit', (c) => console.log('[Backend] exited:', c));
   const ready = await waitForBackendReady(backendProc);
   if (!ready) {
+    // Backend didn't announce readiness, but it may still be serving:
+    //  - server.js exits cleanly (code 0) on EADDRINUSE to reuse an
+    //    existing backend that owns the port;
+    //  - or the process may still be alive but silent (Redis/init stall).
+    // Never show a false "VOX could not start" when /health is genuinely
+    // answering — probe once and reuse the healthy backend.
+    const exitedCleanly = backendProc && (backendProc.exitCode === null || backendProc.exitCode === 0);
+    if (exitedCleanly && await waitForServer('http://127.0.0.1:4000/health', 5000)) {
+      console.warn('[Backend] Backend silent/unavailable but /health is healthy — reusing the running backend.');
+      return { ready: true };
+    }
     return { ready: false, stderr: backendStderr.slice(-500) };
   }
   return { ready: true };
@@ -1271,6 +1467,45 @@ ipcMain.handle('screen-capture:select', async (_e, sourceId) => {
 
 ipcMain.handle('screen-capture:cancel', () => { rejectPendingScreenRequest(); });
 
+// Query current microphone permission state for diagnostics.
+ipcMain.handle('query-mic-permission', async () => {
+  try {
+    // On Windows, check the OS-level privacy setting via registry
+    if (process.platform === 'win32') {
+      const { execSync } = require('child_process');
+      try {
+        // Check if microphone access is enabled at OS level
+        const result = execSync('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone" /v Value 2>nul', { encoding: 'utf8' });
+        const osEnabled = result.includes('Allow');
+        console.log('[Permissions] OS mic access:', osEnabled ? 'ALLOW' : 'DENY');
+        return { osEnabled, electronCache: 'check-cache-logs' };
+      } catch {
+        console.log('[Permissions] Could not check OS mic setting');
+        return { osEnabled: 'unknown', electronCache: 'check-cache-logs' };
+      }
+    }
+    return { osEnabled: 'non-windows', electronCache: 'check-cache-logs' };
+  } catch (err) {
+    console.error('[Permissions] query-mic-permission failed:', err.message);
+    return { error: err.message };
+  }
+});
+
+// Clear Electron's cached permission decisions so the next getUserMedia
+// triggers a fresh check instead of replaying a stale denial.
+ipcMain.handle('clear-permission-cache', async () => {
+  try {
+    if (mainWindow && mainWindow.webContents && mainWindow.webContents.session) {
+      mainWindow.webContents.session.clearPermissionCache();
+      console.log('[Permissions] Cache cleared');
+      return true;
+    }
+  } catch (err) {
+    console.error('[Permissions] Failed to clear cache:', err.message);
+  }
+  return false;
+});
+
 // Open the OS-level privacy/settings page for a particular device kind so
 // users can flip a blocked permission toggle without leaving VOX. Supported
 // kinds: 'microphone' | 'camera'. Returns the URL that was opened (or null
@@ -1326,9 +1561,15 @@ async function start() {
   // covers this boot; the window is created AFTER the backend answers so its
   // first load succeeds immediately instead of staring at ERR_CONNECTION_REFUSED
   // retries for seconds (which read as "stuck on a black screen").
-  setSplashStatus(shouldRunLocalBackend(appConfig) ? 'Connecting vault…' : 'Probing server…');
+  setSplashStatus(shouldRunLocalBackend(appConfig) ? 'Starting vault…' : 'Probing server…');
 
   if (shouldRunLocalBackend(appConfig)) {
+    // The whole local boot is wrapped in a watchdog: every individual step is
+    // capped (Postgres start, migrations, backend spawn, DB health), and this
+    // final belt-and-braces timer guarantees the splash ALWAYS advances past
+    // 74% — on an unforeseen hang the window still opens and the renderer
+    // surfaces the real error instead of a frozen boot bar.
+    const localBoot = (async () => {
     try {
       await runDbBootstrap();
     } catch (err) {
@@ -1345,7 +1586,7 @@ async function start() {
       // the window loads now, the renderer's getMe() 500s and the old auth
       // store treated that as "session expired" → forced logout on every cold
       // boot. Keep the splash up until the database actually answers.
-      await waitForDbHealth(25000);
+      await waitForDbHealth(15000);
     } else {
       console.error('[Startup] Backend exited before becoming ready — check the error output below.');
       if (!isQuitting) {
@@ -1370,6 +1611,18 @@ async function start() {
     } catch (err) {
       console.error('[Startup] Backend error:', err.message);
     }
+    })();
+    // 75s hard cap — never freeze the splash on a wedged DB or backend.
+    await Promise.race([
+      localBoot,
+      new Promise((resolve) => {
+        const wt = setTimeout(() => {
+          console.warn('[Startup] Boot watchdog (75s) elapsed — opening interface regardless.');
+          resolve();
+        }, 75000);
+        wt.unref?.();
+      }),
+    ]);
   } else {
     console.log('[Startup] Client mode — skipping local backend bootstrap.');
     // Best-effort reachability probe so the splash shows honest status before
@@ -1490,6 +1743,9 @@ async function getAutoUpdater() {
   try {
     // CJS-friendly require; available when bundled by electron-builder.
     _autoUpdater = require('electron-updater').autoUpdater;
+    if (_autoUpdater) {
+      _autoUpdater.setFeedURL(PUBLISH_CONFIG);
+    }
   } catch (err) {
     console.warn('[updater] electron-updater not available (' + (err && err.message) + '). Update pipeline disabled.');
     _autoUpdater = false;
@@ -1581,7 +1837,8 @@ async function wireUpdaterEvents() {
 }
 
 app.whenReady().then(() => {
-  wireUpdaterEvents();
+  // Only wire updater events in packaged builds — dev mode skips auto-updater
+  if (app.isPackaged) wireUpdaterEvents();
   // Kick an initial check shortly after boot (10s gives the window time to
   // mount and the user a chance to see the result).
   setTimeout(() => {
@@ -1596,6 +1853,7 @@ app.whenReady().then(() => {
 
 // shared autoCheck — used by both initial 10s kick and the 6h poll.
 ipcMain.on('updater:autoCheck', async () => {
+  if (!app.isPackaged) return;
   const updater = await getAutoUpdater();
   if (!updater) return;
   try {

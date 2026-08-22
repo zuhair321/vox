@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useServerStore } from '../../stores/serverStore';
@@ -21,6 +21,11 @@ import TemplatesPanel from './TemplatesPanel';
 import WidgetPanel from './WidgetPanel';
 import ModerationCenter from '../moderation/ModerationCenter';
 import ServerLogo from '../ui/ServerLogo';
+import {
+  Home, Shield, FolderOpen, Hammer, Link, Smile,
+  Volume2, Award, Bot, FileText, Puzzle, ShieldAlert,
+  ScrollText, Settings,
+} from 'lucide-react';
 
 type TabKey = 'OVERVIEW' | 'ROLES' | 'CATEGORIES' | 'BANS' | 'WEBHOOKS' | 'EMOJI' | 'SOUNDBOARD' | 'BADGES' | 'AUTOMOD' | 'AUDIT' | 'TEMPLATES' | 'WIDGET' | 'MODERATION' | 'BOTS';
 
@@ -30,6 +35,24 @@ interface TabItem {
   icon: string;
   adminOnly: boolean;
 }
+
+
+const TAB_ICONS: Record<TabKey, React.ReactNode> = {
+  OVERVIEW: <Home size={15} />,
+  ROLES: <Shield size={15} />,
+  CATEGORIES: <FolderOpen size={15} />,
+  BANS: <Hammer size={15} />,
+  WEBHOOKS: <Link size={15} />,
+  EMOJI: <Smile size={15} />,
+  SOUNDBOARD: <Volume2 size={15} />,
+  BADGES: <Award size={15} />,
+  AUTOMOD: <Bot size={15} />,
+  AUDIT: <ScrollText size={15} />,
+  TEMPLATES: <FileText size={15} />,
+  WIDGET: <Puzzle size={15} />,
+  MODERATION: <ShieldAlert size={15} />,
+  BOTS: <Settings size={15} />,
+};
 
 const TABS: TabItem[] = [
   { key: 'OVERVIEW', label: 'Overview', icon: '🏠', adminOnly: false },
@@ -57,6 +80,7 @@ const ServerSettings: React.FC = () => {
   const [bannerBusy, setBannerBusy] = useState(false);
   const [hoveredTab, setHoveredTab] = useState<TabKey | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
   const [deleteTyped, setDeleteTyped] = useState('');
   const { addToast } = useUiStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,7 +112,7 @@ const ServerSettings: React.FC = () => {
       }}>
         <div style={{ fontSize: '48px', opacity: 0.3 }}>🔭</div>
         <div style={{ fontSize: '18px', fontWeight: 600 }}>Realm not found</div>
-        <button className="angular-button" onClick={() => navigate('/friends')}>← Back to Friends</button>
+        <button className="angular-button" onClick={() => goBack()}><span style={{marginRight:6}}>←</span> Back to server</button>
       </div>
     );
   }
@@ -100,6 +124,39 @@ const ServerSettings: React.FC = () => {
   const canManage = isOwner || isAdmin;
 
   const visibleTabs = TABS.filter(tab => !tab.adminOnly || canManage);
+
+
+  // Navigate back to the server's last active channel (not /friends).
+  const goBack = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('vox_last_channel') || '{}');
+      const lastChannelId = saved[server.id];
+      if (lastChannelId && server.channels?.some((c: any) => c.id === lastChannelId)) {
+        navigate(`/channels/${server.id}/${lastChannelId}`);
+      } else if (server.channels?.length > 0) {
+        navigate(`/channels/${server.id}/${server.channels[0].id}`);
+      } else {
+        navigate('/friends');
+      }
+    } catch {
+      if (server.channels?.length > 0) {
+        navigate(`/channels/${server.id}/${server.channels[0].id}`);
+      } else {
+        navigate('/friends');
+      }
+    }
+  };
+
+  // Escape key exits server settings
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !deleteConfirmOpen) {
+        goBack();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [deleteConfirmOpen, server]);
 
   // Electron does NOT implement window.prompt (it returns null immediately),
   // so delete confirmation must be an in-app modal. Open it, verify the typed
@@ -147,7 +204,7 @@ const ServerSettings: React.FC = () => {
             height: '180px',
             background: server.banner
               ? 'transparent'
-              : 'linear-gradient(135deg, #1a1d23 0%, #2d323b 50%, #1a1d23 100%)',
+              : 'linear-gradient(135deg, #2a0f16 0%, #120a10 50%, #0a0a0d 100%)',
             position: 'relative',
           }}>
             {server.banner && (
@@ -173,7 +230,7 @@ const ServerSettings: React.FC = () => {
                 fontSize: '14px',
                 letterSpacing: '0.05em',
               }}>
-                SERVER BANNER
+                NO BANNER SET
               </div>
             )}
             {canManage && (
@@ -214,12 +271,13 @@ const ServerSettings: React.FC = () => {
           src={server.icon ? `${API_BASE}${server.icon.startsWith('/') ? server.icon : '/' + server.icon}` : null}
           name={server.name}
           size={64}
+          circle
           onClick={() => { if (canManage) fileInputRef.current?.click(); }}
           style={{
             position: 'absolute',
             bottom: '0px',
             left: '24px',
-            border: '4px solid var(--abyss)',
+            border: '4px solid var(--bg-surface)',
             boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
             borderRadius: '50%',
           }}
@@ -229,7 +287,7 @@ const ServerSettings: React.FC = () => {
       {/* Server name */}
       <div style={{ marginTop: '48px', marginBottom: '4px' }}>
         <h2 style={{
-          fontFamily: "'Inter', 'Segoe UI', sans-serif",
+          fontFamily: "'Share Tech Mono', monospace",
           fontSize: '22px',
           fontWeight: 700,
           color: 'var(--ghost-white)',
@@ -243,32 +301,32 @@ const ServerSettings: React.FC = () => {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
         <div className="vox-card" style={{ padding: '20px 24px' }}>
           <div className="vox-setting-row" style={{ padding: '10px 0', borderBottom: '1px solid var(--rim)' }}>
-            <span className="vox-setting-label">SERVER NAME</span>
-            <span className="vox-setting-value">{server.name}</span>
+            <span className="vox-setting-label" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--gold)', fontSize: '11px', letterSpacing: '0.08em' }}>SERVER NAME</span>
+            <span className="vox-setting-value" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', fontSize: '12px' }}>{server.name}</span>
           </div>
           <div className="vox-setting-row" style={{ padding: '10px 0', borderBottom: '1px solid var(--rim)' }}>
-            <span className="vox-setting-label">DESCRIPTION</span>
-            <span className="vox-setting-value">{server.description || 'No description set'}</span>
+            <span className="vox-setting-label" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--gold)', fontSize: '11px', letterSpacing: '0.08em' }}>DESCRIPTION</span>
+            <span className="vox-setting-value" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', fontSize: '12px' }}>{server.description || 'No description set'}</span>
           </div>
           <div className="vox-setting-row" style={{ padding: '10px 0', borderBottom: '1px solid var(--rim)' }}>
-            <span className="vox-setting-label">VERIFICATION</span>
+            <span className="vox-setting-label" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--gold)', fontSize: '11px', letterSpacing: '0.08em' }}>VERIFICATION</span>
             <span className="vox-setting-value" style={{ textTransform: 'capitalize' }}>{server.verificationLevel?.toLowerCase() || 'None'}</span>
           </div>
           <div className="vox-setting-row" style={{ padding: '10px 0', borderBottom: '1px solid var(--rim)' }}>
-            <span className="vox-setting-label">VANITY URL</span>
-            <span className="vox-setting-value">{server.vanityUrl ? `/${server.vanityUrl}` : 'Not set'}</span>
+            <span className="vox-setting-label" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--gold)', fontSize: '11px', letterSpacing: '0.08em' }}>VANITY URL</span>
+            <span className="vox-setting-value" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', fontSize: '12px' }}>{server.vanityUrl ? `/${server.vanityUrl}` : 'Not set'}</span>
           </div>
           <div className="vox-setting-row" style={{ padding: '10px 0', borderBottom: '1px solid var(--rim)' }}>
-            <span className="vox-setting-label">OWNER</span>
-            <span className="vox-setting-value">{server.ownerId}</span>
+            <span className="vox-setting-label" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--gold)', fontSize: '11px', letterSpacing: '0.08em' }}>OWNER</span>
+            <span className="vox-setting-value" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', fontSize: '12px' }}>{server.ownerId}</span>
           </div>
           <div className="vox-setting-row" style={{ padding: '10px 0', borderBottom: '1px solid var(--rim)' }}>
-            <span className="vox-setting-label">MEMBERS</span>
-            <span className="vox-setting-value">{server.members?.length || 0}</span>
+            <span className="vox-setting-label" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--gold)', fontSize: '11px', letterSpacing: '0.08em' }}>MEMBERS</span>
+            <span className="vox-setting-value" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', fontSize: '12px' }}>{server.members?.length || 0}</span>
           </div>
           <div className="vox-setting-row" style={{ padding: '10px 0' }}>
-            <span className="vox-setting-label">CREATED</span>
-            <span className="vox-setting-value">
+            <span className="vox-setting-label" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--gold)', fontSize: '11px', letterSpacing: '0.08em' }}>CREATED</span>
+            <span className="vox-setting-value" style={{ fontFamily: "'Share Tech Mono', monospace", color: 'var(--text-muted)', fontSize: '12px' }}>
               {server.createdAt ? new Date(server.createdAt).toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
@@ -282,14 +340,14 @@ const ServerSettings: React.FC = () => {
         {isOwner && (
           <div className="vox-card" style={{
             padding: '20px 24px',
-            border: '1px solid rgba(216, 74, 90, 0.3)',
-            background: 'rgba(216, 74, 90, 0.05)',
+            border: '1px solid rgba(165, 24, 47, 0.25)',
+            background: 'rgba(165, 24, 47, 0.04)',
           }}>
             <h3 style={{
-              fontFamily: "'Inter', 'Segoe UI', sans-serif",
-              fontSize: '14px',
-              fontWeight: 600,
-              color: 'var(--chaos)',
+              fontFamily: "'Cinzel', serif",
+              fontSize: '13px',
+              fontWeight: 700,
+              color: 'var(--crimson)',
               margin: '0 0 16px 0',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
@@ -316,9 +374,9 @@ const ServerSettings: React.FC = () => {
                 onClick={handleDeleteServer}
                 style={{
                   padding: '10px 20px',
-                  background: 'var(--chaos)',
-                  border: 'none',
-                  borderRadius: '6px',
+                  background: 'var(--crimson)',
+                  border: '1px solid rgba(165,24,47,0.5)',
+                  borderRadius: '4px',
                   color: 'var(--ghost-white)',
                   fontSize: '13px',
                   fontWeight: 600,
@@ -386,8 +444,8 @@ const ServerSettings: React.FC = () => {
       <div style={{
         width: '240px',
         minWidth: '240px',
-        background: 'linear-gradient(180deg, rgba(216, 74, 90, 0.03), transparent 26%), var(--abyss)',
-        borderRight: '1px solid rgba(216, 74, 90, 0.08)',
+        background: 'linear-gradient(180deg, rgba(201,162,75,0.04), transparent 30%), var(--bg-surface)',
+        borderRight: '1px solid var(--border-hairline)',
         display: 'flex',
         flexDirection: 'column',
         overflowY: 'auto',
@@ -415,17 +473,17 @@ const ServerSettings: React.FC = () => {
           <div style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(180deg, transparent 0%, var(--abyss) 100%)',
+            background: 'linear-gradient(180deg, transparent 0%, var(--bg-surface) 100%)',
           }} />
         </div>
 
         {/* Server info */}
         <div style={{ padding: '0 16px 12px', flexShrink: 0 }}>
           <h1 style={{
-            fontFamily: "'Inter', 'Segoe UI', sans-serif",
-            fontSize: '16px',
+            fontFamily: "'Cinzel Decorative', 'Cinzel', serif",
+            fontSize: '15px',
             fontWeight: 700,
-            color: 'var(--ghost-white)',
+            color: 'var(--gold)',
             margin: 0,
             lineHeight: 1.3,
             overflow: 'hidden',
@@ -441,7 +499,7 @@ const ServerSettings: React.FC = () => {
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
           }}>
-            Server Settings
+            SETTINGS
           </p>
         </div>
 
@@ -471,7 +529,7 @@ const ServerSettings: React.FC = () => {
                   border: 'none',
                   borderRadius: '6px',
                   background: isActive
-                    ? 'rgba(216, 74, 90, 0.12)'
+                    ? 'rgba(201, 162, 75, 0.10)'
                     : isHovered
                       ? 'rgba(255, 255, 255, 0.03)'
                       : 'transparent',
@@ -482,7 +540,7 @@ const ServerSettings: React.FC = () => {
                   transition: 'all 0.15s ease',
                   position: 'relative',
                   textAlign: 'left',
-                  fontFamily: "'Inter', 'Segoe UI', sans-serif",
+                  fontFamily: "'Share Tech Mono', monospace",
                 }}
               >
                 {isActive && (
@@ -493,12 +551,12 @@ const ServerSettings: React.FC = () => {
                     transform: 'translateY(-50%)',
                     width: '3px',
                     height: '20px',
-                    background: 'var(--chaos)',
+                    background: 'var(--gold)',
                     borderRadius: '0 2px 2px 0',
-                    boxShadow: '0 0 8px var(--chaos-glow)',
+                    boxShadow: '0 0 8px rgba(201,162,75,0.3)',
                   }} />
                 )}
-                <span style={{ fontSize: '16px', width: '20px', textAlign: 'center' }}>{tab.icon}</span>
+                <span style={{ width: '20px', textAlign: 'center', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--gold)' : 'inherit' }}>{TAB_ICONS[tab.key]}</span>
                 <span>{tab.label}</span>
               </button>
             );
@@ -617,7 +675,7 @@ const ServerSettings: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <div style={{
-                width: '36px', height: '36px', borderRadius: '50%',
+                width: '36px', height: '36px', borderRadius: '50%', clipPath: 'circle(50%)',
                 background: 'linear-gradient(135deg, rgba(216,74,90,0.2), rgba(216,74,90,0.1))',
                 border: '1px solid var(--blood)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px',
               }}>💀</div>

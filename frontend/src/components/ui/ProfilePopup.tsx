@@ -1,41 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useUiStore } from '../../stores/uiStore';
-import { useFriendStore } from '../../stores/friendStore';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE } from '../../api/client';
-import { useVoiceStore } from '../../stores/voiceStore';
 import { buildDmId } from '../../api/dm';
 import { fetchUserBadges, type Badge } from '../../api/badges';
 import { fetchUserActivity, type Activity } from '../../api/activity';
+import ProfileCard from './ProfileCard';
+import type { ProfileCardUser, ProfilePreset } from './ProfileCard';
 
-const ACTIVITY_VERB: Record<string, string> = {
-  PLAYING: 'Playing',
-  LISTENING: 'Listening to',
-  WATCHING: 'Watching',
-  STREAMING: 'Streaming'
-};
+/* ═══════════════════════════════════════════════════════════════
+   ProfilePopup — thin wrapper around ProfileCard v2.
+   Handles: positioning, outside-click dismiss, note CRUD,
+   data fetching (badges, activity, notes), own-profile detection,
+   and preset state.  The visual surface is entirely ProfileCard.
+   ═══════════════════════════════════════════════════════════════ */
 
-const isBadgeImage = (icon: string) => /^https?:\/\//.test(icon) || icon.startsWith('/');
-
-const ROLE_BADGES: Record<string, { color: string; label: string }> = {
-  FOUNDER: { color: '#e7edf5', label: 'FOUNDER' },
-  ADMIN: { color: '#d84a5a', label: 'ADMIN' },
-  MODERATOR: { color: '#d9c98d', label: 'MOD' },
-  MEMBER: { color: '#8c95a3', label: 'MEMBER' }
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  online: '#3ba55c',
-  idle: '#faa61a',
-  dnd: '#ed4245',
-  offline: '#747f8d'
-};
+/** Current user ID from localStorage (matches authStore persistUser). */
+function getCurrentUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('vox_user');
+    if (!raw) return null;
+    return JSON.parse(raw)?.id || null;
+  } catch {
+    return null;
+  }
+}
 
 const ProfilePopup: React.FC = () => {
   const { profilePopupUser, profilePopupPosition, closeProfilePopup, addToast } = useUiStore();
-  const { sendRequest, blockUser } = useFriendStore();
-  const voice = useVoiceStore();
   const navigate = useNavigate();
   const ref = useRef<HTMLDivElement>(null);
   const [note, setNote] = useState('');
@@ -43,6 +36,11 @@ const ProfilePopup: React.FC = () => {
   const [badges, setBadges] = useState<Badge[]>([]);
   const [activity, setActivityState] = useState<Activity | null>(null);
 
+  // ── Own profile detection ────────────────────────────────────
+  const myId = getCurrentUserId();
+  const isOwn = !!myId && myId === profilePopupUser?.id;
+
+  // ── Fetch badges + activity ──────────────────────────────────
   useEffect(() => {
     if (!profilePopupUser?.id) return;
     let cancelled = false;
@@ -55,9 +53,9 @@ const ProfilePopup: React.FC = () => {
     return () => { cancelled = true; };
   }, [profilePopupUser?.id]);
 
+  // ── Fetch note ───────────────────────────────────────────────
   useEffect(() => {
     if (!profilePopupUser?.id) return;
-    const token = localStorage.getItem('vox_token');
     fetch(`${API_BASE}/api/users/${profilePopupUser.id}/notes`, { headers: {} })
       .then(r => r.json())
       .then(d => setNote(d.note?.text || ''))
@@ -66,7 +64,6 @@ const ProfilePopup: React.FC = () => {
   }, [profilePopupUser?.id]);
 
   const saveNote = async (text: string) => {
-    const token = localStorage.getItem('vox_token');
     const res = await fetch(`${API_BASE}/api/users/${profilePopupUser?.id}/notes`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -76,6 +73,7 @@ const ProfilePopup: React.FC = () => {
     else addToast('Failed to save note.', 'error');
   };
 
+  // ── Outside-click dismiss ────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -90,274 +88,121 @@ const ProfilePopup: React.FC = () => {
 
   if (!profilePopupUser || !profilePopupPosition) return null;
 
-  const avatarUrl = profilePopupUser.avatarUrl
-    ? (profilePopupUser.avatarUrl.startsWith('http') ? profilePopupUser.avatarUrl : `${API_BASE}${profilePopupUser.avatarUrl}`)
-    : null;
-  const status = (profilePopupUser.status || 'offline').toLowerCase();
-  const role = (profilePopupUser.role || 'MEMBER').toUpperCase();
-  const roleBadge = ROLE_BADGES[role] || ROLE_BADGES.MEMBER;
-  const isInVoice = voice.voiceUsers.some(vu => vu.userId === profilePopupUser.id);
+  // ── Resolve roles array ──────────────────────────────────────
+  const roles: string[] = profilePopupUser.roles
+    || (profilePopupUser.role ? [profilePopupUser.role] : ['MEMBER']);
+
+  // ── Resolve preset ───────────────────────────────────────────
+  const preset: ProfilePreset = profilePopupUser.preset || 'crimson-court';
+
+  // ── Build card user ──────────────────────────────────────────
+  const cardUser: ProfileCardUser = {
+    id: profilePopupUser.id,
+    username: profilePopupUser.username,
+    displayName: profilePopupUser.displayName,
+    avatarUrl: profilePopupUser.avatarUrl || null,
+    bannerUrl: profilePopupUser.bannerUrl || null,
+    bio: profilePopupUser.bio,
+    status: profilePopupUser.status,
+    roles,
+    memberSince: profilePopupUser.memberSince,
+    messageCount: profilePopupUser.messageCount,
+    rank: profilePopupUser.rank,
+    hasTurbo: profilePopupUser.hasTurbo,
+    connections: profilePopupUser.connections,
+    preset,
+    customPrimary: profilePopupUser.customPrimary,
+    customSecondary: profilePopupUser.customSecondary,
+    badges: badges.map(b => ({
+      id: b.id,
+      name: b.name,
+      icon: b.icon,
+      description: b.description,
+      color: b.color,
+    })),
+  };
 
   return (
     <AnimatePresence>
-      <motion.div
+      <div
         ref={ref}
-        initial={{ opacity: 0, scale: 0.95, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 8 }}
-        transition={{ duration: 0.15, ease: 'easeOut' }}
         style={{
           position: 'fixed',
-          left: Math.min(profilePopupPosition.x, window.innerWidth - 300),
-          top: Math.min(profilePopupPosition.y, window.innerHeight - 400),
-          width: '280px',
-          backgroundColor: 'var(--dark-matter)',
-          border: '1px solid var(--rim)',
-          borderRadius: '8px',
+          left: Math.min(profilePopupPosition.x, window.innerWidth - 340),
+          top: Math.min(profilePopupPosition.y, window.innerHeight - 520),
           zIndex: 1000,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,0,0,0.3)',
-          overflow: 'hidden'
         }}
       >
-        {/* Banner */}
+        <ProfileCard
+          user={cardUser}
+          isOwnProfile={isOwn}
+          onMessage={isOwn ? undefined : () => {
+            closeProfilePopup();
+            try {
+              const uid = getCurrentUserId();
+              if (uid && profilePopupUser.id) {
+                navigate(`/dm/${buildDmId(uid, profilePopupUser.id)}`);
+              }
+            } catch {}
+          }}
+          onAddOperative={isOwn ? undefined : () => {
+            closeProfilePopup();
+            addToast('Operative request sent.', 'info');
+          }}
+          onBannerClick={isOwn ? () => {
+            addToast('Banner upload coming soon.', 'info');
+          } : undefined}
+          onAvatarClick={isOwn ? () => {
+            addToast('Avatar upload coming soon.', 'info');
+          } : undefined}
+        />
+
+        {/* Note section — below the card */}
         <div style={{
-          height: '60px',
-          background: profilePopupUser.bannerUrl
-            ? `url(${profilePopupUser.bannerUrl.startsWith('http') ? profilePopupUser.bannerUrl : `${API_BASE}${profilePopupUser.bannerUrl}`}) center/cover`
-            : `linear-gradient(135deg, ${roleBadge.color}33, var(--obsidian))`,
-          position: 'relative'
+          background: 'var(--bg-elevated, #1c1a20)',
+          borderTop: '1px solid var(--border-hairline, #2a2730)',
+          padding: '8px 16px',
+          borderBottomLeftRadius: 14,
+          borderBottomRightRadius: 14,
         }}>
-          {/* Avatar overlapping banner */}
-          <div style={{
-            position: 'absolute',
-            bottom: '-20px',
-            left: '16px'
-          }}>
-            <div style={{ position: 'relative' }}>
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt=""
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '50%',
-                    objectFit: 'cover',
-                    border: '3px solid var(--dark-matter)',
-                    background: 'var(--obsidian)'
-                  }}
-                />
-              ) : (
-                <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '50%',
-                  background: `linear-gradient(135deg, ${roleBadge.color}44, var(--obsidian))`,
-                  border: '3px solid var(--dark-matter)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: roleBadge.color,
-                  fontWeight: 700,
-                  fontSize: '18px'
-                }}>
-                  {(profilePopupUser.username || '?').slice(0, 1).toUpperCase()}
-                </div>
-              )}
-              {/* Status dot */}
-              <div style={{
-                position: 'absolute',
-                bottom: '0',
-                right: '0',
-                width: '14px',
-                height: '14px',
-                borderRadius: '50%',
-                background: STATUS_COLORS[status] || STATUS_COLORS.offline,
-                border: '2.5px solid var(--dark-matter)'
-              }} />
-            </div>
-          </div>
-        </div>
-
-        {/* Profile info */}
-        <div style={{ padding: '28px 16px 16px' }}>
-          {/* Username */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-            <h3 style={{
-              fontFamily: "'Cinzel Decorative', serif",
-              fontSize: '15px',
-              fontWeight: 700,
-              color: 'var(--ghost-white)',
-              margin: 0
-            }}>
-              {profilePopupUser.username}{profilePopupUser.hasTurbo && <span className="turbo-badge" title="Turbo">⚡</span>}
-            </h3>
-            <span style={{
-              fontSize: '10px',
-              padding: '1px 6px',
-              background: `${roleBadge.color}22`,
-              border: `1px solid ${roleBadge.color}44`,
-              borderRadius: '4px',
-              color: roleBadge.color,
-              fontWeight: 600,
-              letterSpacing: '0.05em'
-            }}>
-              {roleBadge.label}
-            </span>
-          </div>
-
-          {/* Discriminator */}
-          <p style={{ fontSize: '12px', color: 'var(--shadow)', margin: '0 0 12px' }}>
-            @{profilePopupUser.username}
-          </p>
-
-          {/* Activity / Rich Presence */}
-          {activity?.name && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '6px 8px', marginBottom: '12px',
-              background: 'rgba(88,101,242,0.1)', border: '1px solid rgba(88,101,242,0.25)',
-              borderRadius: '4px', fontSize: '11px', color: 'var(--ash)'
-            }}>
-              <span>🎮</span>
-              <span>
-                <strong style={{ color: 'var(--ghost-white)' }}>{ACTIVITY_VERB[activity.type] || 'Playing'}</strong>{' '}
-                {activity.url ? (
-                  <a href={activity.url} target="_blank" rel="noreferrer" style={{ color: 'var(--chaos)' }}>{activity.name}</a>
-                ) : activity.name}
-              </span>
-            </div>
-          )}
-
-          {/* Badges */}
-          {badges.length > 0 && (
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '6px', textTransform: 'uppercase' }}>
-                BADGES
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {badges.map((b) => (
-                  <span
-                    key={b.id}
-                    title={b.description || b.name}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      width: '26px', height: '26px', borderRadius: '6px',
-                      background: (b.color || '#5865f2') + '22', border: `1px solid ${b.color || '#5865f2'}`
-                    }}
-                  >
-                    {isBadgeImage(b.icon)
-                      ? <img src={b.icon} alt={b.name} style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
-                      : <span style={{ fontSize: '15px' }}>{b.icon}</span>}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Divider */}
-          <div style={{ height: '1px', background: 'var(--rim)', margin: '0 0 12px' }} />
-
-          {/* About */}
-          {profilePopupUser.bio && (
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px', textTransform: 'uppercase' }}>
-                ABOUT ME
-              </div>
-              <p style={{ fontSize: '12px', color: 'var(--ash)', margin: 0, lineHeight: 1.4 }}>
-                {profilePopupUser.bio}
-              </p>
-            </div>
-          )}
-
-          {/* Voice status */}
-          {isInVoice && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 8px',
-              background: 'rgba(74,194,82,0.1)',
-              border: '1px solid rgba(74,194,82,0.2)',
-              borderRadius: '4px',
-              marginBottom: '12px',
-              fontSize: '11px',
-              color: 'var(--toxic)'
-            }}>
-              <span>🔊</span>
-              <span>In Voice Channel</span>
-            </div>
-          )}
-
-          {/* Member since */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px', textTransform: 'uppercase' }}>
-              MEMBER SINCE
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--ash)' }}>
-              {profilePopupUser.memberSince ? new Date(profilePopupUser.memberSince).toLocaleDateString() : 'Unknown'}
-            </div>
-          </div>
-
-          {/* User note */}
-          <div style={{ marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <div style={{ fontSize: '10px', color: 'var(--shadow)', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>MY NOTE</div>
-              <button
-                onClick={() => { if (editingNote) { const input = document.getElementById('note-input') as HTMLInputElement; if (input) saveNote(input.value); } else setEditingNote(true); }}
-                style={{ background: 'none', border: 'none', color: 'var(--chaos)', cursor: 'pointer', fontSize: '10px' }}
-              >
-                {editingNote ? '💾 Save' : '✏️ Edit'}
-              </button>
-            </div>
-            {editingNote ? (
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <input
-                  id="note-input"
-                  defaultValue={note}
-                  placeholder="Add a note about this user..."
-                  maxLength={500}
-                  style={{ flex: 1, padding: '6px 8px', background: 'var(--phantom)', border: '1px solid var(--rim)', borderRadius: '4px', color: 'var(--ghost-white)', fontSize: '12px', outline: 'none' }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { const input = e.currentTarget as HTMLInputElement; saveNote(input.value); } if (e.key === 'Escape') setEditingNote(false); }}
-                />
-              </div>
-            ) : (
-              <p style={{ fontSize: '12px', color: note ? 'var(--ash)' : 'var(--shadow)', margin: 0, fontStyle: note ? 'normal' : 'italic' }}>
-                {note || 'No note yet.'}
-              </p>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="vox-pc-note-header">
+            <span className="vox-pc-section-label" style={{ padding: 0 }}>MY NOTE</span>
             <button
-              className="angular-button primary"
-              style={{ flex: 1, padding: '6px', fontSize: '11px' }}
+              className="vox-pc-note-edit"
               onClick={() => {
-                closeProfilePopup();
-                try {
-                  const myId = JSON.parse(localStorage.getItem('vox_user') || '{}').id;
-                  if (myId && profilePopupUser.id) {
-                    navigate(`/dm/${buildDmId(myId, profilePopupUser.id)}`);
-                  }
-                } catch {}
+                if (editingNote) {
+                  const input = document.getElementById('note-input') as HTMLInputElement;
+                  if (input) saveNote(input.value);
+                } else {
+                  setEditingNote(true);
+                }
               }}
             >
-              💬 MESSAGE
-            </button>
-            <button
-              className="angular-button"
-              style={{ padding: '6px', fontSize: '11px' }}
-              onClick={() => {
-                closeProfilePopup();
-                navigate('/profile');
-              }}
-            >
-              👤 PROFILE
+              {editingNote ? 'Save' : 'Edit'}
             </button>
           </div>
+          {editingNote ? (
+            <input
+              id="note-input"
+              className="vox-pc-note-input"
+              defaultValue={note}
+              placeholder="Add a note about this user..."
+              maxLength={500}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const input = e.currentTarget as HTMLInputElement;
+                  saveNote(input.value);
+                }
+                if (e.key === 'Escape') setEditingNote(false);
+              }}
+            />
+          ) : (
+            <p className={`vox-pc-note-text ${note ? '' : 'empty'}`}>
+              {note || 'No note yet.'}
+            </p>
+          )}
         </div>
-      </motion.div>
+      </div>
     </AnimatePresence>
   );
 };

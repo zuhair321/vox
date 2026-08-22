@@ -42,7 +42,7 @@ dmRouter.get('/dms', requireAuth, async (req, res, next) => {
     const otherIds = allDmIds.map(dmId => dmId.replace(userId, '').replace(/^_+|_+$/g, ''));
     const uniqueOtherIds = [...new Set(otherIds)];
 
-    const [usersMap, lastMessages, unreadCounts] = await Promise.all([
+    const [usersMap, lastMessages, unreadCounts, dmPreferences] = await Promise.all([
       prisma.user.findMany({
         where: { id: { in: uniqueOtherIds } },
         select: { id: true, username: true, displayName: true, avatarUrl: true, status: true, color: true },
@@ -271,5 +271,55 @@ dmRouter.delete('/dm/:dmId/messages/:messageId', requireAuth, async (req, res, n
     emitRealtimeEvent('dm:deleted', `dm:${deleted.dmId}`, { messageId: deleted.id, dmId: deleted.dmId });
 
     res.json({ ok: true, message: deleted });
+  } catch (e) { next(e); }
+});
+
+// ─── DM Preferences (mute, privacy) ──────────────────────────
+
+// GET /api/dm/:dmId/preferences — get this user's preferences for a DM
+dmRouter.get('/dm/:dmId/preferences', requireAuth, async (req, res, next) => {
+  try {
+    const { dmId } = req.params;
+    if (!dmId.includes(req.user.id)) throw new HttpError(403, 'Not authorized');
+
+    const pref = await prisma.dmPreference.findUnique({
+      where: { userId_dmId: { userId: req.user.id, dmId } },
+    });
+
+    res.json({
+      muted: pref?.muted ?? false,
+      mutedUntil: pref?.mutedUntil ?? null,
+      showAvatar: pref?.showAvatar ?? true,
+      showDisplayName: pref?.showDisplayName ?? true,
+    });
+  } catch (e) { next(e); }
+});
+
+// PUT /api/dm/:dmId/preferences — update this user's preferences for a DM
+dmRouter.put('/dm/:dmId/preferences', requireAuth, async (req, res, next) => {
+  try {
+    const { dmId } = req.params;
+    if (!dmId.includes(req.user.id)) throw new HttpError(403, 'Not authorized');
+
+    const { muted, mutedUntil, showAvatar, showDisplayName } = req.body || {};
+
+    const data = {};
+    if (typeof muted === 'boolean') data.muted = muted;
+    if (mutedUntil !== undefined) data.mutedUntil = mutedUntil ? new Date(mutedUntil) : null;
+    if (typeof showAvatar === 'boolean') data.showAvatar = showAvatar;
+    if (typeof showDisplayName === 'boolean') data.showDisplayName = showDisplayName;
+
+    const pref = await prisma.dmPreference.upsert({
+      where: { userId_dmId: { userId: req.user.id, dmId } },
+      create: { userId: req.user.id, dmId, ...data },
+      update: data,
+    });
+
+    res.json({
+      muted: pref.muted,
+      mutedUntil: pref.mutedUntil,
+      showAvatar: pref.showAvatar,
+      showDisplayName: pref.showDisplayName,
+    });
   } catch (e) { next(e); }
 });

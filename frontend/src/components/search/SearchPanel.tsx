@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import { useUiStore } from '../../stores/uiStore';
@@ -148,9 +149,7 @@ const SearchPanel: React.FC = () => {
                 onChange={(e) => setQuery(e.target.value)}
                 style={{ paddingLeft: '32px', paddingRight: query ? '28px' : '12px' }}
               />
-              <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--shadow)', fontSize: '14px' }}>
-                🔍
-              </span>
+              <span style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted, #8b8790)", display: "flex" }}><Search size={14} strokeWidth={1.5} /></span>
               {query && (
                 <button
                   type="button"
@@ -249,7 +248,7 @@ const SearchPanel: React.FC = () => {
 
             {!loading && hasSearched && results.length === 0 && (
               <div style={{ textAlign: 'center', padding: '40px 16px' }}>
-                <div style={{ fontSize: '36px', opacity: 0.3, marginBottom: '12px' }}>🔍</div>
+                <div style={{ color: "var(--text-faint, #5a5660)", marginBottom: "12px" }}><Search size={36} strokeWidth={1} /></div>
                 <div
                   style={{
                     fontFamily: "'Cinzel Decorative', serif",

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNotificationStore } from '../../stores/notificationStore';
 
@@ -28,7 +29,7 @@ const NotificationBell: React.FC = () => {
       aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ''}`}
       style={{ position: 'relative', color: isOpen ? 'var(--chaos)' : undefined }}
     >
-      <span className={pulse ? 'vox-notif-pulse' : ''} style={{ fontSize: '16px' }}>🔔</span>
+      <Bell size={16} strokeWidth={1.5} className={pulse ? 'vox-notif-pulse' : ''} />
       <AnimatePresence>
         {unreadCount > 0 && (
           <motion.span
