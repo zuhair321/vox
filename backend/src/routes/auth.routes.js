@@ -23,6 +23,9 @@ function sessionPayload(result) {
     payload.twoFactorRequired = true;
     payload.tempToken = result.tempToken;
   }
+  if (process.env.SERVE_FRONTEND === "1" && result.tokens) {
+    payload.tokens = { access: result.tokens.access, refresh: result.tokens.refresh };
+  }
   return payload;
 }
 

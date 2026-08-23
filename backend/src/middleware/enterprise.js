@@ -12,7 +12,7 @@ import { pipeline } from 'node:stream/promises';
 // ── 1. Security Headers (HSTS + CSP) ───────────────────────
 export function securityHeaders(req, res, next) {
   // HSTS — Force HTTPS for 1 year, include subdomains
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  if (process.env.SERVE_FRONTEND !== '1') { res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload'); }
   
   // Content-Security-Policy — Restrict resource loading
   const cspDirectives = [

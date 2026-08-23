@@ -1297,21 +1297,65 @@ function createWindow() {
     // bind 4000, fall back to resources/frontend/dist/index.html (file://) so
     // the window still shows something while we surface the error.
     const appUrl = appConfig.apiBase + '/';
+        // Clear any cached HSTS entries for localhost — once the backend sent
+    // Strict-Transport-Security in a previous session, Chromium remembers it
+    // and refuses to load http:// even though the server no longer sends it.
+    try {
+      const sess = mainWindow.webContents.session;
+      sess.clearCache().catch(() => {});
+      sess.clearHostResolverCache().catch(() => {});
+    } catch (e) { writeMain('HSTS clear failed: ' + e.message); }
     writeMain('Loading (HTTP origin): ' + appUrl);
-    mainWindow.loadURL(appUrl)
-      .then(() => writeMain('loadURL succeeded'))
-      .catch((e) => {
-        writeMain('loadURL FAILED, falling back to file://: ' + e.message);
-        const unpackedDist = path.join(process.resourcesPath, 'frontend', 'dist', 'index.html');
-        const packedAsarDist = path.join(__dirname, 'frontend', 'dist', 'index.html');
-        const fallback = fs.existsSync(unpackedDist) ? unpackedDist
-          : fs.existsSync(packedAsarDist) ? packedAsarDist : null;
-        if (fallback) {
-          mainWindow.loadFile(fallback)
-            .then(() => writeMain('loadFile fallback succeeded'))
-            .catch((err) => writeMain('loadFile fallback FAILED: ' + err.message));
-        }
-      });
+    // Wait for backend health, then load. Uses .then() chains (no top-level await)
+    // to avoid syntax errors in non-async contexts.
+    const healthUrl = appConfig.apiBase + '/api/health';
+    function waitForBackend(healthUrl, timeoutMs, intervalMs) {
+      const http = require('http');
+      const deadline = Date.now() + timeoutMs;
+      const probe = (resolve) => {
+        if (Date.now() >= deadline) return resolve(false);
+        const urlObj = new URL(healthUrl);
+        const req = http.get({ hostname: urlObj.hostname, port: urlObj.port, path: urlObj.pathname, timeout: 2000 }, (res) => {
+          let data = '';
+          res.on('data', c => data += c);
+          res.on('end', () => {
+            if (res.statusCode === 200) return resolve(true);
+            setTimeout(() => probe(resolve), intervalMs);
+          });
+        });
+        req.on('error', () => setTimeout(() => probe(resolve), intervalMs));
+        req.on('timeout', () => { req.destroy(); setTimeout(() => probe(resolve), intervalMs); });
+      };
+      return new Promise(probe);
+    }
+    waitForBackend(healthUrl, 30000, 1000).then(ready => {
+      if (!ready) writeMain('Backend health check timed out — attempting loadURL anyway');
+      let loadAttempts = 0;
+      const MAX_LOAD_ATTEMPTS = 5;
+      const tryLoad = () => {
+        mainWindow.loadURL(appUrl)
+          .then(() => writeMain('loadURL succeeded'))
+          .catch(e => {
+            loadAttempts++;
+            writeMain('loadURL attempt ' + loadAttempts + ' failed: ' + e.message);
+            if (loadAttempts < MAX_LOAD_ATTEMPTS) {
+              setTimeout(tryLoad, 1500);
+            } else {
+              writeMain('loadURL FAILED after ' + MAX_LOAD_ATTEMPTS + ' attempts, falling back to file://');
+              const unpackedDist = require('path').join(process.resourcesPath, 'frontend', 'dist', 'index.html');
+              const packedAsarDist = require('path').join(__dirname, 'frontend', 'dist', 'index.html');
+              const fallbackPath = fs.existsSync(unpackedDist) ? unpackedDist
+                : fs.existsSync(packedAsarDist) ? packedAsarDist : null;
+              if (fallbackPath) {
+                mainWindow.loadFile(fallbackPath)
+                  .then(() => writeMain('loadFile fallback succeeded'))
+                  .catch(err => writeMain('loadFile fallback FAILED: ' + err.message));
+              }
+            }
+          });
+      };
+      tryLoad();
+    });
   } else {
     const appUrl = appConfig.apiBase + '/';
     writeMain('Loading: ' + appUrl);
@@ -1670,6 +1714,12 @@ process.on('uncaughtException', (err) => {
 // ═══════════════════════════════════════════════════════════════════
 //  App lifecycle
 // ═══════════════════════════════════════════════════════════════════
+
+// Bypass HSTS for localhost so the Electron window can load http://
+// without being forced to HTTPS (which doesn't exist for the local backend).
+if (process.env.SERVE_FRONTEND === '1') {
+  app.commandLine.appendSwitch('hsts-hosts-to-bypass', '127.0.0.1');
+}
 
 app.whenReady().then(start);
 app.on('before-quit', () => { isQuitting = true; });

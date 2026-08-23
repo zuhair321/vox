@@ -108,9 +108,13 @@ const server = http.createServer(app);
 // ── Core middleware ─────────────────────────────────────────
 console.log('BOOT_AFTER_IMPORTS', Date.now());
 app.set('trust proxy', 1);
+const isLocal = process.env.SERVE_FRONTEND === '1';
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
+  hsts: !isLocal,
 }));
 // Enterprise middleware suite
 app.use(securityHeaders);

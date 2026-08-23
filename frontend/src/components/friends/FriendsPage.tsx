@@ -445,7 +445,7 @@ const FriendsPage: React.FC = () => {
       </div>
 
       {/* Main Friends Area */}
-      <div className="main-content animated-bg" className="vox-flex-1 vox-flex-col vox-overflow-hidden">
+      <div className="main-content animated-bg vox-flex-1 vox-flex-col vox-overflow-hidden">
         <div className="top-bar" style={{ gap: "24px" }}>
           <span className="vox-text-lg vox-font-bold" style={{ marginRight: "16px" }}>👥 Friends</span>
           <div className="vox-flex vox-gap-4">
@@ -454,10 +454,7 @@ const FriendsPage: React.FC = () => {
                 key={tab}
                 onClick={() => setActiveTab(tab as any)}
                 className={`friends-tab ${activeTab === tab ? 'active' : ''}`}
-                style={{
-                  cursor: 'pointer',
-                  padding: '12px 0'
-                }}
+                
               >
                 {tab}
                 {tab === 'PENDING' && incoming.length > 0 && (

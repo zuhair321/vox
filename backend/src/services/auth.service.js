@@ -79,7 +79,8 @@ function cookieSameSite() {
 }
 function setAuthCookies(res, access, refresh) {
   const ss = cookieSameSite();
-  const isProd = useSecureCookies() || ss === 'none';
+  const localHttp = process.env.SERVE_FRONTEND === '1';
+  const isProd = useSecureCookies() || (ss === 'none' && !localHttp);
   const ssCap = ss.charAt(0).toUpperCase() + ss.slice(1);
   const secureSuffix = isProd ? '; Secure' : '';
   const now = Math.floor(Date.now() / 1000);
@@ -95,7 +96,8 @@ function setAuthCookies(res, access, refresh) {
 
 function clearAuthCookies(res) {
   const ss = cookieSameSite();
-  const isProd = useSecureCookies() || ss === 'none';
+  const localHttp = process.env.SERVE_FRONTEND === '1';
+  const isProd = useSecureCookies() || (ss === 'none' && !localHttp);
   const ssCap = ss.charAt(0).toUpperCase() + ss.slice(1);
   const secureSuffix = isProd ? '; Secure' : '';
   res.setHeader('Set-Cookie', [

@@ -10,7 +10,7 @@
 import { create } from 'zustand';
 import * as authApi from '../api/auth';
 import * as storage from '../utils/auth';
-import { startProactiveRefresh, stopProactiveRefresh } from '../api/client';
+import { startProactiveRefresh, stopProactiveRefresh, setLocalTokens } from '../api/client';
 import { useSocketStore } from './socketStore';
 
 const LOCAL_USER_KEY = 'vox_user';
@@ -158,6 +158,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         }
       }
 
+      setLocalTokens(authResult.tokens?.access || null, authResult.tokens?.refresh || null);
       set({ user: authResult.user, accessToken: authResult.tokens?.access || null, isLoading: false });
       // Start refreshing the access token on a 25m cadence so the SPA
       // never crosses an expiry boundary.
@@ -177,6 +178,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const result = await authApi.twoFactorLogin(tempToken, code);
       persistUser(result.user);
+      setLocalTokens(result.tokens?.access || null, result.tokens?.refresh || null);
       set({ user: result.user, accessToken: result.tokens?.access || null, isLoading: false });
       sessionStorage.removeItem('vox_2fa_temp_token');
       startProactiveRefresh();
@@ -216,6 +218,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     storage.logout();
     // Cancel the proactive refresh — we're no longer authed.
     stopProactiveRefresh();
+    setLocalTokens(null, null);
     set({ user: null, accessToken: null, loginAlert: null });
   },
 

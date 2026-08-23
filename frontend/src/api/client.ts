@@ -55,13 +55,20 @@ export async function testReachability(apiBaseOverride?: string): Promise<{
   }
 }
 
+// In local desktop mode, tokens come in the login response body
+// (because cookies can't cross file:// → http:// origins).
+let _localToken: string | null = null;
+let _localRefresh: string | null = null;
+export function setLocalTokens(access: string | null, refresh: string | null) {
+  _localToken = access;
+  _localRefresh = refresh;
+}
+export function getLocalRefreshToken() { return _localRefresh; }
+
 export function getToken() {
-  // Intentionally returns null. Auth is carried by the HttpOnly `vox_access`
-  // cookie (sent automatically via `credentials: 'include'`), so tokens are
-  // never exposed to JavaScript. This prevents an XSS bug from stealing a
-  // live access/refresh token. The backend accepts the cookie in
-  // middleware/auth.js (req.cookies.vox_access).
-  return null;
+  // In local mode, use Bearer auth from the stored token.
+  // In hosted mode, cookies carry auth (returns null).
+  return _localToken;
 }
 
 // ── Automatic token refresh ───────────────────────────────────────
