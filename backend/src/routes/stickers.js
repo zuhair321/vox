@@ -2,7 +2,8 @@
 // VOX — Sticker Routes
 // ═══════════════════════════════════════════════════════════════
 import { Router } from 'express';
-import { requireAuth, requirePermission } from '../middleware/auth.js';
+import { requireAuth } from '../middleware/auth.js';
+import { requirePermission } from '../middleware/permissions.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
 import { standard as rateLimit } from '../middleware/rateLimiter.js';

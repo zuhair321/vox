@@ -1,11 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
 // VOX — Shared Rate Limiter Middleware
 // ═══════════════════════════════════════════════════════════════
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
-function ipKey(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || req.socket?.remoteAddress;
-}
+const ipKey = ipKeyGenerator;
 
 // Standard: 100 req/min
 export const standard = rateLimit({

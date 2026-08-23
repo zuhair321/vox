@@ -12,9 +12,8 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { HttpError } from '../middleware/error.js';
 import { prisma } from '../lib/prisma.js';
-import {
-
 import { standard as rateLimit } from '../middleware/rateLimiter.js';
+import {
   generateLiveKitToken,
   isLiveKitConfigured,
 } from '../services/livekit.service.js';

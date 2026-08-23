@@ -90,6 +90,7 @@ const ROUTE_REGISTRY = [
   ['/api', './routes/feedback.routes.js', 'feedbackRouter'],
   ['/api', './routes/moderation.routes.js', 'moderationRouter'],
   ['/api', './routes/custom-powers.routes.js', 'customPowersRouter'],
+  ['/api', './routes/voice.routes.js', 'voiceRouter'],
   ['/api', './routes/docs.js', 'docsRouter'],
   ['/api', './routes/keys.routes.js', 'keysRouter'],
 ];
