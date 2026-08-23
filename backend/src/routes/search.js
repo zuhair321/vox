@@ -1,8 +1,8 @@
-// Full-text-ish message search.
+// Full-text message search with GIN-indexed tsvector.
 //   GET /api/search?q=&channelId=&serverId=&userId=&hasLink=&before=&after=&limit=
 //
-// SQLite doesn't have full-text tables in this schema, so we use Prisma's
-// `contains` (LIKE %q%) which is case-insensitive on SQLite by default.
+// Uses PostgreSQL tsvector + GIN index for ranked full-text search.
+// Falls back to ILIKE for very short queries (< 3 chars) where tsvector is ineffective.
 // Filters compose safely with the spread-on-truthy pattern so unspecified
 // params never constrain the query.
 import { Router } from 'express';
@@ -84,12 +84,31 @@ searchRouter.get('/search', requireAuth, searchLimiter, async (req, res, next) =
       return res.json({ results: [], count: 0 });
     }
 
-    // ILIKE-based search — reliable regardless of searchVector state.
+    // Full-text search: use tsvector + GIN index when query is long enough,
+    // fall back to ILIKE for very short queries (< 3 chars).
     const chPlaceholders = accessibleChannelIds.map((_, i) => `$${i + 1}`).join(',');
     const searchIdx = accessibleChannelIds.length + 1;
 
-    let sql = `SELECT m.id, 0 AS rank FROM "Message" m WHERE m.deleted = false AND m."channelId" IN (${chPlaceholders}) AND m.body ILIKE $${searchIdx}`;
-    const params = [...accessibleChannelIds, `%${q}%`];
+    let sql;
+    const params = [...accessibleChannelIds];
+
+    if (q.length >= 3) {
+      // GIN-indexed tsvector search with relevance ranking.
+      sql = `SELECT m.id, ts_rank(m."searchVector", websearch_to_tsquery('english', $${searchIdx})) AS rank
+             FROM "Message" m
+             WHERE m.deleted = false
+               AND m."channelId" IN (${chPlaceholders})
+               AND m."searchVector" @@ websearch_to_tsquery('english', $${searchIdx})`;
+      params.push(q);
+    } else {
+      // Short query: ILIKE fallback (tsvector needs >= 3 chars to be meaningful).
+      sql = `SELECT m.id, 0 AS rank
+             FROM "Message" m
+             WHERE m.deleted = false
+               AND m."channelId" IN (${chPlaceholders})
+               AND m.body ILIKE $${searchIdx}`;
+      params.push(`%${q}%`);
+    }
 
     // Scope to one author.
     const userParam = req.query.userId ? String(req.query.userId).trim() : '';
